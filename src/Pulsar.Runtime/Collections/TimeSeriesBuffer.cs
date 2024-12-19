@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Serilog;
 
 namespace Pulsar.Runtime.Collections;
 
@@ -10,6 +11,7 @@ namespace Pulsar.Runtime.Collections;
 public class TimeSeriesBuffer
 {
     private readonly (DateTime Timestamp, double Value)[] _buffer;
+    private readonly ILogger _logger;
     private int _start;
     private int _count;
     private DateTime _oldestTimestamp;
@@ -44,7 +46,8 @@ public class TimeSeriesBuffer
     /// Creates a new time series buffer with the specified capacity
     /// </summary>
     /// <param name="capacity">The maximum number of elements the buffer can hold</param>
-    public TimeSeriesBuffer(int capacity)
+    /// <param name="logger">Optional logger instance. If not provided, will use Log.Logger</param>
+    public TimeSeriesBuffer(int capacity, ILogger? logger = null)
     {
         if (capacity <= 0)
             throw new ArgumentException("Capacity must be greater than 0", nameof(capacity));
@@ -54,6 +57,9 @@ public class TimeSeriesBuffer
         _count = 0;
         _oldestTimestamp = DateTime.MaxValue;
         _newestTimestamp = DateTime.MinValue;
+        _logger = (logger ?? Log.Logger).ForContext<TimeSeriesBuffer>();
+
+        _logger.Debug("Created new time series buffer with capacity {Capacity}", capacity);
     }
 
     /// <summary>
@@ -75,19 +81,29 @@ public class TimeSeriesBuffer
         if (_count < Capacity)
         {
             _count++;
+            _logger.Debug("Added value {Value} at {Timestamp}. Buffer count: {Count}/{Capacity}", 
+                value, timestamp, _count, Capacity);
         }
         else
         {
             _start = (_start + 1) % Capacity;
             // Update oldest timestamp when we overwrite the oldest value
             _oldestTimestamp = _buffer[_start].Timestamp;
+            _logger.Debug("Buffer full, overwrote oldest value. New start index: {StartIndex}, new oldest timestamp: {OldestTimestamp}", 
+                _start, _oldestTimestamp);
         }
 
         // Update timestamp bounds
         if (timestamp < _oldestTimestamp || _count == 1)
+        {
             _oldestTimestamp = timestamp;
+            _logger.Debug("Updated oldest timestamp to {Timestamp}", timestamp);
+        }
         if (timestamp > _newestTimestamp || _count == 1)
+        {
             _newestTimestamp = timestamp;
+            _logger.Debug("Updated newest timestamp to {Timestamp}", timestamp);
+        }
     }
 
     /// <summary>
@@ -101,11 +117,15 @@ public class TimeSeriesBuffer
             throw new ArgumentException("Duration must be greater than 0", nameof(duration));
 
         if (_count == 0)
+        {
+            _logger.Debug("Buffer is empty, returning empty array");
             return Array.Empty<(DateTime, double)>();
+        }
 
         var cutoff = DateTime.UtcNow - duration;
-        var result = new List<(DateTime, double)>();
+        _logger.Debug("Getting values after {Cutoff} (window: {Duration})", cutoff, duration);
 
+        var result = new List<(DateTime, double)>();
         for (int i = 0; i < _count; i++)
         {
             var index = (_start + i) % Capacity;
@@ -116,6 +136,7 @@ public class TimeSeriesBuffer
             }
         }
 
+        _logger.Debug("Found {Count} values in time window", result.Count);
         return result.ToArray();
     }
 
@@ -125,6 +146,7 @@ public class TimeSeriesBuffer
     /// <returns>An array of all timestamp-value pairs in chronological order</returns>
     public (DateTime Timestamp, double Value)[] GetAll()
     {
+        _logger.Debug("Getting all values from buffer. Count: {Count}", _count);
         var result = new (DateTime, double)[_count];
         for (int i = 0; i < _count; i++)
         {
@@ -139,6 +161,7 @@ public class TimeSeriesBuffer
     /// </summary>
     public void Clear()
     {
+        _logger.Debug("Clearing buffer. Previous count: {Count}", _count);
         Array.Clear(_buffer, 0, _buffer.Length);
         _start = 0;
         _count = 0;

@@ -36,21 +36,27 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
     {
         if (condition is not ThresholdOverTimeCondition thresholdCondition)
         {
+            _logger.Error("Invalid condition type. Expected {ExpectedType} but got {ActualType}", 
+                typeof(ThresholdOverTimeCondition).Name, condition.GetType().Name);
             throw new ArgumentException($"Expected ThresholdOverTimeCondition but got {condition.GetType().Name}");
         }
+
+        _logger.Debug("Starting evaluation of threshold over time condition for {DataSource}", thresholdCondition.DataSource);
 
         // Validate the condition
         var errors = _validator.ValidateTemporalCondition(thresholdCondition);
         if (errors.Any())
         {
-            _logger.Error("Invalid temporal condition: {Errors}", string.Join(", ", errors));
+            _logger.Error("Invalid temporal condition: {@Condition} - Errors: {@Errors}", 
+                thresholdCondition, errors);
             return false;
         }
 
         var dataSource = thresholdCondition.DataSource;
         if (!sensorData.ContainsKey(dataSource))
         {
-            _logger.Warning("Data source not found: {DataSource}", dataSource);
+            _logger.Warning("Data source {DataSource} not found in available sensors: {@AvailableSensors}", 
+                dataSource, sensorData.Keys);
             return false;
         }
 
@@ -59,10 +65,20 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
         var now = DateTime.UtcNow;
         var lastTimestamp = _timeSeriesService.GetTimeWindow(dataSource, TimeSpan.FromMilliseconds(1)).LastOrDefault().Timestamp;
 
+        _logger.Debug("Current value for {DataSource}: {Value} at {Timestamp}", 
+            dataSource, currentValue, now);
+
         // Only add the value if enough time has passed since the last update
         if (lastTimestamp == default || now - lastTimestamp >= _samplingRate)
         {
+            _logger.Debug("Updating time series for {DataSource}. Last update was {LastUpdate}", 
+                dataSource, lastTimestamp == default ? "never" : lastTimestamp.ToString());
             _timeSeriesService.Update(dataSource, currentValue);
+        }
+        else
+        {
+            _logger.Debug("Skipping update for {DataSource} - Not enough time elapsed since last update ({LastUpdate})", 
+                dataSource, lastTimestamp);
         }
 
         // Get historical data from the time series
@@ -71,9 +87,13 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
 
         if (values.Length == 0)
         {
-            _logger.Debug("No historical data available for evaluation");
+            _logger.Debug("No historical data available for {DataSource} in the last {Duration}", 
+                dataSource, duration);
             return false;
         }
+
+        _logger.Debug("Retrieved {Count} historical values for {DataSource} over {Duration}", 
+            values.Length, dataSource, duration);
 
         // Calculate the percentage of values that meet the threshold condition
         var threshold = thresholdCondition.Threshold;
@@ -90,14 +110,20 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
             _ => throw new ArgumentException($"Unsupported threshold operator: {thresholdCondition.Operator}")
         };
 
-        // Log the percentages for debugging
-        _logger.Debug(
-            "Threshold evaluation: {Operator} {Threshold}, {ActualPercentage:P2} of values meet condition (required: {RequiredPercentage:P2})",
+        // Log the evaluation details
+        _logger.Information(
+            "Threshold evaluation for {DataSource}: {Operator} {Threshold}, {ActualCount}/{TotalCount} values meet condition ({ActualPercentage:P2}, required: {RequiredPercentage:P2})",
+            dataSource,
             thresholdCondition.Operator,
             threshold,
+            thresholdCondition.Operator == ThresholdOperator.GreaterThan ? valuesAboveThreshold : valuesBelowThreshold,
+            totalValues,
             actualPercentage,
             requiredPercentage);
 
-        return actualPercentage >= requiredPercentage;
+        var result = actualPercentage >= requiredPercentage;
+        _logger.Debug("Evaluation result for {DataSource}: {Result}", dataSource, result);
+
+        return result;
     }
 }
