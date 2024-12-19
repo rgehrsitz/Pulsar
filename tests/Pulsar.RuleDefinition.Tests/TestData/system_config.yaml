@@ -1,0 +1,8 @@
+version: 1
+valid_sensors:
+  - temperature
+  - humidity
+  - pressure
+  - alerts:temperature
+  - converted_temp
+  - derived_temp

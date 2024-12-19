@@ -15,8 +15,6 @@ public class ConditionTypeConverter : IYamlTypeConverter
         parser.Consume<MappingStart>();
         
         // Read the condition type
-        parser.Consume<Scalar>(); // "condition" key
-        parser.Consume<MappingStart>();
         parser.Consume<Scalar>(); // "type" key
         var conditionType = parser.Consume<Scalar>().Value;
 
@@ -63,8 +61,7 @@ public class ConditionTypeConverter : IYamlTypeConverter
             }
         }
 
-        // Consume the end of mappings
-        parser.Consume<MappingEnd>();
+        // End of the mapping
         parser.Consume<MappingEnd>();
 
         return condition;
@@ -73,14 +70,14 @@ public class ConditionTypeConverter : IYamlTypeConverter
     public void WriteYaml(IEmitter emitter, object value, Type type)
     {
         var condition = (Condition)value;
-        
+
         emitter.Emit(new MappingStart());
-        emitter.Emit(new Scalar("condition"));
-        
-        emitter.Emit(new MappingStart());
+
+        // Write type
         emitter.Emit(new Scalar("type"));
         emitter.Emit(new Scalar(condition.Type));
 
+        // Write specific fields based on condition type
         switch (condition)
         {
             case ComparisonCondition comp:
@@ -91,7 +88,6 @@ public class ConditionTypeConverter : IYamlTypeConverter
                 emitter.Emit(new Scalar("value"));
                 emitter.Emit(new Scalar(comp.Value.ToString()));
                 break;
-
             case ThresholdOverTimeCondition threshold:
                 emitter.Emit(new Scalar("data_source"));
                 emitter.Emit(new Scalar(threshold.DataSource));
@@ -100,14 +96,12 @@ public class ConditionTypeConverter : IYamlTypeConverter
                 emitter.Emit(new Scalar("duration"));
                 emitter.Emit(new Scalar(threshold.Duration));
                 break;
-
             case ExpressionCondition expr:
                 emitter.Emit(new Scalar("expression"));
                 emitter.Emit(new Scalar(expr.Expression));
                 break;
         }
 
-        emitter.Emit(new MappingEnd());
         emitter.Emit(new MappingEnd());
     }
 }

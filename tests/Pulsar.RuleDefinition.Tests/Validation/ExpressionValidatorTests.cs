@@ -1,4 +1,5 @@
 using Pulsar.RuleDefinition.Validation;
+using Xunit;
 
 namespace Pulsar.RuleDefinition.Tests.Validation;
 

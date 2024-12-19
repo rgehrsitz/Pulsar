@@ -2,267 +2,218 @@
 
 ## Overview
 
-This DSL is a YAML-based format that describes a set of rules for a sensor-based rules engine. The rules rely on sensor values retrieved from a Redis instance and can include temporal conditions, mathematical expressions, and logical grouping of conditions. The DSL is intended to be human-readable, easily validated, and transformable into optimized C# code for runtime execution. Additionally, the DSL design supports generating metadata to assist in debugging, dependency visualization, and documentation.
+This DSL is a YAML-based format used to define a set of rules for a sensor-driven rules engine. The rules rely on sensor values retrieved from a Redis instance and can include temporal conditions, mathematical expressions, and logical groupings of conditions. They are designed to be human-readable, easily validated, and translatable into optimized C# code for runtime execution.
+
+The DSL is part of a larger system that uses a separate global configuration file to define universal parameters and valid sensors. This separation allows system-wide tooling and services to reference a single source of truth for global configuration, while the rules DSL remains focused solely on rule logic.
 
 ## Key Objectives
 
-1. **Human-Readable**: The DSL should be intuitive and easy to maintain by engineers.
-2. **Tooling & Validation**: A schema (JSON Schema or similar) will validate rule structure and references before compilation.
-3. **Performance & Scalability**: The compiler will generate optimized C# code, suitable for hundreds to a thousand rules, executing every 100ms.
-4. **Temporal & Mathematical Conditions**: Support conditions based on time durations and simple arithmetic expressions.
-5. **Dependency & Ordering**: The compiler infers dependencies between rules and sensors, allowing for an optimal execution order and potential runtime optimizations.
-6. **Metadata Generation**: The compiler generates metadata to provide insights for runtime debugging, documentation, and tooling.
-7. **Stability in Production**: Rules are validated and compiled once. No changes are expected at runtime after deployment.
+1. **Human-Readable**:
+   The DSL should be easy for engineers to read, write, and maintain.
 
-## Document Structure
+2. **Separation of Concerns**:
+   Global system configuration (including valid sensors) is defined in a separate **system configuration file**. The rules DSL references this global configuration indirectly, enabling different services and tools to validate their I/O against the same source of truth.
 
-The DSL file (e.g., `rules.yaml`) will include:
+3. **Tooling & Validation**:
+   A schema (e.g., JSON Schema) will validate both the system configuration and the rules DSL. The rules compiler ensures that all referenced sensors and actions are valid.
 
-- A version number for schema evolution.
-- A list of valid data sources.
-- A collection of rules, each with conditions and actions.
+4. **Performance & Scalability**:
+   The compiled C# code will run efficiently with hundreds to a thousand rules every 100ms. Temporal and mathematical conditions must be performant.
 
-### Top-Level Keys
+5. **Temporal & Mathematical Conditions**:
+   Support conditions based on time durations and basic arithmetic expressions.
 
-- **`version` (required)**: An integer indicating the DSL schema version. Example: `version: 1`
-- **`valid_data_sources` (required)**: A list of strings representing all permissible data keys.
-  Example:
+6. **Dependency & Ordering**:
+   The compiler infers dependencies between rules and sensors, allowing for optimal execution ordering and potential runtime optimizations.
 
-          valid_data_sources:
-            - temperature
-            - humidity
-            - pressure
-            - alerts:temperature
-            - converted_temp
+7. **Metadata Generation**:
+   The compiler generates metadata for runtime debugging, documentation, and dependency visualization.
 
-- **`rules` (required)**: A list of rule objects.
+8. **Stable Production Deployment**:
+   Rules are validated and compiled once, then remain stable unless changes occur during development or bug fixes.
 
-## Rule Structure
+## Configuration Files
 
-Each rule entry in `rules` must contain:
+### System Configuration File (e.g., `system_config.yaml`)
 
-- **`name` (required)**: A unique identifier for the rule.
-- **`description` (optional)**: A human-readable explanation of what the rule does.
-- **`conditions` (required)**: A logical structure defining when the rule fires.
-- **`actions` (required)**: A set of instructions that are executed if the rule’s conditions are met.
+This file is the system-wide source of truth for global definitions. It is maintained separately from the rules file. Components throughout the system, including the rules compiler, can reference this file to ensure consistency.
 
-Example:
+**Structure:**
 
-    rules:
-      - name: "HighTemperatureAlert"
-        description: "Alerts when temperature is >50 for 500ms"
-        conditions:
-          all:
-            - condition:
-                type: threshold_over_time
-                data_source: temperature
-                threshold: 50
-                duration: 500ms
-        actions:
-          - set_value:
-              key: "alerts:temperature"
-              value: "1"
-          - send_message:
-              channel: "alerts"
-              message: "Temperature too high!"
+```yaml
+version: 1
+valid_sensors:
+  - temperature
+  - humidity
+  - pressure
+  - alerts:temperature
+  - converted_temp
+# Additional global configurations can be added here if needed.
+```
 
-## Conditions
+- version (required): An integer indicating the global configuration schema version.
+- valid_sensors (required): A list of strings representing all permissible sensor keys.
 
-Conditions determine whether a rule’s actions should execute. Conditions can be combined using logical grouping:
+System components (e.g., data ingestion, logging services, monitoring tools) and the rules compiler all use this system_config.yaml as a single source of truth for what sensors are valid.
 
-- **`all`**: All nested conditions must be true.
-- **`any`**: At least one nested condition must be true.
+### Rules File (e.g., rules.yaml)
 
-You can nest `all` and `any` blocks arbitrarily for complex logic. Each `all` or `any` block contains a list of `condition` entries.
+This file contains only the rules. It does not define global keys like valid_sensors. The rules reference sensors and conditions that must be validated against the global configuration during compilation.
 
-### Condition Types
+Structure:
 
-1.  **Comparison Condition**:
-
-        condition:
-          type: comparison
-          data_source: <data_key>
-          operator: "<|>|<=|>=|==|!="
-          value: <number>
-
-    - Compares the current data source value to a given literal number.
-    - Example:
-
-            condition:
-              type: comparison
-              data_source: humidity
-              operator: "<"
-              value: 30
-
-2.  **Threshold Over Time Condition**:
-
-        condition:
-          type: threshold_over_time
-          data_source: <data_key>
-          threshold: <number>
-          duration: <time_span>
-
-    - Checks if a data source’s value has stayed above (or below, based on comparison) a given threshold for a specified duration.
-    - The comparison is always `>` (greater than) the threshold. If a `<` threshold is needed, consider inverting logic or using comparison conditions combined with a temporal mechanism.
-    - Duration is specified as a string, e.g. `500ms`, `2s`.
-    - Example:
-
-            condition:
-              type: threshold_over_time
-              data_source: temperature
-              threshold: 50
-              duration: 500ms
-
-3.  **Expression Condition**:
-
-        condition:
-          type: expression
-          expression: "(<data_key> ± <number> ... ) <operator> <number>"
-
-    - Arbitrary arithmetic on one or more data sources is allowed, followed by a comparison.
-    - Supported arithmetic: `+`, `-`, `*`, `/`
-    - Supported comparison operators: `<`, `>`, `<=`, `>=`, `==`, `!=`
-    - Parentheses for grouping are allowed.
-    - Example:
-
-            condition:
-              type: expression
-              expression: "(temperature - 32) * (5/9) > 10"
-
-### Logical Grouping Examples
-
-**Using `all`:**
-
-    conditions:
-      all:
-        - condition: { ... }  # Must be true
-        - condition: { ... }  # Must be true
-
-**Using `any`:**
-
-    conditions:
-      any:
-        - condition: { ... }  # If any one of these is true
-        - condition: { ... }
-
-**Nested conditions:**
-
+```yaml
+rules:
+  - name: "HighTemperatureAlert"
+    description: "Alerts when temperature is >50 for 500ms"
     conditions:
       all:
         - condition:
+            type: threshold_over_time
+            sensor: temperature
+            threshold: 50
+            duration: 500ms
+    actions:
+      - set_value:
+          key: "alerts:temperature"
+          value: "1"
+      - send_message:
+          channel: "alerts"
+          message: "Temperature too high!"
+
+  - name: "ComplexCondition"
+    description: "Sets converted_temp when humidity<30 or computed temp>10C"
+    conditions:
+      any:
+        - condition:
             type: comparison
-            data_source: humidity
+            sensor: humidity
             operator: "<"
             value: 30
-        - any:
-            - condition:
-                type: comparison
-                data_source: temperature
-                operator: ">"
-                value: 50
-            - condition:
-                type: expression
-                expression: "(temperature - 32) * (5/9) > 10"
+        - condition:
+            type: expression
+            expression: "(temperature - 32) * (5/9) > 10"
+    actions:
+      - set_value:
+          key: "converted_temp"
+          value_expression: "(temperature - 32) * (5/9)"
+      - send_message:
+          channel: "conversion"
+          message: "Temperature converted and above threshold!"
+```
 
-## Actions
+### Validation & Compilation Flow
 
-Actions are triggered if the conditions of a rule are met. Actions are executed asynchronously. Certain actions may be batched before updating the KV store for efficiency.
+1. System Configuration Load:
+   The compiler and other services first load system_config.yaml. From here, they obtain the valid_sensors and other global configurations.
 
-### Supported Actions
+2. Rules Load & Validation:
+   The compiler then loads rules.yaml.
 
-1.  **Set Value Action**:
+- The DSL schema ensures structural correctness.
+- The compiler checks each referenced sensor against valid_sensors from the system configuration.
+- The compiler validates arithmetic expressions and condition types.
 
-        - set_value:
-            key: <string>
-            value: <string>
+3. Compilation:
+   On successful validation, the compiler:
 
-    OR using an expression:
+- Infers dependencies and optimizes the order of rule execution.
+- Generates multiple C# files (e.g., 100 rules per file) for manageability.
+- Integrates temporal conditions by generating code that references runtime-managed state.
+- Produces a metadata class describing all rules, their sensors, and actions.
 
-        - set_value:
-            key: <string>
-            value_expression: <expression_string>
+### Rule Structure
 
-    - This writes a key/value pair back into the KV store (Redis).
-    - `value` is a literal string.
-    - `value_expression` allows arithmetic on data source values before setting the key.
+Each rule in rules.yaml must have:
 
-2.  **Send Message Action**:
+- name (required): Unique identifier for the rule.
+- description (optional): A human-readable explanation.
+- conditions (required): Logical constructs using all, any, and condition.
+- actions (required): A list of actions to execute if conditions are met.
 
-        - send_message:
-            channel: <string>
-            message: <string>
+### Conditions
 
-    - Sends a message to an external system (e.g., a messaging queue) asynchronously.
+Logical Grouping:
 
-## Validation
+- all: All conditions in its list must be true.
+- any: At least one condition in its list must be true.
+  Condition Types:
 
-- **Schema Validation**:
-  A JSON Schema (external document) will validate:
+1. Comparison:
 
-      - Proper structure of `rules.yaml` (presence of `version`, `valid_data_sources`, and `rules`).
-      - Each rule’s fields and condition/action structures.
-      - Data source references must appear in `valid_data_sources`.
-      - Operators and condition types must be known and valid.
+```yaml
+condition:
+  type: comparison
+  sensor: <sensor_key>
+  operator: "<|>|<=|>=|==|!="
+  value: <number>
+```
 
-- **Compilation Validation**:
-  The compiler will:
+2. Threshold Over Time:
 
-      - Check for unknown data sources not listed in `valid_data_sources`.
-      - Validate arithmetic expressions for syntax errors.
-      - Ensure no circular dependencies between rules.
-      - Produce clear, descriptive errors if invalid references or structures are found.
+```yaml
+condition:
+  type: threshold_over_time
+  sensor: <sensor_key>
+  threshold: <number>
+  duration: <time_span> (e.g., 500ms, 2s)
+```
 
-## Compilation & Generated Code
+3. Expression:
 
-- **Process**:
+```yaml
+condition:
+  type: expression
+  expression: "(<sensor_key> [+-*/] <number> ...) <operator> <number>"
+```
 
-  - The DSL is parsed into an internal representation.
-  - The compiler identifies dependencies (e.g., which data sources each rule needs, which keys get set).
-  - Dependencies and ordering are optimized to minimize redundant evaluations.
-  - Temporal conditions trigger the generation of code that references runtime-provided temporal state management.
-  - The compiler emits C# code split into multiple files for manageability (e.g., 100 rules per file).
-  - All code files may be combined into a single assembly/class via partial classes.
+### Actions
 
-- **Runtime Integration**:
+1. Set Value:
 
-  - The runtime passes data source values into the compiled methods every cycle (100ms).
-  - The compiled code evaluates rules and triggers actions as needed.
-  - The runtime manages temporal states and caching for data sources that require it.
+```yaml
+- set_value:
+    key: <string>
+    value: <string> | value_expression: <expression_string>
+```
 
-## Metadata Generation
+2. Send Message:
 
-- **Rule Metadata Class**:
-  The compiler generates a `RuleMetadata` class that provides a dictionary of rule names to `RuleInfo` objects. Each `RuleInfo` includes:
+```yaml
+- send_message:
+    channel: <string>
+    message: <string>
+```
 
-  - Rule name
-  - Description
-  - Referenced data sources
-  - Actions performed
-  - Condition types
+### Metadata Generation
 
-- **Uses of Metadata**:
+A separate generated file (e.g., RuleMetadata.cs) will provide a dictionary of all rules and their characteristics. This includes:
 
-  - Runtime debugging: Inspect which rules are defined and what they depend on.
-  - Dependency visualization: Understand how rules interact without reading YAML or C# code.
-  - Documentation generation: Transform metadata into human-friendly docs.
-  - Performance optimization: Identify which rules depend on which data sources to skip unneeded evaluations.
+- Rule name
+- Description
+- Sensors referenced
+- Actions performed
+- Condition types
 
-## Error Handling & Logging
+This metadata aids in debugging, visualization, and documentation.
 
-- **Compilation Errors**:
-  If a rule references an unknown data source or uses an invalid operator, the compiler fails with a descriptive error.
-- **Runtime Logging**:
+### Error Handling & Logging
 
-  - Optional hooks for logging rule evaluations, condition checks, and action executions.
-  - Metadata can be leveraged to provide clear and meaningful log messages.
+- Compile-Time Errors:
+  - If a rule references an invalid sensor, compilation fails.
+  - If an expression is malformed, compilation fails.
+  - Descriptive error messages help identify and fix issues quickly.
+- Runtime Logging:
+  - Optional hooks in generated code for logging rule evaluations, condition checks, and actions.
 
-## Lifecycle
+### Lifecycle
 
-- **Development Time**:
-  The rules are created and validated using the DSL. The code is compiled and tested.
-- **Deployment**:
-  Once deployed, the rules do not change frequently. If changes occur, the entire set is re-validated and re-compiled.
+- Development:
+  - Engineers write and edit system_config.yaml (for global sensors) and rules.yaml (for logic).
+  - The code is validated, compiled, and tested before deployment.
+- Deployment:
+  - Once deployed, the rules remain stable. Any changes require re-validation and compilation.
 
 ---
 
-**This DSL Specification** should be used as the primary reference for designing and implementing the parser, compiler, runtime engine, and associated tooling. It defines the structure, capabilities, and requirements for the rules engine DSL.
+This Updated DSL Specification serves as the authoritative reference for the rules DSL, the system configuration, and how they interact. It defines how to separate global configuration from rule logic, how to validate and compile the rules, and how to generate the necessary runtime artifacts (C# code and metadata).

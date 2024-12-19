@@ -1,4 +1,6 @@
-﻿namespace Pulsar.RuleDefinition.Tests;
+using Xunit;
+
+namespace Pulsar.RuleDefinition.Tests;
 
 public class UnitTest1
 {

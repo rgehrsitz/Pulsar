@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using Pulsar.RuleDefinition.Analysis;
 using Pulsar.RuleDefinition.Models;
+using Xunit;
 
 namespace Pulsar.RuleDefinition.Tests.Analysis;
 
@@ -19,7 +21,6 @@ public class DependencyAnalyzerTests
         var ruleSet = new RuleSetDefinition
         {
             Version = 1,
-            ValidDataSources = new List<string> { "temperature", "humidity" },
             Rules = new List<Rule>
             {
                 CreateRule("Rule1", "temperature > 50", "output1"),
@@ -43,7 +44,6 @@ public class DependencyAnalyzerTests
         var ruleSet = new RuleSetDefinition
         {
             Version = 1,
-            ValidDataSources = new List<string> { "temperature", "derived_temp" },
             Rules = new List<Rule>
             {
                 CreateRule("Rule2", "derived_temp > 100", "output2"),
@@ -68,11 +68,10 @@ public class DependencyAnalyzerTests
         var ruleSet = new RuleSetDefinition
         {
             Version = 1,
-            ValidDataSources = new List<string> { "value1", "value2" },
             Rules = new List<Rule>
             {
-                CreateRule("Rule1", "value2 > 0", "value1"),
-                CreateRule("Rule2", "value1 > 0", "value2")
+                CreateRule("Rule1", "output2 > 0", "output1"),
+                CreateRule("Rule2", "output1 > 0", "output2")
             }
         };
 
@@ -81,7 +80,7 @@ public class DependencyAnalyzerTests
 
         // Assert
         Assert.NotEmpty(cyclicDependencies);
-        Assert.Contains(cyclicDependencies, cd => cd.Contains("Cyclic dependency"));
+        Assert.Contains(cyclicDependencies, e => e.Contains("Cyclic dependency"));
     }
 
     [Fact]
@@ -91,7 +90,6 @@ public class DependencyAnalyzerTests
         var ruleSet = new RuleSetDefinition
         {
             Version = 1,
-            ValidDataSources = new List<string> { "input", "temp1", "temp2", "result" },
             Rules = new List<Rule>
             {
                 CreateRule("Rule3", "temp2 > 0", "result"),

@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using Pulsar.RuleDefinition.Models;
@@ -24,16 +27,30 @@ public class RuleParser
     /// </summary>
     /// <param name="yamlContent">The YAML content to parse</param>
     /// <returns>A RuleSetDefinition object representing the parsed rules</returns>
-    /// <exception cref="YamlDotNet.Core.YamlException">Thrown when the YAML is invalid</exception>
+    /// <exception cref="ArgumentException">If the YAML is invalid or missing required fields</exception>
     public RuleSetDefinition ParseRules(string yamlContent)
     {
+        if (string.IsNullOrWhiteSpace(yamlContent))
+        {
+            throw new ArgumentException("YAML content cannot be empty");
+        }
+
         try
         {
-            return _deserializer.Deserialize<RuleSetDefinition>(yamlContent);
+            var result = _deserializer.Deserialize<RuleSetDefinition>(yamlContent);
+            if (result == null)
+            {
+                throw new ArgumentException("Invalid YAML: failed to deserialize to RuleSetDefinition");
+            }
+            return result;
         }
-        catch (YamlDotNet.Core.YamlException ex)
+        catch (YamlException ex)
         {
-            throw new RuleParsingException("Failed to parse rule definitions", ex);
+            throw new ArgumentException($"Invalid YAML format: {ex.Message}", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new ArgumentException($"Invalid YAML content: {ex.Message}", ex);
         }
     }
 
@@ -42,8 +59,8 @@ public class RuleParser
     /// </summary>
     /// <param name="filePath">Path to the YAML file</param>
     /// <returns>A RuleSetDefinition object representing the parsed rules</returns>
-    /// <exception cref="FileNotFoundException">Thrown when the file doesn't exist</exception>
-    /// <exception cref="YamlDotNet.Core.YamlException">Thrown when the YAML is invalid</exception>
+    /// <exception cref="FileNotFoundException">If the file doesn't exist</exception>
+    /// <exception cref="ArgumentException">If the YAML is invalid or missing required fields</exception>
     public RuleSetDefinition ParseRulesFromFile(string filePath)
     {
         if (!File.Exists(filePath))
