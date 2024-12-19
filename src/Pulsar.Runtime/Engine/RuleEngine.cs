@@ -35,7 +35,7 @@ public class RuleEngine : BackgroundService
 
         // Initialize evaluators
         _comparisonEvaluator = new ComparisonEvaluator();
-        _thresholdEvaluator = new ThresholdOverTimeEvaluator(_sensorDataProvider);
+        _thresholdEvaluator = new ThresholdOverTimeEvaluator(_sensorDataProvider, _logger);
 
         // Initialize historical value buffers for all input sensors
         _historicalValues = new Dictionary<string, RingBuffer<double>>();

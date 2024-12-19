@@ -50,16 +50,6 @@ public class ComparisonCondition : Condition
 }
 
 /// <summary>
-/// Represents a threshold over time condition
-/// </summary>
-public class ThresholdOverTimeCondition : Condition
-{
-    public string DataSource { get; set; } = string.Empty;
-    public double Threshold { get; set; }
-    public string Duration { get; set; } = string.Empty;
-}
-
-/// <summary>
 /// Represents an expression-based condition
 /// </summary>
 public class ExpressionCondition : Condition

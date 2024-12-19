@@ -55,6 +55,21 @@ public class ConditionTypeConverter : IYamlTypeConverter
                 case "duration" when condition is ThresholdOverTimeCondition threshold:
                     threshold.Duration = value;
                     break;
+                case "operator" when condition is ThresholdOverTimeCondition threshold:
+                    threshold.Operator = value.ToLowerInvariant() switch
+                    {
+                        ">" or "gt" => ThresholdOperator.GreaterThan,
+                        "<" or "lt" => ThresholdOperator.LessThan,
+                        _ => throw new YamlException($"Invalid threshold operator: {value}")
+                    };
+                    break;
+                case "required_percentage" when condition is ThresholdOverTimeCondition threshold:
+                    if (value.EndsWith("%"))
+                    {
+                        value = value[..^1];
+                    }
+                    threshold.RequiredPercentage = double.Parse(value) / 100.0;
+                    break;
                 case "expression" when condition is ExpressionCondition expr:
                     expr.Expression = value;
                     break;
@@ -95,6 +110,18 @@ public class ConditionTypeConverter : IYamlTypeConverter
                 emitter.Emit(new Scalar(threshold.Threshold.ToString()));
                 emitter.Emit(new Scalar("duration"));
                 emitter.Emit(new Scalar(threshold.Duration));
+                emitter.Emit(new Scalar("operator"));
+                emitter.Emit(new Scalar(threshold.Operator switch
+                {
+                    ThresholdOperator.GreaterThan => ">",
+                    ThresholdOperator.LessThan => "<",
+                    _ => throw new YamlException($"Invalid threshold operator: {threshold.Operator}")
+                }));
+                if (threshold.RequiredPercentage < 1.0)
+                {
+                    emitter.Emit(new Scalar("required_percentage"));
+                    emitter.Emit(new Scalar(threshold.RequiredPercentage.ToString("P0")));
+                }
                 break;
             case ExpressionCondition expr:
                 emitter.Emit(new Scalar("expression"));
