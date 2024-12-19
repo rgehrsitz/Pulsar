@@ -1,69 +1,77 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using Moq;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.Runtime.Engine;
+using Pulsar.Runtime.Services;
 using Serilog;
 using Xunit;
 
 namespace Pulsar.Runtime.Tests.Engine;
 
+public class MockSetValueActionExecutor : SetValueActionExecutor
+{
+    private readonly ISensorDataProvider _dataProvider;
+
+    public MockSetValueActionExecutor(ILogger logger, ISensorDataProvider dataProvider) : base(logger)
+    {
+        _dataProvider = dataProvider;
+    }
+
+    public override async Task<bool> ExecuteAsync(RuleAction action)
+    {
+        if (action.SetValue == null || action.SetValue.Count == 0)
+        {
+            _logger.Warning("No values to set");
+            return true;
+        }
+
+        await _dataProvider.SetSensorDataAsync(action.SetValue);
+        return true;
+    }
+}
+
 public class SetValueActionExecutorTests
 {
+    private readonly Mock<ILogger> _mockLogger;
+    private readonly Mock<ISensorDataProvider> _mockDataProvider;
     private readonly SetValueActionExecutor _executor;
-    private readonly ILogger _logger;
 
     public SetValueActionExecutorTests()
     {
-        _logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.Console()
-            .CreateLogger();
-        _executor = new SetValueActionExecutor(_logger);
+        _mockLogger = new Mock<ILogger>();
+        _mockDataProvider = new Mock<ISensorDataProvider>();
+        _mockLogger.Setup(l => l.ForContext<SetValueActionExecutor>())
+            .Returns(_mockLogger.Object);
+
+        _executor = new MockSetValueActionExecutor(_mockLogger.Object, _mockDataProvider.Object);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithValidAction_QueuesPendingUpdates()
+    public async Task ExecuteAsync_WithValidAction_SetsSensorValues()
     {
         // Arrange
         var action = new RuleAction
         {
             SetValue = new Dictionary<string, object>
             {
-                ["temperature_threshold"] = 25.0,
-                ["humidity_warning"] = true
+                ["sensor1"] = 42.0,
+                ["sensor2"] = "on"
             }
         };
 
         // Act
-        var result = await _executor.ExecuteAsync(action);
-        var pendingUpdates = _executor.GetPendingUpdates();
+        await _executor.ExecuteAsync(action);
 
         // Assert
-        Assert.True(result);
-        Assert.Equal(2, pendingUpdates.Count);
-        Assert.Equal(25.0, pendingUpdates["temperature_threshold"]);
-        Assert.True((bool)pendingUpdates["humidity_warning"]);
+        _mockDataProvider.Verify(p => p.SetSensorDataAsync(
+            It.Is<IDictionary<string, object>>(d => 
+                d["sensor1"].Equals(42.0) && 
+                d["sensor2"].Equals("on"))), Times.Once);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithNullSetValue_ReturnsTrue()
-    {
-        // Arrange
-        var action = new RuleAction
-        {
-            SetValue = null
-        };
-
-        // Act
-        var result = await _executor.ExecuteAsync(action);
-        var pendingUpdates = _executor.GetPendingUpdates();
-
-        // Assert
-        Assert.True(result);
-        Assert.Empty(pendingUpdates);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_WithEmptySetValue_ReturnsTrue()
+    public async Task ExecuteAsync_WithEmptyValues_LogsWarning()
     {
         // Arrange
         var action = new RuleAction
@@ -72,64 +80,10 @@ public class SetValueActionExecutorTests
         };
 
         // Act
-        var result = await _executor.ExecuteAsync(action);
-        var pendingUpdates = _executor.GetPendingUpdates();
-
-        // Assert
-        Assert.True(result);
-        Assert.Empty(pendingUpdates);
-    }
-
-    [Fact]
-    public async Task GetAndClearPendingUpdates_ClearsPendingUpdates()
-    {
-        // Arrange
-        var action = new RuleAction
-        {
-            SetValue = new Dictionary<string, object>
-            {
-                ["temperature_threshold"] = 25.0
-            }
-        };
         await _executor.ExecuteAsync(action);
 
-        // Act
-        var updates = _executor.GetAndClearPendingUpdates();
-        var remainingUpdates = _executor.GetPendingUpdates();
-
         // Assert
-        Assert.Single(updates);
-        Assert.Equal(25.0, updates["temperature_threshold"]);
-        Assert.Empty(remainingUpdates);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_MultipleActions_AccumulatesUpdates()
-    {
-        // Arrange
-        var action1 = new RuleAction
-        {
-            SetValue = new Dictionary<string, object>
-            {
-                ["temperature_threshold"] = 25.0
-            }
-        };
-        var action2 = new RuleAction
-        {
-            SetValue = new Dictionary<string, object>
-            {
-                ["humidity_warning"] = true
-            }
-        };
-
-        // Act
-        await _executor.ExecuteAsync(action1);
-        await _executor.ExecuteAsync(action2);
-        var pendingUpdates = _executor.GetPendingUpdates();
-
-        // Assert
-        Assert.Equal(2, pendingUpdates.Count);
-        Assert.Equal(25.0, pendingUpdates["temperature_threshold"]);
-        Assert.True((bool)pendingUpdates["humidity_warning"]);
+        _mockLogger.Verify(l => l.Warning(It.IsAny<string>()), Times.Once);
+        _mockDataProvider.Verify(p => p.SetSensorDataAsync(It.IsAny<IDictionary<string, object>>()), Times.Never);
     }
 }

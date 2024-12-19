@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Collections.Generic;
 using Pulsar.Core;
 using Pulsar.Runtime.Services;
 using Pulsar.RuleDefinition.Models;
@@ -19,16 +20,19 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
     private readonly ILogger _logger;
     private readonly TimeSeriesService _timeSeriesService;
     private readonly TimeSpan _samplingRate;
+    private readonly IMetricsService _metricsService;
 
     public ThresholdOverTimeEvaluator(
         ISensorDataProvider dataProvider,
         ILogger logger,
+        IMetricsService metricsService,
         TimeSpan? samplingRate = null)
     {
         _dataProvider = dataProvider ?? throw new ArgumentNullException(nameof(dataProvider));
         _logger = logger.ForContext<ThresholdOverTimeEvaluator>();
         _validator = new TemporalValidator();
-        _timeSeriesService = new TimeSeriesService(logger);
+        _metricsService = metricsService;
+        _timeSeriesService = new TimeSeriesService(logger, metricsService, 100); // Store last 100 values per sensor
         _samplingRate = samplingRate ?? TimeSpan.FromSeconds(1);
     }
 
@@ -36,32 +40,24 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
     {
         if (condition is not ThresholdOverTimeCondition thresholdCondition)
         {
-            _logger.Error("Invalid condition type. Expected {ExpectedType} but got {ActualType}", 
-                typeof(ThresholdOverTimeCondition).Name, condition.GetType().Name);
-            throw new ArgumentException($"Expected ThresholdOverTimeCondition but got {condition.GetType().Name}");
+            _logger.Warning("Invalid condition type {ConditionType}", condition.GetType().Name);
+            return false;
         }
 
-        _logger.Debug("Starting evaluation of threshold over time condition for {DataSource}", thresholdCondition.DataSource);
-
-        // Validate the condition
         var errors = _validator.ValidateTemporalCondition(thresholdCondition);
         if (errors.Any())
         {
-            _logger.Error("Invalid temporal condition: {@Condition} - Errors: {@Errors}", 
-                thresholdCondition, errors);
+            _logger.Warning("Invalid condition: {ValidationErrors}", string.Join(", ", errors));
             return false;
         }
 
         var dataSource = thresholdCondition.DataSource;
-        if (!sensorData.ContainsKey(dataSource))
+        if (!sensorData.TryGetValue(dataSource, out var currentValue))
         {
-            _logger.Warning("Data source {DataSource} not found in available sensors: {@AvailableSensors}", 
-                dataSource, sensorData.Keys);
+            _logger.Warning("No data found for source {DataSource}", dataSource);
             return false;
         }
 
-        // Update the time series with the current value
-        var currentValue = sensorData[dataSource];
         var now = DateTime.UtcNow;
         var lastTimestamp = _timeSeriesService.GetTimeWindow(dataSource, TimeSpan.FromMilliseconds(1)).LastOrDefault().Timestamp;
 
@@ -81,49 +77,43 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
                 dataSource, lastTimestamp);
         }
 
-        // Get historical data from the time series
-        var duration = TimeSpan.FromMilliseconds(thresholdCondition.DurationMs);
+        var duration = ParseDuration(thresholdCondition.Duration);
         var values = _timeSeriesService.GetTimeWindow(dataSource, duration);
 
-        if (values.Length == 0)
+        if (!values.Any())
         {
-            _logger.Debug("No historical data available for {DataSource} in the last {Duration}", 
-                dataSource, duration);
+            _logger.Warning("No values found in time window for source {DataSource}", dataSource);
             return false;
         }
 
-        _logger.Debug("Retrieved {Count} historical values for {DataSource} over {Duration}", 
-            values.Length, dataSource, duration);
-
-        // Calculate the percentage of values that meet the threshold condition
-        var threshold = thresholdCondition.Threshold;
-        var requiredPercentage = thresholdCondition.RequiredPercentage;
-        var valuesAboveThreshold = values.Count(x => x.Value >= threshold);
-        var valuesBelowThreshold = values.Count(x => x.Value <= threshold);
-        var totalValues = values.Length;
-
-        // Calculate the actual percentage based on the operator
-        var actualPercentage = thresholdCondition.Operator switch
+        var result = thresholdCondition.Operator switch
         {
-            ThresholdOperator.GreaterThan => (double)valuesAboveThreshold / totalValues,
-            ThresholdOperator.LessThan => (double)valuesBelowThreshold / totalValues,
-            _ => throw new ArgumentException($"Unsupported threshold operator: {thresholdCondition.Operator}")
+            ThresholdOperator.GreaterThan => values.All(v => v.Value > thresholdCondition.Threshold),
+            ThresholdOperator.LessThan => values.All(v => v.Value < thresholdCondition.Threshold),
+            _ => throw new ArgumentException($"Invalid operator {thresholdCondition.Operator}")
         };
 
-        // Log the evaluation details
-        _logger.Information(
-            "Threshold evaluation for {DataSource}: {Operator} {Threshold}, {ActualCount}/{TotalCount} values meet condition ({ActualPercentage:P2}, required: {RequiredPercentage:P2})",
-            dataSource,
-            thresholdCondition.Operator,
-            threshold,
-            thresholdCondition.Operator == ThresholdOperator.GreaterThan ? valuesAboveThreshold : valuesBelowThreshold,
-            totalValues,
-            actualPercentage,
-            requiredPercentage);
-
-        var result = actualPercentage >= requiredPercentage;
-        _logger.Debug("Evaluation result for {DataSource}: {Result}", dataSource, result);
-
+        _metricsService.RecordConditionEvaluation("", "ThresholdOverTime", result);
         return result;
+    }
+
+    private static TimeSpan ParseDuration(string duration)
+    {
+        if (string.IsNullOrEmpty(duration))
+        {
+            throw new ArgumentException("Duration cannot be null or empty", nameof(duration));
+        }
+
+        var lastChar = duration[^1];
+        var value = int.Parse(duration[..^1]);
+
+        return lastChar switch
+        {
+            's' => TimeSpan.FromSeconds(value),
+            'm' => TimeSpan.FromMinutes(value),
+            'h' => TimeSpan.FromHours(value),
+            'd' => TimeSpan.FromDays(value),
+            _ => throw new ArgumentException($"Invalid duration format: {duration}. Use s, m, h, or d suffix.")
+        };
     }
 }

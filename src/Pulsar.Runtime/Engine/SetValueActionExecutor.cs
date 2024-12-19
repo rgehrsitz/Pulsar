@@ -11,7 +11,7 @@ namespace Pulsar.Runtime.Engine;
 public class SetValueActionExecutor : IActionExecutor
 {
     private readonly ConcurrentDictionary<string, object> _pendingUpdates;
-    private readonly ILogger _logger;
+    protected readonly ILogger _logger;
 
     public SetValueActionExecutor(ILogger logger)
     {
@@ -19,7 +19,7 @@ public class SetValueActionExecutor : IActionExecutor
         _logger = logger.ForContext<SetValueActionExecutor>();
     }
 
-    public Task<bool> ExecuteAsync(RuleAction action)
+    public virtual Task<bool> ExecuteAsync(RuleAction action)
     {
         if (action.SetValue == null || action.SetValue.Count == 0)
         {

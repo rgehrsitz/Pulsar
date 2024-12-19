@@ -9,14 +9,14 @@ namespace Pulsar.Runtime.Engine;
 /// </summary>
 public class SendMessageActionExecutor : IActionExecutor
 {
-    private readonly ILogger _logger;
+    protected readonly ILogger _logger;
 
     public SendMessageActionExecutor(ILogger logger)
     {
         _logger = logger.ForContext<SendMessageActionExecutor>();
     }
 
-    public Task<bool> ExecuteAsync(RuleAction action)
+    public virtual Task<bool> ExecuteAsync(RuleAction action)
     {
         if (action.SendMessage == null || action.SendMessage.Count == 0)
         {
