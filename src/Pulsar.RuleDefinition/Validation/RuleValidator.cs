@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Analysis;
 
 namespace Pulsar.RuleDefinition.Validation;
 
@@ -11,11 +12,13 @@ namespace Pulsar.RuleDefinition.Validation;
 public class RuleValidator
 {
     private readonly SystemConfig _systemConfig;
+    private readonly DependencyAnalyzer _dependencyAnalyzer;
     private static readonly HashSet<string> ValidOperators = new() { ">", "<", ">=", "<=", "==", "!=" };
 
     public RuleValidator(SystemConfig systemConfig)
     {
         _systemConfig = systemConfig ?? throw new ArgumentNullException(nameof(systemConfig));
+        _dependencyAnalyzer = new DependencyAnalyzer();
     }
 
     /// <summary>
@@ -50,10 +53,22 @@ public class RuleValidator
             errors.Add(new ValidationError($"Duplicate rule name: {duplicate}"));
         }
 
+        if (errors.Any())
+        {
+            return new ValidationResult(errors);
+        }
+
         // Validate each rule
         foreach (var rule in ruleSet.Rules)
         {
             errors.AddRange(ValidateRule(rule));
+        }
+
+        // Check for circular dependencies
+        var (_, cyclicDependencies) = _dependencyAnalyzer.AnalyzeAndOrder(ruleSet);
+        foreach (var dependency in cyclicDependencies)
+        {
+            errors.Add(new ValidationError(dependency));
         }
 
         return new ValidationResult(errors);
