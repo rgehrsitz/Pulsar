@@ -97,4 +97,57 @@ rules:
         // Act & Assert
         Assert.Throws<ArgumentException>(() => _parser.ParseRules(emptyYaml));
     }
+
+    [Fact]
+    public void ParseRules_MissingName_ThrowsException()
+    {
+        // Arrange
+        var yaml = @"
+version: 1
+rules:
+  - conditions:
+      all:
+        - type: comparison
+          data_source: temperature
+          operator: '>'
+          value: 50";
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => _parser.ParseRules(yaml));
+    }
+
+    [Fact]
+    public void ParseRules_MissingConditions_ThrowsException()
+    {
+        // Arrange
+        var yaml = @"
+version: 1
+rules:
+  - name: Test
+    actions:
+      - type: notify
+        message: Test message";
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => _parser.ParseRules(yaml));
+    }
+
+    [Fact]
+    public void ParseRules_InvalidConditionType_ThrowsException()
+    {
+        // Arrange
+        var yaml = @"
+version: 1
+rules:
+  - name: Test
+    conditions:
+      all:
+        - type: invalid_type
+          data_source: temperature
+          operator: '>'
+          value: 50";
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => _parser.ParseRules(yaml));
+    }
 }

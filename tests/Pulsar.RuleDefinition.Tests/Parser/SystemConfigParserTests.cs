@@ -104,6 +104,51 @@ valid_sensors:
     }
 
     [Fact]
+    public void Parse_DuplicateSensorNames_ThrowsException()
+    {
+        // Arrange
+        var yaml = @"
+version: 1
+valid_sensors:
+  - temperature
+  - humidity
+  - temperature";  // Duplicate sensor name
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => _parser.Parse(yaml));
+    }
+
+    [Fact]
+    public void Parse_WhitespaceSensorName_ThrowsException()
+    {
+        // Arrange
+        var yaml = @"
+version: 1
+valid_sensors:
+  - temperature
+  - ""   ""
+  - humidity";
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => _parser.Parse(yaml));
+    }
+
+    [Fact]
+    public void Parse_NullSensorName_ThrowsException()
+    {
+        // Arrange
+        var yaml = @"
+version: 1
+valid_sensors:
+  - temperature
+  - null
+  - humidity";
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => _parser.Parse(yaml));
+    }
+
+    [Fact]
     public void ParseFile_ValidFile_ReturnsConfig()
     {
         // Arrange

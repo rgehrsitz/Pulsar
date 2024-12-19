@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -42,11 +43,35 @@ public class RuleParser
             {
                 throw new ArgumentException("Invalid YAML: failed to deserialize to RuleSetDefinition");
             }
+
+            // Validate required fields
+            if (result.Rules == null || !result.Rules.Any())
+            {
+                throw new ArgumentException("At least one rule must be defined");
+            }
+
+            foreach (var rule in result.Rules)
+            {
+                if (string.IsNullOrWhiteSpace(rule.Name))
+                {
+                    throw new ArgumentException("Rule name cannot be empty or whitespace");
+                }
+
+                if (rule.Conditions == null)
+                {
+                    throw new ArgumentException($"Rule '{rule.Name}' must have conditions defined");
+                }
+            }
+
             return result;
         }
         catch (YamlException ex)
         {
             throw new ArgumentException($"Invalid YAML format: {ex.Message}", ex);
+        }
+        catch (ArgumentException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
