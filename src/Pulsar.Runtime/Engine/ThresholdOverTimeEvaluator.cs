@@ -27,7 +27,7 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
 
         if (!sensorData.ContainsKey(thresholdCondition.DataSource))
         {
-            throw new KeyNotFoundException($"Data source '{thresholdCondition.DataSource}' not found in sensor data");
+            return false;
         }
 
         var duration = ParseDuration(thresholdCondition.Duration);
@@ -48,8 +48,8 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
         if (duration.Length < 2)
             throw new ArgumentException("Duration must be in format: [number][unit] (e.g., '5m', '1h')");
 
-        if (!int.TryParse(duration[..^1], out var value))
-            throw new ArgumentException($"Invalid duration format: {duration}. Expected format: [number][unit] (e.g., '5m', '1h')");
+        if (!int.TryParse(duration[..^1], out var value) || value <= 0)
+            throw new ArgumentException($"Invalid duration format: {duration}. Expected format: [positive number][unit] (e.g., '5m', '1h')");
 
         var unit = duration[^1];
 

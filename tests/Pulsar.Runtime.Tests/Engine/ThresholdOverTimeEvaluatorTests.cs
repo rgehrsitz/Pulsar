@@ -67,7 +67,7 @@ public class ThresholdOverTimeEvaluatorTests
     }
 
     [Fact]
-    public async Task EvaluateAsync_UnknownDataSource_ThrowsKeyNotFoundException()
+    public async Task EvaluateAsync_UnknownDataSource_ReturnsFalse()
     {
         // Arrange
         var condition = new ThresholdOverTimeCondition
@@ -78,9 +78,11 @@ public class ThresholdOverTimeEvaluatorTests
             Threshold = 30.0
         };
 
-        // Act & Assert
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => 
-            _evaluator.EvaluateAsync(condition, _currentData));
+        // Act
+        var result = await _evaluator.EvaluateAsync(condition, _currentData);
+
+        // Assert
+        Assert.False(result);
     }
 
     [Fact]
@@ -93,6 +95,50 @@ public class ThresholdOverTimeEvaluatorTests
             DataSource = "temperature",
             Operator = ">",
             Value = 30.0
+        };
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ArgumentException>(() => 
+            _evaluator.EvaluateAsync(condition, _currentData));
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_NoHistoricalData_ReturnsFalse()
+    {
+        // Arrange
+        var condition = new ThresholdOverTimeCondition
+        {
+            Type = "threshold_over_time",
+            DataSource = "empty_sensor",
+            Duration = "5m",
+            Threshold = 30.0
+        };
+
+        var emptyDataProvider = new EmptyMockSensorDataProvider();
+        var evaluator = new ThresholdOverTimeEvaluator(emptyDataProvider);
+
+        // Act
+        var result = await evaluator.EvaluateAsync(condition, _currentData);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Theory]
+    [InlineData("0m")]  // Zero duration
+    [InlineData("-5m")] // Negative duration
+    [InlineData("")]    // Empty duration
+    [InlineData("5")]   // Missing unit
+    [InlineData("5x")]  // Invalid unit
+    public async Task EvaluateAsync_InvalidDurationFormat_ThrowsArgumentException(string duration)
+    {
+        // Arrange
+        var condition = new ThresholdOverTimeCondition
+        {
+            Type = "threshold_over_time",
+            DataSource = "temperature",
+            Duration = duration,
+            Threshold = 30.0
         };
 
         // Act & Assert
@@ -132,5 +178,33 @@ public class MockSensorDataProvider : ISensorDataProvider
         }
 
         return Task.FromResult<IReadOnlyList<(DateTime Timestamp, double Value)>>(data);
+    }
+
+    public Task SetSensorDataAsync(IDictionary<string, object> values)
+    {
+        // For testing, we don't need to actually store the values
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Mock implementation of ISensorDataProvider that always returns empty data
+/// </summary>
+public class EmptyMockSensorDataProvider : ISensorDataProvider
+{
+    public Task<IDictionary<string, double>> GetCurrentDataAsync()
+    {
+        return Task.FromResult<IDictionary<string, double>>(new Dictionary<string, double>());
+    }
+
+    public Task<IReadOnlyList<(DateTime Timestamp, double Value)>> GetHistoricalDataAsync(string sensorName, TimeSpan duration)
+    {
+        return Task.FromResult<IReadOnlyList<(DateTime Timestamp, double Value)>>(
+            Array.Empty<(DateTime Timestamp, double Value)>());
+    }
+
+    public Task SetSensorDataAsync(IDictionary<string, object> values)
+    {
+        return Task.CompletedTask;
     }
 }

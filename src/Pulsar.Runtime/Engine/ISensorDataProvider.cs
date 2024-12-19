@@ -18,4 +18,10 @@ public interface ISensorDataProvider
     /// <param name="duration">Time window duration</param>
     /// <returns>List of sensor values within the specified time window</returns>
     Task<IReadOnlyList<(DateTime Timestamp, double Value)>> GetHistoricalDataAsync(string sensorName, TimeSpan duration);
+
+    /// <summary>
+    /// Sets multiple sensor values
+    /// </summary>
+    /// <param name="values">Dictionary of sensor names to their values</param>
+    Task SetSensorDataAsync(IDictionary<string, object> values);
 }

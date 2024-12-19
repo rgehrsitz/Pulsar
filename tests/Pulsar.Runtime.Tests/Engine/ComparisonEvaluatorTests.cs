@@ -49,6 +49,29 @@ public class ComparisonEvaluatorTests
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData(">", double.MaxValue, false)]  // Test boundary: max value
+    [InlineData("<", double.MinValue, false)]  // Test boundary: min value
+    [InlineData("==", 25.000000001, false)]    // Test precision comparison
+    [InlineData("==", 25.0, true)]             // Test exact equality
+    public async Task EvaluateAsync_BoundaryValues_HandledCorrectly(string op, double value, bool expected)
+    {
+        // Arrange
+        var condition = new ComparisonCondition
+        {
+            Type = "comparison",
+            DataSource = "temperature",
+            Operator = op,
+            Value = value
+        };
+
+        // Act
+        var result = await _evaluator.EvaluateAsync(condition, _sensorData);
+
+        // Assert
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public async Task EvaluateAsync_UnknownDataSource_ThrowsKeyNotFoundException()
     {
@@ -64,6 +87,23 @@ public class ComparisonEvaluatorTests
         // Act & Assert
         await Assert.ThrowsAsync<KeyNotFoundException>(() => 
             _evaluator.EvaluateAsync(condition, _sensorData));
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_EmptySensorData_ThrowsKeyNotFoundException()
+    {
+        // Arrange
+        var condition = new ComparisonCondition
+        {
+            Type = "comparison",
+            DataSource = "temperature",
+            Operator = ">",
+            Value = 20.0
+        };
+
+        // Act & Assert
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => 
+            _evaluator.EvaluateAsync(condition, new Dictionary<string, double>()));
     }
 
     [Fact]
