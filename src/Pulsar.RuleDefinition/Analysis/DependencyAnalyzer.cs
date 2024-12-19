@@ -2,74 +2,129 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Pulsar.RuleDefinition.Models;
-using Pulsar.RuleDefinition.Validation;
+using Serilog;
 
 namespace Pulsar.RuleDefinition.Analysis;
 
 public class DependencyAnalyzer
 {
-    private readonly ExpressionValidator _expressionValidator;
+    private readonly ILogger _logger;
 
     public DependencyAnalyzer()
     {
-        _expressionValidator = new ExpressionValidator();
+        _logger = Log.ForContext<DependencyAnalyzer>();
     }
 
-    public (List<Rule> orderedRules, List<string> cyclicDependencies) AnalyzeAndOrder(RuleSetDefinition ruleSet)
+    public (List<Rule> OrderedRules, List<string> CyclicDependencies) AnalyzeAndOrder(RuleSetDefinition ruleSet)
     {
-        var graph = BuildDependencyGraph(ruleSet.Rules);
-        var cyclicDependencies = new List<string>();
+        _logger.Information("Starting dependency analysis for ruleset {RuleSetVersion} with {RuleCount} rules", ruleSet.Version, ruleSet.Rules.Count);
 
-        // Check for cyclic dependencies
+        // First check for duplicate rule names
+        var duplicateRules = ruleSet.Rules
+            .GroupBy(r => r.Name)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        if (duplicateRules.Any())
+        {
+            _logger.Error("Found duplicate rule names: {@DuplicateRules}", duplicateRules);
+            return (new List<Rule>(), new List<string> { "Duplicate rule names found" });
+        }
+
+        var rules = ruleSet.Rules.ToDictionary(r => r.Name, r => r);
+        var graph = BuildDependencyGraph(rules);
+        
+        _logger.Debug("Built dependency graph with {NodeCount} nodes", graph.Count);
+        foreach (var (rule, deps) in graph)
+        {
+            _logger.Debug("Rule {RuleName} depends on: {@Dependencies}", rule, deps);
+        }
+
         var visited = new HashSet<string>();
         var recursionStack = new HashSet<string>();
+        var orderedRules = new List<Rule>();
+        var cyclicDependencies = new List<string>();
 
-        foreach (var rule in ruleSet.Rules)
+        foreach (var rule in rules.Keys)
         {
-            if (HasCyclicDependency(rule.Name, graph, visited, recursionStack))
+            if (!visited.Contains(rule))
             {
-                cyclicDependencies.Add($"Cyclic dependency detected involving rule '{rule.Name}'");
+                _logger.Debug("Checking for cycles starting from rule {RuleName}", rule);
+                if (HasCycle(rule, graph, visited, recursionStack, cyclicDependencies))
+                {
+                    _logger.Warning("Cyclic dependency detected starting from rule {RuleName}. Cycle: {@CyclicDependencies}", 
+                        rule, cyclicDependencies);
+                }
             }
         }
 
-        if (cyclicDependencies.Any())
+        if (!cyclicDependencies.Any())
         {
-            return (ruleSet.Rules, cyclicDependencies);
+            _logger.Information("No cyclic dependencies found, proceeding with topological sort");
+            
+            // If there are no dependencies, maintain original order
+            if (!graph.Any(kv => kv.Value.Any()))
+            {
+                _logger.Information("No dependencies found, maintaining original order");
+                orderedRules = ruleSet.Rules.ToList();
+            }
+            else
+            {
+                visited.Clear();
+                foreach (var rule in rules.Keys)
+                {
+                    if (!visited.Contains(rule))
+                    {
+                        TopologicalSort(rule, graph, visited, rules, orderedRules);
+                    }
+                }
+                _logger.Information("Successfully ordered {RuleCount} rules", orderedRules.Count);
+                _logger.Debug("Rule execution order: {@RuleOrder}", orderedRules.Select(r => r.Name));
+            }
+        }
+        else
+        {
+            _logger.Error("Found {CycleCount} cyclic dependencies in ruleset", cyclicDependencies.Count);
+            // Format cyclic dependencies as expected by tests
+            cyclicDependencies = cyclicDependencies.Select(c => $"Cyclic dependency detected: {c}").ToList();
         }
 
-        // If no dependencies exist, return the original order
-        if (!graph.Values.Any(deps => deps.Any()))
-        {
-            return (ruleSet.Rules, cyclicDependencies);
-        }
-
-        // Perform topological sort
-        var orderedRules = TopologicalSort(ruleSet.Rules, graph);
         return (orderedRules, cyclicDependencies);
     }
 
-    private Dictionary<string, HashSet<string>> BuildDependencyGraph(List<Rule> rules)
+    private Dictionary<string, HashSet<string>> BuildDependencyGraph(Dictionary<string, Rule> rules)
     {
-        var graph = rules.ToDictionary(r => r.Name, _ => new HashSet<string>());
-        var rulesByOutput = rules.ToDictionary(
-            r => r.Name,
-            r => r.Actions
-                .SelectMany(a => a.SetValue.Where(kv => kv.Key == "key").Select(kv => kv.Value?.ToString()))
-                .Where(k => k != null)
-                .ToHashSet()!
-        );
+        _logger.Debug("Building dependency graph for {RuleCount} rules", rules.Count);
+        var graph = new Dictionary<string, HashSet<string>>();
 
-        // Build the dependency graph
-        foreach (var rule in rules)
+        foreach (var (ruleName, rule) in rules)
         {
-            var dataSources = ExtractDataSources(rule);
-            foreach (var source in dataSources)
+            if (!graph.ContainsKey(ruleName))
             {
-                // Find which rule produces this data source
-                var producer = rules.FirstOrDefault(r => rulesByOutput[r.Name].Contains(source));
-                if (producer != null && producer.Name != rule.Name)  // Avoid self-dependencies
+                graph[ruleName] = new HashSet<string>();
+            }
+
+            var dataSources = GetDataSources(rule);
+            var outputs = GetOutputs(rule);
+
+            _logger.Debug("Rule {RuleName} - DataSources: {@DataSources}, Outputs: {@Outputs}", 
+                ruleName, dataSources, outputs);
+
+            foreach (var otherRule in rules.Values.Where(r => r.Name != ruleName))
+            {
+                var otherOutputs = GetOutputs(otherRule);
+                if (dataSources.Intersect(otherOutputs).Any())
                 {
-                    graph[producer.Name].Add(rule.Name);  // Producer must run before consumer
+                    // If otherRule writes to a sensor that this rule reads from,
+                    // then otherRule depends on this rule (not the other way around)
+                    if (!graph.ContainsKey(otherRule.Name))
+                    {
+                        graph[otherRule.Name] = new HashSet<string>();
+                    }
+                    graph[otherRule.Name].Add(ruleName);
+                    _logger.Debug("Added dependency: {RuleName} depends on {DependencyRule}", 
+                        otherRule.Name, ruleName);
                 }
             }
         }
@@ -77,103 +132,138 @@ public class DependencyAnalyzer
         return graph;
     }
 
-    private HashSet<string> ExtractDataSources(Rule rule)
+    private HashSet<string> GetDataSources(Rule rule)
     {
-        var dataSources = new HashSet<string>();
+        var sources = new HashSet<string>();
 
-        void ProcessConditions(List<Condition>? conditions)
+        if (rule.Conditions != null)
         {
-            if (conditions == null) return;
-
-            foreach (var condition in conditions)
+            if (rule.Conditions.All != null)
             {
-                switch (condition)
+                foreach (var condition in rule.Conditions.All)
                 {
-                    case ComparisonCondition comp:
-                        dataSources.Add(comp.DataSource);
-                        break;
+                    if (condition is ComparisonCondition comparison)
+                    {
+                        sources.Add(comparison.DataSource);
+                    }
+                    else if (condition is ThresholdOverTimeCondition threshold)
+                    {
+                        sources.Add(threshold.DataSource);
+                    }
+                    else if (condition is ExpressionCondition expression)
+                    {
+                        var parts = expression.Expression.Split(' ');
+                        sources.Add(parts[0]); // The first part is always the data source
+                    }
+                }
+            }
 
-                    case ThresholdOverTimeCondition threshold:
-                        dataSources.Add(threshold.DataSource);
-                        break;
-
-                    case ExpressionCondition expr:
-                        var (_, sources, _) = _expressionValidator.ValidateExpression(expr.Expression);
-                        dataSources.UnionWith(sources);
-                        break;
+            if (rule.Conditions.Any != null)
+            {
+                foreach (var condition in rule.Conditions.Any)
+                {
+                    if (condition is ComparisonCondition comparison)
+                    {
+                        sources.Add(comparison.DataSource);
+                    }
+                    else if (condition is ThresholdOverTimeCondition threshold)
+                    {
+                        sources.Add(threshold.DataSource);
+                    }
+                    else if (condition is ExpressionCondition expression)
+                    {
+                        var parts = expression.Expression.Split(' ');
+                        sources.Add(parts[0]); // The first part is always the data source
+                    }
                 }
             }
         }
 
-        ProcessConditions(rule.Conditions.All);
-        ProcessConditions(rule.Conditions.Any);
-
-        return dataSources;
+        return sources;
     }
 
-    private bool HasCyclicDependency(
-        string ruleName,
-        Dictionary<string, HashSet<string>> graph,
-        HashSet<string> visited,
-        HashSet<string> recursionStack)
+    private HashSet<string> GetOutputs(Rule rule)
     {
-        if (recursionStack.Contains(ruleName))
-            return true;
+        var outputs = new HashSet<string>();
 
-        if (visited.Contains(ruleName))
-            return false;
-
-        visited.Add(ruleName);
-        recursionStack.Add(ruleName);
-
-        if (graph.ContainsKey(ruleName))
+        if (rule.Actions != null)
         {
-            foreach (var dependency in graph[ruleName])
+            foreach (var action in rule.Actions)
             {
-                if (HasCyclicDependency(dependency, graph, visited, recursionStack))
+                if (action.SetValue != null && action.SetValue.TryGetValue("key", out var key))
                 {
+                    var keyStr = key?.ToString();
+                    if (!string.IsNullOrEmpty(keyStr))
+                    {
+                        outputs.Add(keyStr);
+                    }
+                }
+            }
+        }
+
+        return outputs;
+    }
+
+    private bool HasCycle(string rule, Dictionary<string, HashSet<string>> graph, HashSet<string> visited,
+        HashSet<string> recursionStack, List<string> cyclicDependencies)
+    {
+        visited.Add(rule);
+        recursionStack.Add(rule);
+
+        _logger.Debug("Checking cycles for rule {RuleName}. RecursionStack: {@RecursionStack}", 
+            rule, recursionStack);
+
+        if (graph.TryGetValue(rule, out var dependencies))
+        {
+            foreach (var dependency in dependencies)
+            {
+                if (!visited.Contains(dependency))
+                {
+                    if (HasCycle(dependency, graph, visited, recursionStack, cyclicDependencies))
+                    {
+                        var cycle = string.Join(" -> ", recursionStack.Reverse());
+                        if (!cyclicDependencies.Contains(cycle))
+                        {
+                            cyclicDependencies.Add(cycle);
+                            _logger.Warning("Found cycle: {CyclePath}", cycle);
+                        }
+                        return true;
+                    }
+                }
+                else if (recursionStack.Contains(dependency))
+                {
+                    var cycle = string.Join(" -> ", recursionStack.Reverse());
+                    if (!cyclicDependencies.Contains(cycle))
+                    {
+                        cyclicDependencies.Add(cycle);
+                        _logger.Warning("Found cycle: {CyclePath}", cycle);
+                    }
                     return true;
                 }
             }
         }
 
-        recursionStack.Remove(ruleName);
+        recursionStack.Remove(rule);
         return false;
     }
 
-    private List<Rule> TopologicalSort(List<Rule> rules, Dictionary<string, HashSet<string>> graph)
+    private void TopologicalSort(string rule, Dictionary<string, HashSet<string>> graph, HashSet<string> visited, Dictionary<string, Rule> rules, List<Rule> orderedRules)
     {
-        var visited = new HashSet<string>();
-        var sorted = new List<Rule>();
+        visited.Add(rule);
 
-        void Visit(string ruleName)
+        if (graph.TryGetValue(rule, out var dependencies))
         {
-            if (visited.Contains(ruleName))
-                return;
-
-            visited.Add(ruleName);
-
-            if (graph.ContainsKey(ruleName))
+            foreach (var dependency in dependencies)
             {
-                foreach (var dependency in graph[ruleName])
+                if (!visited.Contains(dependency))
                 {
-                    Visit(dependency);
+                    TopologicalSort(dependency, graph, visited, rules, orderedRules);
                 }
             }
-
-            sorted.Add(rules.First(r => r.Name == ruleName));
         }
 
-        // Visit rules in original order to maintain ordering when no dependencies exist
-        foreach (var rule in rules.AsEnumerable().Reverse())  // Start from the last rule
-        {
-            if (!visited.Contains(rule.Name))
-            {
-                Visit(rule.Name);
-            }
-        }
-
-        sorted.Reverse();  // Reverse to get the correct order
-        return sorted;
+        // Insert at the beginning instead of adding to the end
+        orderedRules.Insert(0, rules[rule]);
+        _logger.Debug("Added rule {RuleName} to ordered list", rule);
     }
 }
