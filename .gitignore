@@ -21,3 +21,6 @@ msbuild.wrn
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# windsurf rules
+.windsurfrules
