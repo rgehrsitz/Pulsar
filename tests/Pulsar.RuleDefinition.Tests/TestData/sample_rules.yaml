@@ -1,0 +1,92 @@
+version: 1
+
+valid_data_sources:
+  - temperature
+  - humidity
+  - pressure
+  - alerts:temperature
+  - alerts:humidity
+  - alerts:pressure
+  - converted_temp
+  - system_status
+
+rules:
+  - name: HighTemperatureAlert
+    description: Triggers when temperature exceeds 50°C for more than 500ms
+    conditions:
+      all:
+        - condition:
+            type: threshold_over_time
+            data_source: temperature
+            threshold: 50
+            duration: 500ms
+
+    actions:
+      - set_value:
+          key: alerts:temperature
+          value: "1"
+      - send_message:
+          channel: alerts
+          message: Temperature exceeds 50°C!
+
+  - name: CombinedEnvironmentAlert
+    description: Monitors both temperature and humidity for dangerous conditions
+    conditions:
+      any:
+        - condition:
+            type: comparison
+            data_source: temperature
+            operator: ">"
+            value: 45
+        - condition:
+            type: comparison
+            data_source: humidity
+            operator: ">"
+            value: 85
+
+    actions:
+      - set_value:
+          key: system_status
+          value: warning
+      - send_message:
+          channel: alerts
+          message: Environmental conditions are approaching critical levels
+
+  - name: TemperatureConversion
+    description: Converts temperature from Celsius to Fahrenheit using an expression
+    conditions:
+      all:
+        - condition:
+            type: expression
+            expression: "(temperature * 1.8 + 32) > 100"
+
+    actions:
+      - set_value:
+          key: converted_temp
+          value: "${temperature * 1.8 + 32}"
+      - send_message:
+          channel: monitoring
+          message: High temperature detected in Fahrenheit
+
+  - name: ComplexCondition
+    description: Demonstrates nested condition groups
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            data_source: pressure
+            operator: "<"
+            value: 980
+        - condition:
+            type: threshold_over_time
+            data_source: humidity
+            threshold: 90
+            duration: 1000ms
+
+    actions:
+      - set_value:
+          key: alerts:pressure
+          value: warning
+      - send_message:
+          channel: alerts
+          message: Critical environmental conditions detected!

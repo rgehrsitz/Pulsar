@@ -22,4 +22,10 @@
     <ProjectReference Include="..\..\src\Pulsar.RuleDefinition\Pulsar.RuleDefinition.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="TestData\sample_rules.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

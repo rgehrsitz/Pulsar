@@ -1,0 +1,113 @@
+using YamlDotNet.Core;
+using YamlDotNet.Core.Events;
+using YamlDotNet.Serialization;
+using Pulsar.RuleDefinition.Models;
+
+namespace Pulsar.RuleDefinition.Parser;
+
+public class ConditionTypeConverter : IYamlTypeConverter
+{
+    public bool Accepts(Type type) => type == typeof(Condition);
+
+    public object ReadYaml(IParser parser, Type type)
+    {
+        // Start of the mapping
+        parser.Consume<MappingStart>();
+        
+        // Read the condition type
+        parser.Consume<Scalar>(); // "condition" key
+        parser.Consume<MappingStart>();
+        parser.Consume<Scalar>(); // "type" key
+        var conditionType = parser.Consume<Scalar>().Value;
+
+        // Create the appropriate condition type
+        Condition condition = conditionType switch
+        {
+            "comparison" => new ComparisonCondition(),
+            "threshold_over_time" => new ThresholdOverTimeCondition(),
+            "expression" => new ExpressionCondition(),
+            _ => throw new YamlException($"Unknown condition type: {conditionType}")
+        };
+
+        condition.Type = conditionType;
+
+        // Parse the remaining fields based on condition type
+        while (parser.Current is Scalar scalar)
+        {
+            parser.MoveNext();
+            var value = parser.Consume<Scalar>().Value;
+
+            switch (scalar.Value)
+            {
+                case "data_source" when condition is ComparisonCondition comp:
+                    comp.DataSource = value;
+                    break;
+                case "operator" when condition is ComparisonCondition comp:
+                    comp.Operator = value;
+                    break;
+                case "value" when condition is ComparisonCondition comp:
+                    comp.Value = double.Parse(value);
+                    break;
+                case "data_source" when condition is ThresholdOverTimeCondition threshold:
+                    threshold.DataSource = value;
+                    break;
+                case "threshold" when condition is ThresholdOverTimeCondition threshold:
+                    threshold.Threshold = double.Parse(value);
+                    break;
+                case "duration" when condition is ThresholdOverTimeCondition threshold:
+                    threshold.Duration = value;
+                    break;
+                case "expression" when condition is ExpressionCondition expr:
+                    expr.Expression = value;
+                    break;
+            }
+        }
+
+        // Consume the end of mappings
+        parser.Consume<MappingEnd>();
+        parser.Consume<MappingEnd>();
+
+        return condition;
+    }
+
+    public void WriteYaml(IEmitter emitter, object value, Type type)
+    {
+        var condition = (Condition)value;
+        
+        emitter.Emit(new MappingStart());
+        emitter.Emit(new Scalar("condition"));
+        
+        emitter.Emit(new MappingStart());
+        emitter.Emit(new Scalar("type"));
+        emitter.Emit(new Scalar(condition.Type));
+
+        switch (condition)
+        {
+            case ComparisonCondition comp:
+                emitter.Emit(new Scalar("data_source"));
+                emitter.Emit(new Scalar(comp.DataSource));
+                emitter.Emit(new Scalar("operator"));
+                emitter.Emit(new Scalar(comp.Operator));
+                emitter.Emit(new Scalar("value"));
+                emitter.Emit(new Scalar(comp.Value.ToString()));
+                break;
+
+            case ThresholdOverTimeCondition threshold:
+                emitter.Emit(new Scalar("data_source"));
+                emitter.Emit(new Scalar(threshold.DataSource));
+                emitter.Emit(new Scalar("threshold"));
+                emitter.Emit(new Scalar(threshold.Threshold.ToString()));
+                emitter.Emit(new Scalar("duration"));
+                emitter.Emit(new Scalar(threshold.Duration));
+                break;
+
+            case ExpressionCondition expr:
+                emitter.Emit(new Scalar("expression"));
+                emitter.Emit(new Scalar(expr.Expression));
+                break;
+        }
+
+        emitter.Emit(new MappingEnd());
+        emitter.Emit(new MappingEnd());
+    }
+}
