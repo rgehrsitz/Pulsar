@@ -20,6 +20,8 @@ public class MetricsService : IMetricsService
     private readonly Gauge _timeSeriesBufferSize;
     private readonly Gauge _sensorValue;
     private readonly Counter _sensorUpdatesTotal;
+    private readonly Gauge _nodeStatus;
+    private readonly Gauge _pulsarStatus;
     private readonly ILogger _logger;
 
     public MetricsService(ILogger logger)
@@ -113,6 +115,22 @@ public class MetricsService : IMetricsService
             {
                 LabelNames = new[] { "sensor_name" }
             });
+
+        _nodeStatus = Metrics.CreateGauge(
+            "pulsar_redis_node_status",
+            "Status of Redis cluster nodes (1 = connected, 0 = disconnected)",
+            new GaugeConfiguration
+            {
+                LabelNames = new[] { "node_type", "endpoint", "building_id" }
+            });
+
+        _pulsarStatus = Metrics.CreateGauge(
+            "pulsar_instance_status",
+            "Status of Pulsar instance (1 = active, 0 = passive)",
+            new GaugeConfiguration
+            {
+                LabelNames = new[] { "building_id" }
+            });
     }
 
     public void RecordConditionEvaluation(string ruleName, string conditionType, bool result)
@@ -184,5 +202,19 @@ public class MetricsService : IMetricsService
     {
         _sensorUpdatesTotal.WithLabels(sensorName).Inc();
         _logger.Debug("Recorded sensor update for {SensorName}", sensorName);
+    }
+
+    public void RecordNodeStatus(string nodeType, string endpoint, bool isConnected, string buildingId)
+    {
+        _nodeStatus.WithLabels(nodeType, endpoint, buildingId).Set(isConnected ? 1 : 0);
+        _logger.Debug("Recorded node status: {NodeType} {Endpoint} in Building {BuildingId} = {Status}", 
+            nodeType, endpoint, buildingId, isConnected ? "Connected" : "Disconnected");
+    }
+
+    public void RecordPulsarStatus(string buildingId, bool isActive)
+    {
+        _pulsarStatus.WithLabels(buildingId).Set(isActive ? 1 : 0);
+        _logger.Debug("Recorded Pulsar status in Building {BuildingId} = {Status}",
+            buildingId, isActive ? "Active" : "Passive");
     }
 }

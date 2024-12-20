@@ -3,7 +3,9 @@ using NRedisStack.RedisStackCommands;
 using StackExchange.Redis;
 using Serilog;
 using Pulsar.Runtime.Engine;
+using Pulsar.Runtime.Configuration;
 using NRedisStack.DataTypes;
+using System.Threading;
 
 namespace Pulsar.Runtime.Storage;
 
@@ -12,34 +14,104 @@ namespace Pulsar.Runtime.Storage;
 /// </summary>
 public class RedisSensorDataProvider : ISensorDataProvider
 {
-    private readonly IConnectionMultiplexer _redis;
+    private readonly RedisClusterConfiguration _clusterConfig;
     private readonly ILogger _logger;
     private readonly string _keyPrefix;
     private readonly string _tsPrefix;
+    private readonly SemaphoreSlim _reconnectLock = new SemaphoreSlim(1, 1);
+    private IDatabase _db;
+    private const int MaxRetries = 3;
+    private const int RetryDelayMs = 1000;
 
-    public RedisSensorDataProvider(IConnectionMultiplexer redis, ILogger logger, string keyPrefix = "sensor:", string tsPrefix = "ts:")
+    public RedisSensorDataProvider(
+        RedisClusterConfiguration clusterConfig,
+        ILogger logger, 
+        string keyPrefix = "sensor:", 
+        string tsPrefix = "ts:")
     {
-        _redis = redis;
+        _clusterConfig = clusterConfig;
         _logger = logger.ForContext<RedisSensorDataProvider>();
         _keyPrefix = keyPrefix;
         _tsPrefix = tsPrefix;
     }
 
-    public async Task<IDictionary<string, double>> GetCurrentDataAsync()
+    private async Task<IDatabase> GetDatabaseAsync()
     {
+        if (_db != null)
+        {
+            try
+            {
+                // Test the connection with a simple ping
+                await _db.PingAsync();
+                return _db;
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "Redis connection test failed, attempting to reconnect");
+                _db = null;
+            }
+        }
+
+        await _reconnectLock.WaitAsync();
         try
         {
-            var db = _redis.GetDatabase();
+            if (_db == null)
+            {
+                var connection = _clusterConfig.GetConnection();
+                _db = connection.GetDatabase();
+                _logger.Information("Successfully connected to Redis");
+            }
+            return _db;
+        }
+        finally
+        {
+            _reconnectLock.Release();
+        }
+    }
+
+    private async Task<T> ExecuteWithRetryAsync<T>(Func<IDatabase, Task<T>> operation, string operationName)
+    {
+        for (int attempt = 1; attempt <= MaxRetries; attempt++)
+        {
+            try
+            {
+                var db = await GetDatabaseAsync();
+                return await operation(db);
+            }
+            catch (RedisConnectionException ex)
+            {
+                _logger.Warning(ex, "Redis connection error during {Operation} (attempt {Attempt}/{MaxRetries})",
+                    operationName, attempt, MaxRetries);
+                
+                if (attempt == MaxRetries)
+                    throw;
+
+                await Task.Delay(RetryDelayMs * attempt);
+                _db = null; // Force reconnection on next attempt
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error during {Operation}", operationName);
+                throw;
+            }
+        }
+
+        throw new InvalidOperationException($"Failed to execute {operationName} after {MaxRetries} attempts");
+    }
+
+    public async Task<IDictionary<string, double>> GetCurrentDataAsync()
+    {
+        return await ExecuteWithRetryAsync(async db =>
+        {
+            var result = new Dictionary<string, double>();
             var keys = await GetAllSensorKeys(db);
-            
+
             if (!keys.Any())
             {
-                return new Dictionary<string, double>();
+                return result;
             }
 
-            // Use MGET to get all values in a single operation
             var values = await db.StringGetAsync(keys.ToArray());
-            var result = new Dictionary<string, double>();
 
             for (var i = 0; i < keys.Length; i++)
             {
@@ -53,7 +125,6 @@ public class RedisSensorDataProvider : ISensorDataProvider
 
                 if (double.TryParse(value.ToString(), out var doubleValue))
                 {
-                    // Remove prefix from key when returning
                     var sensorKey = key.ToString().Substring(_keyPrefix.Length);
                     result[sensorKey] = doubleValue;
                 }
@@ -64,19 +135,14 @@ public class RedisSensorDataProvider : ISensorDataProvider
             }
 
             return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Error getting sensor data from Redis");
-            throw;
-        }
+        }, "GetCurrentData");
     }
 
     public async Task<IReadOnlyList<(DateTime Timestamp, double Value)>> GetHistoricalDataAsync(string sensorName, TimeSpan duration)
     {
         try
         {
-            var db = _redis.GetDatabase();
+            var db = await GetDatabaseAsync();
             var ts = db.TS();
             var tsKey = $"{_tsPrefix}{sensorName}";
 
@@ -105,9 +171,8 @@ public class RedisSensorDataProvider : ISensorDataProvider
             return;
         }
 
-        try
+        await ExecuteWithRetryAsync(async db =>
         {
-            var db = _redis.GetDatabase();
             var ts = db.TS();
             var batch = db.CreateBatch();
             var tasks = new List<Task>();
@@ -115,16 +180,13 @@ public class RedisSensorDataProvider : ISensorDataProvider
 
             foreach (var (key, value) in values)
             {
-                // Set current value
                 var redisKey = new RedisKey($"{_keyPrefix}{key}");
                 var redisValue = new RedisValue(value?.ToString() ?? string.Empty);
                 tasks.Add(batch.StringSetAsync(redisKey, redisValue));
 
-                // Store in time series if value is numeric
                 if (double.TryParse(value?.ToString(), out var doubleValue))
                 {
                     var tsKey = $"{_tsPrefix}{key}";
-                    // Ensure time series exists (creates if not exists)
                     await ts.CreateAsync(tsKey);
                     tasks.Add(ts.AddAsync(tsKey, now, doubleValue));
                 }
@@ -132,22 +194,18 @@ public class RedisSensorDataProvider : ISensorDataProvider
 
             batch.Execute();
             await Task.WhenAll(tasks);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Error setting sensor data in Redis");
-            throw;
-        }
+            return true;
+        }, "SetSensorData");
     }
 
     private async Task<RedisKey[]> GetAllSensorKeys(IDatabase db)
     {
         try
         {
-            // Use SCAN to get all keys with our prefix
             var keys = new List<RedisKey>();
             var pattern = $"{_keyPrefix}*";
-            var enumerator = db.Multiplexer.GetServer(db.Multiplexer.GetEndPoints().First())
+            var enumerator = _clusterConfig.GetConnection()
+                .GetServer(_clusterConfig.GetCurrentMaster())
                 .KeysAsync(pattern: pattern);
 
             await foreach (var key in enumerator)

@@ -1,0 +1,71 @@
+{
+  "buildings": {
+    "building1": {
+      "redis_server": {
+        "hostname": "server1a",
+        "ip": "192.168.1.101",
+        "redis_port": 6379,
+        "sentinel_port": 26379,
+        "redis_config": "redis-building1-server1a.conf",
+        "sentinel_config": "sentinel-building1-server1a.conf"
+      },
+      "sentinel_server": {
+        "hostname": "server1b",
+        "ip": "192.168.1.102",
+        "sentinel_port": 26379,
+        "sentinel_config": "sentinel-building1-server1b.conf"
+      },
+      "sentinel_nodes": [
+        {
+          "hostname": "node1c",
+          "ip": "192.168.1.103",
+          "sentinel_port": 26379,
+          "sentinel_config": "sentinel-building1-node1c.conf"
+        },
+        {
+          "hostname": "node1d",
+          "ip": "192.168.1.104",
+          "sentinel_port": 26379,
+          "sentinel_config": "sentinel-building1-node1d.conf"
+        }
+      ]
+    },
+    "building2": {
+      "redis_server": {
+        "hostname": "server2a",
+        "ip": "192.168.2.101",
+        "redis_port": 6379,
+        "sentinel_port": 26379,
+        "redis_config": "redis-building2-server2a.conf",
+        "sentinel_config": "sentinel-building2-server2a.conf"
+      },
+      "sentinel_server": {
+        "hostname": "server2b",
+        "ip": "192.168.2.102",
+        "sentinel_port": 26379,
+        "sentinel_config": "sentinel-building2-server2b.conf"
+      },
+      "sentinel_nodes": [
+        {
+          "hostname": "node2c",
+          "ip": "192.168.2.103",
+          "sentinel_port": 26379,
+          "sentinel_config": "sentinel-building2-node2c.conf"
+        },
+        {
+          "hostname": "node2d",
+          "ip": "192.168.2.104",
+          "sentinel_port": 26379,
+          "sentinel_config": "sentinel-building2-node2d.conf"
+        }
+      ]
+    }
+  },
+  "redis": {
+    "password": "your-redis-password",
+    "install_path": "C:\\Redis",
+    "config_path": "C:\\Redis\\config",
+    "log_path": "C:\\Redis\\logs",
+    "data_path": "C:\\Redis\\data"
+  }
+}
