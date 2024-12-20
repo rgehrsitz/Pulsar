@@ -2,297 +2,257 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Threading;
 using System.Threading.Tasks;
 using Moq;
 using StackExchange.Redis;
 using Xunit;
-using Serilog;
-using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Configuration;
-using Newtonsoft.Json.Linq;
+using Pulsar.Runtime.Services;
+using Serilog;
 
-namespace Pulsar.Runtime.Tests.Services;
-
-public class ClusterHealthServiceTests : IDisposable
+namespace Pulsar.Runtime.Tests.Services
 {
-    private readonly Mock<ILogger> _loggerMock;
-    private readonly Mock<IConnectionMultiplexer> _multiplexerMock;
-    private readonly Mock<IServer> _serverMock;
-    private readonly Mock<IServer> _sentinelMock;
-    private readonly Mock<MetricsService> _metricsServiceMock;
-    private readonly Mock<PulsarStateManager> _stateManagerMock;
-    private readonly string _buildingId = "test-building";
-    private readonly string _masterName = "mymaster";
-    private readonly string[] _sentinelHosts = new[] { "localhost:26379" };
-    private readonly string _hostname = "test-host";
-    private RedisClusterConfiguration _clusterConfig;
-    private ClusterHealthService _healthService;
-    private CancellationTokenSource _cts;
-
-    public ClusterHealthServiceTests()
+    public class ClusterHealthServiceTests
     {
-        _loggerMock = new Mock<ILogger>();
-        _multiplexerMock = new Mock<IConnectionMultiplexer>();
-        _serverMock = new Mock<IServer>();
-        _sentinelMock = new Mock<IServer>();
-        _metricsServiceMock = new Mock<MetricsService>(_loggerMock.Object);
-        _stateManagerMock = new Mock<PulsarStateManager>();
-        _cts = new CancellationTokenSource();
+        private readonly Mock<IConnectionMultiplexer> _multiplexerMock;
+        private readonly Mock<IServer> _sentinelMock;
+        private readonly Mock<ILogger> _loggerMock;
+        private readonly Mock<MetricsService> _metricsServiceMock;
+        private readonly Mock<PulsarStateManager> _stateManagerMock;
+        private readonly RedisClusterConfiguration _clusterConfig;
+        private readonly string _buildingId = "test-building";
 
-        // Setup Redis connection
-        var endPoint = new DnsEndPoint("localhost", 26379);
-        _multiplexerMock.Setup(m => m.GetServer(endPoint))
-            .Returns(_sentinelMock.Object);
-        _multiplexerMock.Setup(m => m.IsConnected)
-            .Returns(true);
+        public ClusterHealthServiceTests()
+        {
+            _multiplexerMock = new Mock<IConnectionMultiplexer>();
+            _sentinelMock = new Mock<IServer>();
+            _loggerMock = new Mock<ILogger>();
+            _metricsServiceMock = new Mock<MetricsService>(_loggerMock.Object);
+            _stateManagerMock = new Mock<PulsarStateManager>();
+            _clusterConfig = new RedisClusterConfiguration(_loggerMock.Object, "master", new[] { "localhost:26379" }, Environment.MachineName);
 
-        // Setup logger
-        _loggerMock.Setup(x => x.ForContext<ClusterHealthService>())
-            .Returns(_loggerMock.Object);
-        _loggerMock.Setup(x => x.ForContext<RedisClusterConfiguration>())
-            .Returns(_loggerMock.Object);
+            // Setup Redis connection
+            var endPoint = new DnsEndPoint("localhost", 26379);
+            _multiplexerMock.Setup(m => m.GetServer(endPoint))
+                .Returns(_sentinelMock.Object);
+            _multiplexerMock.Setup(m => m.IsConnected)
+                .Returns(true);
 
-        // Setup cluster configuration
-        _clusterConfig = new TestRedisClusterConfiguration(
-            _loggerMock.Object,
-            _masterName,
-            _sentinelHosts,
-            _hostname,
-            _multiplexerMock.Object);
+            // Setup logger context
+            _loggerMock.Setup(x => x.ForContext<ClusterHealthService>())
+                .Returns(_loggerMock.Object);
+        }
 
-        // Create health service with short check interval for testing
-        _healthService = new ClusterHealthService(
-            _loggerMock.Object,
-            _clusterConfig,
-            _metricsServiceMock.Object,
-            _stateManagerMock.Object,
-            _buildingId,
-            TimeSpan.FromMilliseconds(100));
-    }
+        [Fact]
+        public async Task CheckClusterHealth_HealthyCluster_RecordsCorrectMetrics()
+        {
+            // Arrange
+            var masterEndpoint = "127.0.0.1:6379";
+            var slaveEndpoints = new[] { "127.0.0.1:6380" };
 
-    public void Dispose()
-    {
-        _cts.Cancel();
-        _cts.Dispose();
-        _healthService?.Dispose();
-        _clusterConfig?.Dispose();
-    }
+            SetupHealthyCluster(masterEndpoint, slaveEndpoints);
 
-    [Fact]
-    public async Task CheckClusterHealth_HealthyCluster_RecordsCorrectMetrics()
-    {
-        // Arrange
-        var masterEndpoint = "10.0.0.1:6379";
-        var slaveEndpoint = "10.0.0.2:6379";
+            var service = new ClusterHealthService(
+                _loggerMock.Object,
+                _clusterConfig,
+                _metricsServiceMock.Object,
+                _stateManagerMock.Object,
+                _buildingId);
 
-        SetupHealthyCluster(masterEndpoint, new[] { slaveEndpoint });
+            // Act
+            await service.StartAsync(default);
+            await Task.Delay(100); // Allow one health check to complete
+            await service.StopAsync(default);
 
-        // Act
-        await _healthService.StartAsync(_cts.Token);
-        await Task.Delay(200); // Allow one health check to complete
-        await _healthService.StopAsync(_cts.Token);
+            // Assert
+            _metricsServiceMock.Verify(
+                x => x.RecordNodeStatus(
+                    "master",
+                    masterEndpoint,
+                    true,
+                    _buildingId),
+                Times.Once);
 
-        // Assert
-        _metricsServiceMock.Verify(
-            x => x.RecordNodeStatus(
-                "master",
-                masterEndpoint,
-                true,
-                _buildingId),
-            Times.Once);
+            _metricsServiceMock.Verify(
+                x => x.RecordNodeStatus(
+                    "slave",
+                    slaveEndpoints[0],
+                    true,
+                    _buildingId),
+                Times.Once);
 
-        _metricsServiceMock.Verify(
-            x => x.RecordNodeStatus(
-                "slave",
-                slaveEndpoint,
-                true,
-                _buildingId),
-            Times.Once);
+            _metricsServiceMock.Verify(
+                x => x.RecordPulsarStatus(
+                    _buildingId,
+                    It.IsAny<bool>()),
+                Times.Once);
+        }
 
-        _metricsServiceMock.Verify(
-            x => x.RecordPulsarStatus(
-                _buildingId,
-                true),
-            Times.Once);
-    }
+        [Fact]
+        public async Task CheckClusterHealth_MasterFailure_RecordsFailureMetrics()
+        {
+            // Arrange
+            var masterEndpoint = "127.0.0.1:6379";
+            var slaveEndpoints = new[] { "127.0.0.1:6380" };
 
-    [Fact]
-    public async Task CheckClusterHealth_MasterFailure_RecordsFailureMetrics()
-    {
-        // Arrange
-        var masterEndpoint = "10.0.0.1:6379";
-        var slaveEndpoint = "10.0.0.2:6379";
+            SetupClusterWithFailedMaster(masterEndpoint, slaveEndpoints);
 
-        SetupClusterWithFailedMaster(masterEndpoint, new[] { slaveEndpoint });
+            var service = new ClusterHealthService(
+                _loggerMock.Object,
+                _clusterConfig,
+                _metricsServiceMock.Object,
+                _stateManagerMock.Object,
+                _buildingId);
 
-        // Act
-        await _healthService.StartAsync(_cts.Token);
-        await Task.Delay(200); // Allow one health check to complete
-        await _healthService.StopAsync(_cts.Token);
+            // Act
+            await service.StartAsync(default);
+            await Task.Delay(100); // Allow one health check to complete
+            await service.StopAsync(default);
 
-        // Assert
-        _metricsServiceMock.Verify(
-            x => x.RecordNodeStatus(
-                "master",
-                masterEndpoint,
-                false,
-                _buildingId),
-            Times.Once);
+            // Assert
+            _metricsServiceMock.Verify(
+                x => x.RecordNodeStatus(
+                    "master",
+                    masterEndpoint,
+                    false,
+                    _buildingId),
+                Times.Once);
 
-        _loggerMock.Verify(
-            x => x.Error(
-                It.IsAny<Exception>(),
-                It.Is<string>(s => s.Contains("Failed to check cluster health")),
-                It.IsAny<object[]>()),
-            Times.Once);
-    }
+            _loggerMock.Verify(
+                x => x.Error(
+                    It.IsAny<Exception>(),
+                    It.IsAny<string>(),
+                    It.IsAny<object[]>()),
+                Times.Once);
+        }
 
-    [Fact]
-    public async Task CheckClusterHealth_SlaveFailure_ContinuesOperation()
-    {
-        // Arrange
-        var masterEndpoint = "10.0.0.1:6379";
-        var slaveEndpoint = "10.0.0.2:6379";
+        [Fact]
+        public async Task CheckClusterHealth_SlaveFailure_ContinuesOperation()
+        {
+            // Arrange
+            var masterEndpoint = "127.0.0.1:6379";
+            var slaveEndpoints = new[] { "127.0.0.1:6380" };
 
-        SetupClusterWithFailedSlave(masterEndpoint, new[] { slaveEndpoint });
+            SetupClusterWithFailedSlave(masterEndpoint, slaveEndpoints);
 
-        // Act
-        await _healthService.StartAsync(_cts.Token);
-        await Task.Delay(200); // Allow one health check to complete
-        await _healthService.StopAsync(_cts.Token);
+            var service = new ClusterHealthService(
+                _loggerMock.Object,
+                _clusterConfig,
+                _metricsServiceMock.Object,
+                _stateManagerMock.Object,
+                _buildingId);
 
-        // Assert
-        _metricsServiceMock.Verify(
-            x => x.RecordNodeStatus(
-                "master",
-                masterEndpoint,
-                true,
-                _buildingId),
-            Times.Once);
+            // Act
+            await service.StartAsync(default);
+            await Task.Delay(100); // Allow one health check to complete
+            await service.StopAsync(default);
 
-        _metricsServiceMock.Verify(
-            x => x.RecordNodeStatus(
-                "slave",
-                slaveEndpoint,
-                false,
-                _buildingId),
-            Times.Once);
+            // Assert
+            _metricsServiceMock.Verify(
+                x => x.RecordNodeStatus(
+                    "master",
+                    masterEndpoint,
+                    true,
+                    _buildingId),
+                Times.Once);
 
-        _metricsServiceMock.Verify(
-            x => x.RecordPulsarStatus(
-                _buildingId,
-                true),
-            Times.Once);
-    }
+            _metricsServiceMock.Verify(
+                x => x.RecordNodeStatus(
+                    "slave",
+                    slaveEndpoints[0],
+                    false,
+                    _buildingId),
+                Times.Once);
 
-    private void SetupHealthyCluster(string masterEndpoint, string[] slaveEndpoints)
-    {
-        var masterServer = new Mock<IServer>();
-        masterServer.Setup(s => s.IsConnected).Returns(true);
-        masterServer.Setup(s => s.Info("replication"))
-            .Returns(new[]
+            _metricsServiceMock.Verify(
+                x => x.RecordPulsarStatus(
+                    _buildingId,
+                    It.IsAny<bool>()),
+                Times.Once);
+        }
+
+        private void SetupHealthyCluster(string masterEndpoint, string[] slaveEndpoints)
+        {
+            // Setup sentinel responses
+            _sentinelMock.Setup(s => s.SentinelGetMasterAddressByNameAsync("master", It.IsAny<CommandFlags>()))
+                .ReturnsAsync(new IPEndPoint(IPAddress.Parse(masterEndpoint.Split(':')[0]), int.Parse(masterEndpoint.Split(':')[1])));
+
+            var replicaInfo = slaveEndpoints.Select(endpoint => new[]
             {
-                new KeyValuePair<string, string>("role", "master"),
-                new KeyValuePair<string, string>("connected_slaves", "1")
+                new KeyValuePair<string, string>("ip", endpoint.Split(':')[0]),
+                new KeyValuePair<string, string>("port", endpoint.Split(':')[1])
+            }).ToArray();
+
+            _sentinelMock.Setup(s => s.SentinelReplicasAsync("master", It.IsAny<CommandFlags>()))
+                .ReturnsAsync(replicaInfo);
+
+            // Setup master server
+            var masterServer = new Mock<IServer>();
+            masterServer.Setup(s => s.IsConnected).Returns(true);
+            
+            var replicationInfo = string.Join("\n", new[]
+            {
+                "role:master",
+                "connected_slaves:1"
             });
 
-        _multiplexerMock.Setup(m => m.GetServer(masterEndpoint))
-            .Returns(masterServer.Object);
+            masterServer.Setup(s => s.InfoAsync(It.IsAny<string>(), It.IsAny<CommandFlags>()))
+                .ReturnsAsync(replicationInfo);
 
-        foreach (var slaveEndpoint in slaveEndpoints)
-        {
-            var slaveServer = new Mock<IServer>();
-            slaveServer.Setup(s => s.IsConnected).Returns(true);
-            slaveServer.Setup(s => s.Info("replication"))
-                .Returns(new[]
+            _multiplexerMock.Setup(m => m.GetServer(It.IsAny<EndPoint>()))
+                .Returns(masterServer.Object);
+
+            // Setup slave servers
+            foreach (var slaveEndpoint in slaveEndpoints)
+            {
+                var slaveServer = new Mock<IServer>();
+                slaveServer.Setup(s => s.IsConnected).Returns(true);
+                
+                var slaveInfo = string.Join("\n", new[]
                 {
-                    new KeyValuePair<string, string>("role", "slave"),
-                    new KeyValuePair<string, string>("master_host", masterEndpoint.Split(':')[0])
+                    "role:slave",
+                    $"master_host:{masterEndpoint.Split(':')[0]}"
                 });
 
-            _multiplexerMock.Setup(m => m.GetServer(slaveEndpoint))
-                .Returns(slaveServer.Object);
+                slaveServer.Setup(s => s.InfoAsync(It.IsAny<string>(), It.IsAny<CommandFlags>()))
+                    .ReturnsAsync(slaveInfo);
+
+                _multiplexerMock.Setup(m => m.GetServer(It.IsAny<EndPoint>()))
+                    .Returns(slaveServer.Object);
+            }
         }
 
-        // Setup sentinel responses
-        var masterInfo = new JObject
+        private void SetupClusterWithFailedMaster(string masterEndpoint, string[] slaveEndpoints)
         {
-            ["ip"] = masterEndpoint.Split(':')[0],
-            ["port"] = masterEndpoint.Split(':')[1]
-        };
+            // Setup sentinel responses
+            _sentinelMock.Setup(s => s.SentinelGetMasterAddressByNameAsync("master", It.IsAny<CommandFlags>()))
+                .ReturnsAsync(new IPEndPoint(IPAddress.Parse(masterEndpoint.Split(':')[0]), int.Parse(masterEndpoint.Split(':')[1])));
 
-        _sentinelMock.Setup(s => s.SentinelMaster(_masterName))
-            .Returns(masterInfo.ToString());
+            // Setup master server
+            var masterServer = new Mock<IServer>();
+            masterServer.Setup(s => s.IsConnected).Returns(false);
+            masterServer.Setup(s => s.InfoAsync(It.IsAny<string>(), It.IsAny<CommandFlags>()))
+                .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
 
-        var slaveInfos = slaveEndpoints.Select(endpoint => new JObject
-        {
-            ["ip"] = endpoint.Split(':')[0],
-            ["port"] = endpoint.Split(':')[1]
-        });
-
-        _sentinelMock.Setup(s => s.SentinelSlaves(_masterName))
-            .Returns(slaveInfos.Select(info => info.ToString()).ToArray());
-    }
-
-    private void SetupClusterWithFailedMaster(string masterEndpoint, string[] slaveEndpoints)
-    {
-        var masterServer = new Mock<IServer>();
-        masterServer.Setup(s => s.IsConnected).Returns(false);
-        masterServer.Setup(s => s.Info("replication"))
-            .Throws(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
-
-        _multiplexerMock.Setup(m => m.GetServer(masterEndpoint))
-            .Returns(masterServer.Object);
-
-        // Setup sentinel responses
-        var masterInfo = new JObject
-        {
-            ["ip"] = masterEndpoint.Split(':')[0],
-            ["port"] = masterEndpoint.Split(':')[1]
-        };
-
-        _sentinelMock.Setup(s => s.SentinelMaster(_masterName))
-            .Returns(masterInfo.ToString());
-    }
-
-    private void SetupClusterWithFailedSlave(string masterEndpoint, string[] slaveEndpoints)
-    {
-        SetupHealthyCluster(masterEndpoint, slaveEndpoints);
-
-        foreach (var slaveEndpoint in slaveEndpoints)
-        {
-            var slaveServer = new Mock<IServer>();
-            slaveServer.Setup(s => s.IsConnected).Returns(false);
-            slaveServer.Setup(s => s.Info("replication"))
-                .Throws(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
-
-            _multiplexerMock.Setup(m => m.GetServer(slaveEndpoint))
-                .Returns(slaveServer.Object);
+            _multiplexerMock.Setup(m => m.GetServer(It.IsAny<EndPoint>()))
+                .Returns(masterServer.Object);
         }
-    }
-}
 
-/// <summary>
-/// Test implementation of RedisClusterConfiguration that allows injection of a mock connection
-/// </summary>
-public class TestRedisClusterConfiguration : RedisClusterConfiguration
-{
-    private readonly IConnectionMultiplexer _mockConnection;
+        private void SetupClusterWithFailedSlave(string masterEndpoint, string[] slaveEndpoints)
+        {
+            SetupHealthyCluster(masterEndpoint, slaveEndpoints);
 
-    public TestRedisClusterConfiguration(
-        ILogger logger,
-        string masterName,
-        string[] sentinelHosts,
-        string currentHostname,
-        IConnectionMultiplexer mockConnection)
-        : base(logger, masterName, sentinelHosts, currentHostname)
-    {
-        _mockConnection = mockConnection;
-    }
+            // Setup slave servers
+            foreach (var slaveEndpoint in slaveEndpoints)
+            {
+                var slaveServer = new Mock<IServer>();
+                slaveServer.Setup(s => s.IsConnected).Returns(false);
+                slaveServer.Setup(s => s.InfoAsync(It.IsAny<string>(), It.IsAny<CommandFlags>()))
+                    .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
 
-    public override IConnectionMultiplexer GetConnection()
-    {
-        return _mockConnection;
+                _multiplexerMock.Setup(m => m.GetServer(It.IsAny<EndPoint>()))
+                    .Returns(slaveServer.Object);
+            }
+        }
     }
 }

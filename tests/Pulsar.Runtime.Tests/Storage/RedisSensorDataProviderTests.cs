@@ -1,157 +1,171 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 using Moq;
 using NRedisStack;
-using NRedisStack.DataTypes;
 using NRedisStack.RedisStackCommands;
 using StackExchange.Redis;
 using Xunit;
-using Serilog;
-using System.Threading;
-using System.Runtime.CompilerServices;
-using Pulsar.Runtime.Storage;
 using Pulsar.Runtime.Configuration;
+using Pulsar.Runtime.Storage;
+using Serilog;
+using NRedisStack.DataTypes;
 
-namespace Pulsar.Runtime.Tests.Storage;
-
-public class RedisSensorDataProviderTests
+namespace Pulsar.Runtime.Tests.Storage
 {
-    private readonly Mock<ILogger> _loggerMock;
-    private readonly Mock<IConnectionMultiplexer> _multiplexerMock;
-    private readonly Mock<IDatabase> _databaseMock;
-    private readonly Mock<TimeSeriesCommands> _tsCommandsMock;
-    private readonly RedisClusterConfiguration _clusterConfig;
-    private readonly Mock<IServer> _serverMock;
-    private readonly string _keyPrefix = "sensor:";
-    private readonly string _tsPrefix = "ts:";
-    
-    public RedisSensorDataProviderTests()
+    public class RedisSensorDataProviderTests
     {
-        _loggerMock = new Mock<ILogger>();
-        _multiplexerMock = new Mock<IConnectionMultiplexer>();
-        _databaseMock = new Mock<IDatabase>();
-        _tsCommandsMock = new Mock<TimeSeriesCommands>();
-        _serverMock = new Mock<IServer>();
-        _clusterConfig = new RedisClusterConfiguration(_loggerMock.Object, "master", new[] { "localhost:26379" }, Environment.MachineName);
-        
-        var endPoint = new DnsEndPoint("localhost", 26379);
-        _multiplexerMock.Setup(m => m.GetServer(endPoint))
-            .Returns(_serverMock.Object);
-        
-        _multiplexerMock.Setup(m => m.GetDatabase(0, null))
-            .Returns(_databaseMock.Object);
-        
-        _databaseMock.Setup(m => m.TS())
-            .Returns(_tsCommandsMock.Object);
+        private readonly Mock<IConnectionMultiplexer> _multiplexerMock;
+        private readonly Mock<IDatabase> _databaseMock;
+        private readonly Mock<ILogger> _loggerMock;
+        private readonly Mock<ITimeSeriesCommands> _tsCommandsMock;
+        private readonly RedisClusterConfiguration _clusterConfig;
+        private readonly RedisSensorDataProvider _provider;
+        private readonly string _keyPrefix = "sensor:";
+        private readonly string _tsPrefix = "ts:";
 
-        _databaseMock.Setup(m => m.Ping(CommandFlags.None))
-            .Returns(TimeSpan.Zero);
-
-        _multiplexerMock.Setup(m => m.IsConnected)
-            .Returns(true);
-
-        _loggerMock.Setup(m => m.ForContext<RedisSensorDataProvider>())
-            .Returns(_loggerMock.Object);
-
-        _clusterConfig.GetType()
-            .GetMethod("GetConnection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?.Invoke(_clusterConfig, Array.Empty<object>());
-    }
-
-    [Fact]
-    public async Task GetCurrentDataAsync_ShouldReturnEmptyDictionary_WhenNoKeysExist()
-    {
-        // Arrange
-        _serverMock.Setup(s => s.Keys(pattern: "sensor:*", database: 0))
-            .Returns(Array.Empty<RedisKey>().ToAsyncEnumerable());
-
-        var provider = new RedisSensorDataProvider(_clusterConfig, _loggerMock.Object);
-
-        // Act
-        var result = await provider.GetCurrentDataAsync();
-
-        // Assert
-        Assert.Empty(result);
-    }
-
-    [Fact]
-    public async Task GetCurrentDataAsync_ShouldReturnSensorValues_WhenKeysExist()
-    {
-        // Arrange
-        var keys = new[] { "sensor:temp1", "sensor:temp2" }.Select(k => (RedisKey)k);
-        var values = new[] { "25.5", "30.0" }.Select(v => (RedisValue)v);
-
-        _serverMock.Setup(s => s.Keys(pattern: "sensor:*", database: 0))
-            .Returns(keys.ToAsyncEnumerable());
-
-        _databaseMock.Setup(d => d.StringGet(It.IsAny<RedisKey[]>(), CommandFlags.None))
-            .Returns(values.ToArray());
-
-        var provider = new RedisSensorDataProvider(_clusterConfig, _loggerMock.Object);
-
-        // Act
-        var result = await provider.GetCurrentDataAsync();
-
-        // Assert
-        Assert.Equal(2, result.Count);
-        Assert.Equal(25.5, result["temp1"]);
-        Assert.Equal(30.0, result["temp2"]);
-    }
-
-    [Fact]
-    public async Task SetSensorDataAsync_ShouldCreateTimeSeriesAndSetValues()
-    {
-        // Arrange
-        var values = new Dictionary<string, object>
+        public RedisSensorDataProviderTests()
         {
-            { "temp1", 25.5 },
-            { "temp2", 30.0 }
-        };
+            _multiplexerMock = new Mock<IConnectionMultiplexer>();
+            _databaseMock = new Mock<IDatabase>();
+            _loggerMock = new Mock<ILogger>();
+            _tsCommandsMock = new Mock<ITimeSeriesCommands>();
+            _clusterConfig = new RedisClusterConfiguration(_loggerMock.Object, "master", new[] { "localhost:26379" }, Environment.MachineName);
 
-        _tsCommandsMock.Setup(ts => ts.Create(It.IsAny<string>()))
-            .Returns(true);
+            _multiplexerMock.Setup(m => m.GetDatabase(It.IsAny<int>(), It.IsAny<object>()))
+                .Returns(_databaseMock.Object);
 
-        _tsCommandsMock.Setup(ts => ts.Add(It.IsAny<string>(), It.IsAny<long>(), It.IsAny<double>()))
-            .Returns(true);
+            // Setup logger context
+            _loggerMock.Setup(x => x.ForContext<RedisSensorDataProvider>())
+                .Returns(_loggerMock.Object);
 
-        var provider = new RedisSensorDataProvider(_clusterConfig, _loggerMock.Object);
+            // Setup Redis connection
+            _databaseMock.Setup(d => d.PingAsync(It.IsAny<CommandFlags>()))
+                .ReturnsAsync(TimeSpan.Zero);
 
-        // Act
-        await provider.SetSensorDataAsync(values);
+            // Setup time series commands
+            _databaseMock.Setup(d => d.TS())
+                .Returns(_tsCommandsMock.Object);
 
-        // Verify
-        _tsCommandsMock.Verify(ts => ts.Create("ts:temp1"), Times.Once);
-        _tsCommandsMock.Verify(ts => ts.Create("ts:temp2"), Times.Once);
-        _tsCommandsMock.Verify(ts => ts.Add(It.IsAny<string>(), It.IsAny<long>(), It.IsAny<double>()), Times.Exactly(2));
-        _databaseMock.Verify(d => d.StringSet(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), null, CommandFlags.None), Times.Exactly(2));
-    }
+            _provider = new RedisSensorDataProvider(_clusterConfig, _loggerMock.Object, _keyPrefix, _tsPrefix);
+        }
 
-    [Fact]
-    public async Task GetHistoricalDataAsync_ShouldReturnTimeSeriesData()
-    {
-        // Arrange
-        var duration = TimeSpan.FromHours(1);
-        var now = DateTimeOffset.UtcNow;
-        var timeSeriesData = new[]
+        [Fact]
+        public async Task GetCurrentDataAsync_ReturnsData()
         {
-            new TimeSeriesEntry(now.ToUnixTimeMilliseconds(), 25.5),
-            new TimeSeriesEntry(now.AddMinutes(30).ToUnixTimeMilliseconds(), 26.0)
-        };
+            // Arrange
+            var keys = new RedisKey[] { "sensor:temp1", "sensor:temp2" };
+            var values = new RedisValue[] { "25.0", "30.0" };
 
-        _tsCommandsMock.Setup(ts => ts.Range(It.IsAny<string>(), It.IsAny<long>(), It.IsAny<long>()))
-            .Returns(timeSeriesData);
+            _databaseMock.Setup(d => d.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+                .ReturnsAsync(values);
 
-        var provider = new RedisSensorDataProvider(_clusterConfig, _loggerMock.Object);
+            // Act
+            var result = await _provider.GetCurrentDataAsync();
 
-        // Act
-        var result = await provider.GetHistoricalDataAsync("temp1", duration);
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(2, result.Count);
+            Assert.Equal(25.0, result["temp1"]);
+            Assert.Equal(30.0, result["temp2"]);
+        }
 
-        // Assert
-        Assert.Equal(2, result.Count);
-        Assert.Equal(25.5, result[0].Value);
-        Assert.Equal(26.0, result[1].Value);
+        [Fact]
+        public async Task GetHistoricalDataAsync_ReturnsHistory()
+        {
+            // Arrange
+            var sensorId = "temp1";
+            var now = DateTimeOffset.UtcNow;
+            var duration = TimeSpan.FromHours(1);
+            var expectedData = new[]
+            {
+                new TimeSeriesTuple(now.AddMinutes(-30).ToUnixTimeMilliseconds(), 25.0),
+                new TimeSeriesTuple(now.ToUnixTimeMilliseconds(), 26.0)
+            };
+
+            _tsCommandsMock.Setup(ts => ts.RangeAsync(
+                $"{_tsPrefix}{sensorId}",
+                It.IsAny<long>(),
+                It.IsAny<long>(),
+                It.IsAny<bool>()))
+                .ReturnsAsync(expectedData);
+
+            // Act
+            var result = await _provider.GetHistoricalDataAsync(sensorId, duration);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(2, result.Count);
+            Assert.Equal(25.0, result[0].Value);
+            Assert.Equal(26.0, result[1].Value);
+        }
+
+        [Fact]
+        public async Task SetSensorDataAsync_StoresData()
+        {
+            // Arrange
+            var values = new Dictionary<string, object>
+            {
+                { "temp1", 25.0 },
+                { "temp2", 30.0 }
+            };
+
+            _databaseMock.Setup(d => d.CreateBatch())
+                .Returns(Mock.Of<IBatch>());
+
+            _tsCommandsMock.Setup(ts => ts.CreateAsync(
+                It.IsAny<string>(),
+                It.IsAny<CreateOptions>()))
+                .ReturnsAsync(true);
+
+            _tsCommandsMock.Setup(ts => ts.AddAsync(
+                It.IsAny<string>(),
+                It.IsAny<long>(),
+                It.IsAny<double>()))
+                .ReturnsAsync(It.IsAny<long>());
+
+            // Act
+            await _provider.SetSensorDataAsync(values);
+
+            // Assert
+            _tsCommandsMock.Verify(ts => ts.CreateAsync(
+                It.Is<string>(key => key.StartsWith(_tsPrefix)),
+                It.IsAny<CreateOptions>()),
+                Times.Exactly(2));
+
+            _tsCommandsMock.Verify(ts => ts.AddAsync(
+                It.Is<string>(key => key.StartsWith(_tsPrefix)),
+                It.IsAny<long>(),
+                It.IsAny<double>()),
+                Times.Exactly(2));
+        }
+
+        [Fact]
+        public async Task GetCurrentDataAsync_ConnectionFailure_ThrowsException()
+        {
+            // Arrange
+            _databaseMock.Setup(d => d.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+                .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
+
+            // Act & Assert
+            await Assert.ThrowsAsync<RedisConnectionException>(() =>
+                _provider.GetCurrentDataAsync());
+        }
+
+        [Fact]
+        public async Task GetHistoricalDataAsync_ConnectionFailure_ThrowsException()
+        {
+            // Arrange
+            _tsCommandsMock.Setup(ts => ts.RangeAsync(
+                It.IsAny<string>(),
+                It.IsAny<long>(),
+                It.IsAny<long>(),
+                It.IsAny<bool>()))
+                .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
+
+            // Act & Assert
+            await Assert.ThrowsAsync<RedisConnectionException>(() =>
+                _provider.GetHistoricalDataAsync("temp1", TimeSpan.FromHours(1)));
+        }
     }
 }
