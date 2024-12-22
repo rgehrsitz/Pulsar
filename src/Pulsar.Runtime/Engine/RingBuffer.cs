@@ -17,6 +17,14 @@ public class RingBuffer<T>
 
     public void Add(T item)
     {
+        if (item == null)
+        {
+            throw new ArgumentNullException(
+                nameof(item),
+                "Cannot add null values to the ring buffer."
+            );
+        }
+
         lock (_lock)
         {
             _buffer[_currentIndex] = item;

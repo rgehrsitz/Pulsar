@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.Extensions.Logging;
 using Pulsar.RuleDefinition.Models;
 
 namespace Pulsar.Runtime.Engine;
@@ -12,30 +13,51 @@ namespace Pulsar.Runtime.Engine;
 /// </summary>
 public class CompiledExpressionEvaluator : IConditionEvaluator
 {
-    private readonly ConcurrentDictionary<string, Func<IDictionary<string, double>, bool>> _compiledExpressions = new();
+    private readonly ConcurrentDictionary<
+        string,
+        Func<IDictionary<string, double>, bool>
+    > _compiledExpressions = new();
+    private readonly ILogger _logger;
+
+    public CompiledExpressionEvaluator(ILogger logger)
+    {
+        _logger = logger;
+    }
 
     public Task<bool> EvaluateAsync(Condition condition, IDictionary<string, double> sensorData)
     {
         if (condition is not ExpressionCondition expressionCondition)
         {
-            throw new ArgumentException($"Expected ExpressionCondition but got {condition.GetType().Name}");
+            throw new ArgumentException(
+                $"Expected ExpressionCondition but got {condition.GetType().Name}"
+            );
         }
 
         var compiledExpression = _compiledExpressions.GetOrAdd(
             expressionCondition.Expression,
-            expr => CompileExpression(expr));
+            expr => CompileExpression(expr)
+        );
 
         try
         {
             return Task.FromResult(compiledExpression(sensorData));
         }
-        catch (Exception ex) when (ex is KeyNotFoundException || ex is InvalidOperationException)
+        catch (KeyNotFoundException ex)
         {
-            throw new ArgumentException(ex.Message, ex);
+            _logger.LogWarning(
+                "Missing variable during expression evaluation: {Message}",
+                ex.Message
+            );
+            return Task.FromResult(false); // Log and skip instead of throwing
         }
         catch (Exception ex)
         {
-            throw new ArgumentException($"Error evaluating expression: {expressionCondition.Expression}. Error: {ex.Message}", ex);
+            _logger.LogError(
+                "Error evaluating expression {Expression}: {Message}",
+                expressionCondition.Expression,
+                ex.Message
+            );
+            return Task.FromResult(false); // Log and skip
         }
     }
 
@@ -56,7 +78,10 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
                         try
                         {
                             // Check for unknown variables first
-                            foreach (var key in new[] { {{string.Join(", ", ExtractVariables(expression).Select(v => $"\"{v}\""))}} })
+                            foreach (var key in new[] { {{string.Join(
+                    ", ",
+                    ExtractVariables(expression).Select(v => $"\"{v}\"")
+                )}} })
                             {
                                 if (!data.ContainsKey(key))
                                 {
@@ -87,27 +112,33 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
                 MetadataReference.CreateFromFile(typeof(Dictionary<,>).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(IDictionary<,>).Assembly.Location),
                 MetadataReference.CreateFromFile(Assembly.Load("netstandard").Location),
-                MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location)
+                MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location),
             };
 
             var compilation = CSharpCompilation.Create(
                 assemblyName,
                 new[] { syntaxTree },
                 references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+            );
 
             using var ms = new MemoryStream();
             var result = compilation.Emit(ms);
 
             if (!result.Success)
             {
-                var failures = result.Diagnostics
-                    .Where(diagnostic => diagnostic.IsWarningAsError || diagnostic.Severity == DiagnosticSeverity.Error);
+                var failures = result.Diagnostics.Where(diagnostic =>
+                    diagnostic.IsWarningAsError || diagnostic.Severity == DiagnosticSeverity.Error
+                );
 
-                var errorMessage = string.Join(Environment.NewLine,
-                    failures.Select(f => $"{f.Id}: {f.GetMessage()}"));
+                var errorMessage = string.Join(
+                    Environment.NewLine,
+                    failures.Select(f => $"{f.Id}: {f.GetMessage()}")
+                );
 
-                throw new ArgumentException($"Invalid expression: {expression}. Compilation errors: {errorMessage}");
+                throw new ArgumentException(
+                    $"Invalid expression: {expression}. Compilation errors: {errorMessage}"
+                );
             }
 
             ms.Seek(0, SeekOrigin.Begin);
@@ -120,7 +151,10 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
         }
         catch (Exception ex)
         {
-            throw new ArgumentException($"Failed to compile expression: {expression}. Error: {ex.Message}", ex);
+            throw new ArgumentException(
+                $"Failed to compile expression: {expression}. Error: {ex.Message}",
+                ex
+            );
         }
     }
 
@@ -133,11 +167,13 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
         transformed = System.Text.RegularExpressions.Regex.Replace(
             transformed,
             @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[({])",
-            match => match.Value switch
-            {
-                "data" => "data",
-                _ => $"data[\"{match.Value}\"]"
-            });
+            match =>
+                match.Value switch
+                {
+                    "data" => "data",
+                    _ => $"data[\"{match.Value}\"]",
+                }
+        );
 
         return transformed;
     }
@@ -147,17 +183,17 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
         // Simple regex to extract variable names (this could be improved with a proper parser)
         var matches = System.Text.RegularExpressions.Regex.Matches(
             expression,
-            @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[({])");
+            @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[({])"
+        );
 
-        return matches.Select(m => m.Value)
-            .Where(v => !IsReservedWord(v))
-            .Distinct();
+        return matches.Select(m => m.Value).Where(v => !IsReservedWord(v)).Distinct();
     }
 
-    private static bool IsReservedWord(string word) => word switch
-    {
-        "data" or "return" or "true" or "false" or "null" => true,
-        "Abs" or "Round" or "Floor" or "Ceiling" or "Max" or "Min" or "Pow" or "Sqrt" => true,
-        _ => false
-    };
+    private static bool IsReservedWord(string word) =>
+        word switch
+        {
+            "data" or "return" or "true" or "false" or "null" => true,
+            "Abs" or "Round" or "Floor" or "Ceiling" or "Max" or "Min" or "Pow" or "Sqrt" => true,
+            _ => false,
+        };
 }

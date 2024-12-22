@@ -26,23 +26,30 @@ public class RuleEngine : IHostedService
         ISensorDataProvider sensorDataProvider,
         IActionExecutor actionExecutor,
         CompiledRuleSet ruleSet,
-        TimeSpan? cycleDuration = null)
+        TimeSpan? cycleDuration = null
+    )
     {
         _logger = logger.ForContext<RuleEngine>();
         _metrics = metrics;
         _sensorDataProvider = sensorDataProvider;
         _actionExecutor = actionExecutor;
         _ruleSet = ruleSet;
-        _cycleDuration = cycleDuration ?? TimeSpan.FromSeconds(1);
+        _cycleDuration = cycleDuration ?? TimeSpan.FromMilliseconds(100);
 
-        _logger.Information("Rule engine initialized with {RuleCount} rules in {LayerCount} layers", 
-            _ruleSet.Rules.Count, _ruleSet.LayerCount);
+        _logger.Information(
+            "Rule engine initialized with {RuleCount} rules in {LayerCount} layers",
+            _ruleSet.Rules.Count,
+            _ruleSet.LayerCount
+        );
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Information("Starting rule engine execution cycle with {Duration}ms interval", _cycleDuration.TotalMilliseconds);
-        
+        _logger.Information(
+            "Starting rule engine execution cycle with {Duration}ms interval",
+            _cycleDuration.TotalMilliseconds
+        );
+
         return ExecuteAsync(cancellationToken);
     }
 
@@ -82,17 +89,27 @@ public class RuleEngine : IHostedService
                 _metrics.RecordRuleExecution(rule.Rule.Name);
 
                 _logger.Debug("Evaluating rule {RuleName}", rule.Rule.Name);
-                var conditionMet = await EvaluateConditions(rule.Rule, rule.Rule.Conditions, sensorData);
+                var conditionMet = await EvaluateConditions(
+                    rule.Rule,
+                    rule.Rule.Conditions,
+                    sensorData
+                );
 
                 if (conditionMet)
                 {
-                    _logger.Information("Rule {RuleName} conditions met, executing {ActionCount} actions", 
-                        rule.Rule.Name, rule.Rule.Actions.Count);
+                    _logger.Information(
+                        "Rule {RuleName} conditions met, executing {ActionCount} actions",
+                        rule.Rule.Name,
+                        rule.Rule.Actions.Count
+                    );
                     await ExecuteActions(rule.Rule, rule.Rule.Actions, CancellationToken.None);
                 }
                 else
                 {
-                    _logger.Debug("Rule {RuleName} conditions not met, skipping actions", rule.Rule.Name);
+                    _logger.Debug(
+                        "Rule {RuleName} conditions not met, skipping actions",
+                        rule.Rule.Name
+                    );
                 }
             }
             catch (Exception ex)
@@ -105,7 +122,11 @@ public class RuleEngine : IHostedService
         await Task.WhenAll(tasks);
     }
 
-    private async Task ExecuteActions(Rule rule, IEnumerable<RuleAction> actions, CancellationToken cancellationToken)
+    private async Task ExecuteActions(
+        Rule rule,
+        IEnumerable<RuleAction> actions,
+        CancellationToken cancellationToken
+    )
     {
         foreach (var action in actions)
         {
@@ -128,16 +149,27 @@ public class RuleEngine : IHostedService
             catch (Exception ex)
             {
                 _logger.Error(ex, "Error executing action {ActionType}", action.GetType().Name);
-                _metrics.RecordActionExecutionError(rule.Name, action.GetType().Name, ex.GetType().Name);
+                _metrics.RecordActionExecutionError(
+                    rule.Name,
+                    action.GetType().Name,
+                    ex.GetType().Name
+                );
             }
         }
     }
 
-    private async Task<bool> EvaluateConditions(Rule rule, ConditionGroup group, IDictionary<string, double> sensorData)
+    private async Task<bool> EvaluateConditions(
+        Rule rule,
+        ConditionGroup group,
+        IDictionary<string, double> sensorData
+    )
     {
         if (group.All != null && group.All.Any())
         {
-            _logger.Debug("Evaluating ALL conditions group with {Count} conditions", group.All.Count);
+            _logger.Debug(
+                "Evaluating ALL conditions group with {Count} conditions",
+                group.All.Count
+            );
             foreach (var condition in group.All)
             {
                 var result = await EvaluateCondition(condition, sensorData);
@@ -154,7 +186,10 @@ public class RuleEngine : IHostedService
 
         if (group.Any != null && group.Any.Any())
         {
-            _logger.Debug("Evaluating ANY conditions group with {Count} conditions", group.Any.Count);
+            _logger.Debug(
+                "Evaluating ANY conditions group with {Count} conditions",
+                group.Any.Count
+            );
             foreach (var condition in group.Any)
             {
                 var result = await EvaluateCondition(condition, sensorData);
@@ -172,13 +207,19 @@ public class RuleEngine : IHostedService
         return false;
     }
 
-    private Task<bool> EvaluateCondition(Condition condition, IDictionary<string, double> sensorData)
+    private Task<bool> EvaluateCondition(
+        Condition condition,
+        IDictionary<string, double> sensorData
+    )
     {
         if (condition is ComparisonCondition comparison)
         {
             if (!sensorData.TryGetValue(comparison.DataSource, out var value))
             {
-                _logger.Warning("Data source {DataSource} not found in sensor data", comparison.DataSource);
+                _logger.Warning(
+                    "Data source {DataSource} not found in sensor data",
+                    comparison.DataSource
+                );
                 return Task.FromResult(false);
             }
 
@@ -190,11 +231,16 @@ public class RuleEngine : IHostedService
                 ">=" => value >= comparison.Value,
                 "<" => value < comparison.Value,
                 "<=" => value <= comparison.Value,
-                _ => false
+                _ => false,
             };
 
-            _logger.Debug("Evaluated comparison condition: {DataSource} {Operator} {Value} = {Result}",
-                comparison.DataSource, comparison.Operator, comparison.Value, result);
+            _logger.Debug(
+                "Evaluated comparison condition: {DataSource} {Operator} {Value} = {Result}",
+                comparison.DataSource,
+                comparison.Operator,
+                comparison.Value,
+                result
+            );
 
             return Task.FromResult(result);
         }

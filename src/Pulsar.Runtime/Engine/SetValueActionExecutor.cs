@@ -30,6 +30,18 @@ public class SetValueActionExecutor : IActionExecutor
         {
             foreach (var (key, value) in action.SetValue)
             {
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    _logger.Warning("Invalid key in SetValue action: {Key}", key);
+                    continue; // Skip invalid keys
+                }
+
+                if (value == null)
+                {
+                    _logger.Warning("Null value for key {Key} in SetValue action", key);
+                    continue; // Skip invalid values
+                }
+
                 _pendingUpdates.AddOrUpdate(key, value, (_, _) => value);
                 _logger.Debug("Queued value update {Key} to {Value}", key, value);
             }

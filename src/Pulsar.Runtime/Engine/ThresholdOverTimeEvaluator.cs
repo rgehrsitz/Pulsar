@@ -1,11 +1,11 @@
 using System;
-using System.Threading.Tasks;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Pulsar.Core;
-using Pulsar.Runtime.Services;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.RuleDefinition.Validation;
+using Pulsar.Runtime.Services;
 using Serilog;
 
 namespace Pulsar.Runtime.Engine;
@@ -26,7 +26,8 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
         ISensorDataProvider dataProvider,
         ILogger logger,
         IMetricsService metricsService,
-        TimeSpan? samplingRate = null)
+        TimeSpan? samplingRate = null
+    )
     {
         _dataProvider = dataProvider ?? throw new ArgumentNullException(nameof(dataProvider));
         _logger = logger.ForContext<ThresholdOverTimeEvaluator>();
@@ -36,8 +37,12 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
         _samplingRate = samplingRate ?? TimeSpan.FromSeconds(1);
     }
 
-    public async Task<bool> EvaluateAsync(Condition condition, IDictionary<string, double> sensorData)
+    public async Task<bool> EvaluateAsync(
+        Condition condition,
+        IDictionary<string, double> sensorData
+    )
     {
+        await Task.Yield(); // Ensure the method runs asynchronously
         if (condition is not ThresholdOverTimeCondition thresholdCondition)
         {
             _logger.Warning("Invalid condition type {ConditionType}", condition.GetType().Name);
@@ -59,22 +64,35 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
         }
 
         var now = DateTime.UtcNow;
-        var lastTimestamp = _timeSeriesService.GetTimeWindow(dataSource, TimeSpan.FromMilliseconds(1)).LastOrDefault().Timestamp;
+        var lastTimestamp = _timeSeriesService
+            .GetTimeWindow(dataSource, TimeSpan.FromMilliseconds(1))
+            .LastOrDefault()
+            .Timestamp;
 
-        _logger.Debug("Current value for {DataSource}: {Value} at {Timestamp}", 
-            dataSource, currentValue, now);
+        _logger.Debug(
+            "Current value for {DataSource}: {Value} at {Timestamp}",
+            dataSource,
+            currentValue,
+            now
+        );
 
         // Only add the value if enough time has passed since the last update
         if (lastTimestamp == default || now - lastTimestamp >= _samplingRate)
         {
-            _logger.Debug("Updating time series for {DataSource}. Last update was {LastUpdate}", 
-                dataSource, lastTimestamp == default ? "never" : lastTimestamp.ToString());
+            _logger.Debug(
+                "Updating time series for {DataSource}. Last update was {LastUpdate}",
+                dataSource,
+                lastTimestamp == default ? "never" : lastTimestamp.ToString()
+            );
             _timeSeriesService.Update(dataSource, currentValue);
         }
         else
         {
-            _logger.Debug("Skipping update for {DataSource} - Not enough time elapsed since last update ({LastUpdate})", 
-                dataSource, lastTimestamp);
+            _logger.Debug(
+                "Skipping update for {DataSource} - Not enough time elapsed since last update ({LastUpdate})",
+                dataSource,
+                lastTimestamp
+            );
         }
 
         var duration = ParseDuration(thresholdCondition.Duration);
@@ -88,10 +106,24 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
 
         var result = thresholdCondition.Operator switch
         {
-            ThresholdOperator.GreaterThan => values.All(v => v.Value > thresholdCondition.Threshold),
+            ThresholdOperator.GreaterThan => values.All(v =>
+                v.Value > thresholdCondition.Threshold
+            ),
             ThresholdOperator.LessThan => values.All(v => v.Value < thresholdCondition.Threshold),
-            _ => throw new ArgumentException($"Invalid operator {thresholdCondition.Operator}")
+            _ => false, // Invalid operator returns false
         };
+
+        if (
+            result == false
+            && !Enum.IsDefined(typeof(ThresholdOperator), thresholdCondition.Operator)
+        )
+        {
+            _logger.Warning(
+                "Invalid operator {Operator} in condition {Condition}",
+                thresholdCondition.Operator,
+                thresholdCondition
+            );
+        }
 
         _metricsService.RecordConditionEvaluation("", "ThresholdOverTime", result);
         return result;
@@ -113,7 +145,9 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
             'm' => TimeSpan.FromMinutes(value),
             'h' => TimeSpan.FromHours(value),
             'd' => TimeSpan.FromDays(value),
-            _ => throw new ArgumentException($"Invalid duration format: {duration}. Use s, m, h, or d suffix.")
+            _ => throw new ArgumentException(
+                $"Invalid duration format: {duration}. Use s, m, h, or d suffix."
+            ),
         };
     }
 }
