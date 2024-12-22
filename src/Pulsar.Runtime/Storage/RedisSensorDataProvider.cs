@@ -1,11 +1,14 @@
 using NRedisStack;
 using NRedisStack.RedisStackCommands;
+using NRedisStack.DataTypes;
+using NRedisStack.Literals.Enums;
 using StackExchange.Redis;
 using Serilog;
 using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Configuration;
-using NRedisStack.DataTypes;
 using System.Threading;
+using System.Collections.Generic;
+using System;
 
 namespace Pulsar.Runtime.Storage;
 
@@ -140,9 +143,8 @@ public class RedisSensorDataProvider : ISensorDataProvider
 
     public async Task<IReadOnlyList<(DateTime Timestamp, double Value)>> GetHistoricalDataAsync(string sensorName, TimeSpan duration)
     {
-        try
+        return await ExecuteWithRetryAsync(async db =>
         {
-            var db = await GetDatabaseAsync();
             var ts = db.TS();
             var tsKey = $"{_tsPrefix}{sensorName}";
 
@@ -156,12 +158,7 @@ public class RedisSensorDataProvider : ISensorDataProvider
                 Timestamp: DateTimeOffset.FromUnixTimeMilliseconds(p.Time).UtcDateTime,
                 Value: p.Val
             )).ToList();
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Error getting historical data for sensor {SensorName}", sensorName);
-            throw;
-        }
+        }, "GetHistoricalData");
     }
 
     public async Task SetSensorDataAsync(IDictionary<string, object> values)
@@ -187,8 +184,23 @@ public class RedisSensorDataProvider : ISensorDataProvider
                 if (double.TryParse(value?.ToString(), out var doubleValue))
                 {
                     var tsKey = $"{_tsPrefix}{key}";
-                    await ts.CreateAsync(tsKey);
-                    tasks.Add(ts.AddAsync(tsKey, now, doubleValue));
+                    
+                    // Create time series
+                    try
+                    {
+                        var createParams = new TsCreateParamsBuilder()
+                            .Build();
+                        await ts.CreateAsync(tsKey, createParams);
+                    }
+                    catch (RedisServerException)
+                    {
+                        // Key may already exist, ignore
+                    }
+                    
+                    // Add value
+                    var addParams = new TsAddParamsBuilder()
+                        .Build();
+                    await ts.AddAsync(tsKey, new TimeStamp(now), doubleValue, addParams);
                 }
             }
 
