@@ -1,14 +1,14 @@
+// Filename: RedisSensorDataProviderTests.cs
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Moq;
+using Xunit;
+using Pulsar.Runtime.Storage;
+using StackExchange.Redis;
 using NRedisStack;
 using NRedisStack.RedisStackCommands;
-using StackExchange.Redis;
-using Xunit;
-using System.Linq;
-using Pulsar.Runtime.Storage;
-using Pulsar.Runtime.Configuration;
 using NRedisStack.DataTypes;
 using NRedisStack.Literals.Enums;
 using Serilog;
@@ -20,86 +20,102 @@ namespace Pulsar.Runtime.Tests.Storage
         private readonly Mock<IConnectionMultiplexer> _multiplexerMock;
         private readonly Mock<IDatabase> _databaseMock;
         private readonly Mock<TimeSeriesCommands> _tsCommandsMock;
-        private readonly Mock<Serilog.ILogger> _loggerMock;
+        private readonly Mock<ILogger> _loggerMock;
         private readonly RedisSensorDataProvider _provider;
+
         private const string _keyPrefix = "sensor:";
         private const string _tsPrefix = "ts:";
-        private readonly RedisClusterConfiguration _clusterConfig;
 
         public RedisSensorDataProviderTests()
         {
-            _multiplexerMock = new Mock<IConnectionMultiplexer>();
-            _databaseMock = new Mock<IDatabase>();
-            _tsCommandsMock = new Mock<TimeSeriesCommands>();
-            _loggerMock = new Mock<Serilog.ILogger>();
+            _multiplexerMock = new Mock<IConnectionMultiplexer>(MockBehavior.Strict);
+            _databaseMock = new Mock<IDatabase>(MockBehavior.Strict);
+            _tsCommandsMock = new Mock<TimeSeriesCommands>(MockBehavior.Strict);
+            _loggerMock = new Mock<ILogger>(MockBehavior.Loose);
 
-            _multiplexerMock.Setup(m => m.GetDatabaseAsync(It.IsAny<int>(), It.IsAny<object>()))
-                .ReturnsAsync(_databaseMock.Object);
+            // When production calls _connection.GetDatabase(), we return _databaseMock
+            _multiplexerMock
+                .Setup(m => m.GetDatabase(It.IsAny<int>(), null))
+                .Returns(_databaseMock.Object);
 
-            _databaseMock.Setup(d => d.TSAsync())
-                .ReturnsAsync(_tsCommandsMock.Object);
+            // We'll also mock out GetServerAsync(...) so we can control the KeysAsync(...) call
+            var serverMock = new Mock<IServer>(MockBehavior.Strict);
+            _multiplexerMock
+                .Setup(m => m.GetServerAsync("localhost", 6379, null))
+                .ReturnsAsync(serverMock.Object);
 
-            _databaseMock.Setup(d => d.KeyTimeToLiveAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
-                .ReturnsAsync(TimeSpan.Zero);
+            // The server will return whatever keys we want when enumerating
+            // For general tests, we'll set up a default empty result. We can override in a test if needed.
+            serverMock
+                .Setup(s => s.KeysAsync(
+                    It.IsAny<int>(),
+                    It.IsAny<RedisValue>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CommandFlags>()))
+                .Returns((int dbIndex, RedisValue pattern, int pageSize, int pageOffset, CommandFlags flags) =>
+                    AsyncEnumerable.Empty<RedisKey>());
 
-            // Setup time series operations
-            var emptyList = new List<TimeSeriesTuple>() as IReadOnlyList<TimeSeriesTuple>;
-            _tsCommandsMock.Setup(ts => ts.RangeAsync(
-                It.IsAny<string>(),
-                It.IsAny<long>(),
-                It.IsAny<long>()))
-                .ReturnsAsync(emptyList);
+            // Mock TS() -> returns our _tsCommandsMock
+            _databaseMock
+                .Setup(d => d.TS())
+                .Returns(_tsCommandsMock.Object);
 
-            _tsCommandsMock.Setup(ts => ts.CreateAsync(It.IsAny<string>()))
+            // By default, create/add just succeed
+            _tsCommandsMock
+                .Setup(ts => ts.CreateAsync(It.IsAny<string>(), It.IsAny<TsCreateParams>(), It.IsAny<CommandFlags>()))
                 .ReturnsAsync(true);
 
-            _tsCommandsMock.Setup(ts => ts.AddAsync(
-                It.IsAny<string>(),
-                It.IsAny<long>(),
-                It.IsAny<double>()))
+            _tsCommandsMock
+                .Setup(ts => ts.AddAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<TimeStamp>(),
+                    It.IsAny<double>(),
+                    It.IsAny<TsAddParams>(),
+                    It.IsAny<CommandFlags>()))
                 .ReturnsAsync(new TimeStamp(1));
 
-            // Setup specific test data
-            var now = DateTimeOffset.UtcNow;
-            var duration = TimeSpan.FromHours(1);
-            var sensorId = "temp1";
-            var expectedData = new[]
-            {
-                new TimeSeriesTuple(now.AddMinutes(-30).ToUnixTimeMilliseconds(), 25.0),
-                new TimeSeriesTuple(now.ToUnixTimeMilliseconds(), 26.0)
-            };
+            // RangeAsync defaults to empty
+            _tsCommandsMock
+                .Setup(ts => ts.RangeAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<long>(),
+                    It.IsAny<long>(),
+                    It.IsAny<TsRangeParams>(),
+                    It.IsAny<CommandFlags>()))
+                .ReturnsAsync(new List<TimeSeriesTuple>() as IReadOnlyList<TimeSeriesTuple>);
 
-            _tsCommandsMock.Setup(ts => ts.RangeAsync(
-                $"{_tsPrefix}{sensorId}",
-                It.IsAny<long>(),
-                It.IsAny<long>()))
-                .ReturnsAsync(expectedData);
-
-            _clusterConfig = new RedisClusterConfiguration(
+            // Create our provider with the mocks
+            _provider = new RedisSensorDataProvider(
+                _multiplexerMock.Object,
                 _loggerMock.Object,
-                "master",
-                new[] { "localhost:6379" },
-                Environment.MachineName);
-
-            _provider = new RedisSensorDataProvider(_clusterConfig, _loggerMock.Object, _keyPrefix, _tsPrefix);
+                _keyPrefix,
+                _tsPrefix);
         }
 
         [Fact]
         public async Task GetCurrentDataAsync_ReturnsData()
         {
             // Arrange
-            var keys = new RedisKey[] { "sensor:temp1", "sensor:temp2" };
+            var keys = new RedisKey[] { $"{_keyPrefix}temp1", $"{_keyPrefix}temp2" };
             var values = new RedisValue[] { "25.0", "30.0" };
 
-            var server = new Mock<IServer>();
-            var asyncEnumerable = keys.ToAsyncEnumerable();
-            server.Setup(s => s.KeysAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CommandFlags>()))
-                .Returns(asyncEnumerable);
+            // Mock out keys
+            var server = _multiplexerMock.Object.GetServer("localhost", 6379);
+            var serverMock = Mock.Get(server);
+            serverMock
+                .Setup(s => s.KeysAsync(
+                    It.IsAny<int>(),
+                    It.IsAny<RedisValue>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CommandFlags>()))
+                .Returns((int dbIndex, RedisValue pattern, int pageSize, int pageOffset, CommandFlags flags) =>
+                    keys.ToAsyncEnumerable());
 
-            _multiplexerMock.Setup(m => m.GetServerAsync(It.IsAny<string>(), It.IsAny<object>()))
-                .ReturnsAsync(server.Object);
-
-            _databaseMock.Setup(d => d.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            // Mock out the StringGetAsync
+            _databaseMock
+                .Setup(d => d.StringGetAsync(It.Is<RedisKey[]>(rka => rka.SequenceEqual(keys)), It.IsAny<CommandFlags>()))
                 .ReturnsAsync(values);
 
             // Act
@@ -113,20 +129,30 @@ namespace Pulsar.Runtime.Tests.Storage
         }
 
         [Fact]
-        public async Task GetHistoricalDataAsync_ReturnsHistory()
+        public async Task GetHistoricalDataAsync_ReturnsData()
         {
             // Arrange
-            var sensorId = "temp1";
             var now = DateTimeOffset.UtcNow;
+            var sensorName = "temp1";
             var duration = TimeSpan.FromHours(1);
-            var expectedData = new[]
+            var expectedTuples = new List<TimeSeriesTuple>
             {
                 new TimeSeriesTuple(now.AddMinutes(-30).ToUnixTimeMilliseconds(), 25.0),
                 new TimeSeriesTuple(now.ToUnixTimeMilliseconds(), 26.0)
-            };
+            } as IReadOnlyList<TimeSeriesTuple>;
+
+            // Mock out RangeAsync
+            _tsCommandsMock
+                .Setup(ts => ts.RangeAsync(
+                    $"{_tsPrefix}{sensorName}",
+                    It.IsAny<long>(),
+                    It.IsAny<long>(),
+                    It.IsAny<TsRangeParams>(),
+                    It.IsAny<CommandFlags>()))
+                .ReturnsAsync(expectedTuples);
 
             // Act
-            var result = await _provider.GetHistoricalDataAsync(sensorId, duration);
+            var result = await _provider.GetHistoricalDataAsync(sensorName, duration);
 
             // Assert
             Assert.NotNull(result);
@@ -146,79 +172,92 @@ namespace Pulsar.Runtime.Tests.Storage
             };
 
             var batchMock = new Mock<IBatch>();
-            _databaseMock.Setup(d => d.CreateBatch())
+            _databaseMock
+                .Setup(d => d.CreateBatch())
                 .Returns(batchMock.Object);
 
-            batchMock.Setup(b => b.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), null, When.Always, CommandFlags.None))
+            // We just say every StringSetAsync in the batch returns true
+            batchMock
+                .Setup(b => b.StringSetAsync(
+                    It.IsAny<RedisKey>(),
+                    It.IsAny<RedisValue>(),
+                    null,
+                    When.Always,
+                    CommandFlags.None))
                 .Returns(Task.FromResult(true));
 
             // Act
             await _provider.SetSensorDataAsync(values);
 
             // Assert
-            _tsCommandsMock.Verify(ts => ts.CreateAsync(
-                It.Is<string>(key => key.StartsWith(_tsPrefix))),
+            // Verify we created each timeseries
+            _tsCommandsMock.Verify(ts =>
+                ts.CreateAsync(
+                    It.Is<string>(key => key.StartsWith(_tsPrefix)),
+                    It.IsAny<TsCreateParams>(),
+                    It.IsAny<CommandFlags>()),
                 Times.Exactly(2));
 
-            _tsCommandsMock.Verify(ts => ts.AddAsync(
-                It.Is<string>(key => key.StartsWith(_tsPrefix)),
-                It.IsAny<long>(),
-                It.IsAny<double>()),
+            // Verify we added each data point
+            _tsCommandsMock.Verify(ts =>
+                ts.AddAsync(
+                    It.Is<string>(key => key.StartsWith(_tsPrefix)),
+                    It.IsAny<TimeStamp>(),
+                    It.IsAny<double>(),
+                    It.IsAny<TsAddParams>(),
+                    It.IsAny<CommandFlags>()),
                 Times.Exactly(2));
         }
 
         [Fact]
         public async Task GetCurrentDataAsync_ConnectionFailure_ThrowsException()
         {
-            // Arrange
-            _databaseMock.Setup(d => d.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
-                .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
+            // Arrange: force a connection exception
+            _databaseMock
+                .Setup(d => d.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+                .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Fail"));
 
             // Act & Assert
-            await Assert.ThrowsAsync<RedisConnectionException>(() =>
-                _provider.GetCurrentDataAsync());
+            await Assert.ThrowsAsync<RedisConnectionException>(() => _provider.GetCurrentDataAsync());
         }
 
         [Fact]
         public async Task GetHistoricalDataAsync_ConnectionFailure_ThrowsException()
         {
-            // Arrange
-            _tsCommandsMock.Setup(ts => ts.RangeAsync(
-                It.IsAny<string>(),
-                It.IsAny<long>(),
-                It.IsAny<long>(),
-                It.IsAny<TsRangeParams>()))
-                .Throws(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
-
-            var now = DateTimeOffset.UtcNow;
-            var duration = TimeSpan.FromHours(1);
-            var sensorId = "temp1";
+            // Arrange: force a connection exception on RangeAsync
+            _tsCommandsMock
+                .Setup(ts => ts.RangeAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<long>(),
+                    It.IsAny<long>(),
+                    It.IsAny<TsRangeParams>(),
+                    It.IsAny<CommandFlags>()))
+                .Throws(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Fail"));
 
             // Act & Assert
             await Assert.ThrowsAsync<RedisConnectionException>(() =>
-                _provider.GetHistoricalDataAsync(sensorId, duration));
+                _provider.GetHistoricalDataAsync("temp1", TimeSpan.FromHours(1)));
         }
 
         [Fact]
         public async Task GetHistoricalDataAsync_NoData_ReturnsEmptyList()
         {
             // Arrange
-            var now = DateTimeOffset.UtcNow;
-            var duration = TimeSpan.FromHours(1);
-            var sensorId = "temp1";
             var emptyList = new List<TimeSeriesTuple>() as IReadOnlyList<TimeSeriesTuple>;
-
-            _tsCommandsMock.Setup(ts => ts.RangeAsync(
-                It.IsAny<string>(),
-                It.IsAny<long>(),
-                It.IsAny<long>(),
-                It.IsAny<TsRangeParams>()))
+            _tsCommandsMock
+                .Setup(ts => ts.RangeAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<long>(),
+                    It.IsAny<long>(),
+                    It.IsAny<TsRangeParams>(),
+                    It.IsAny<CommandFlags>()))
                 .ReturnsAsync(emptyList);
 
             // Act
-            var result = await _provider.GetHistoricalDataAsync(sensorId, duration);
+            var result = await _provider.GetHistoricalDataAsync("temp1", TimeSpan.FromHours(1));
 
             // Assert
+            Assert.NotNull(result);
             Assert.Empty(result);
         }
 
@@ -226,37 +265,33 @@ namespace Pulsar.Runtime.Tests.Storage
         public async Task SetSensorDataAsync_ValidData_Success()
         {
             // Arrange
-            var now = DateTimeOffset.UtcNow;
             var values = new Dictionary<string, object>
             {
                 { "temp1", 25.0 },
                 { "temp2", 26.0 }
             };
 
+            // We will just rely on default setups that return success for CreateAsync/AddAsync
+
             // Act
             await _provider.SetSensorDataAsync(values);
 
             // Assert
-            var createParams = new TsCreateParamsBuilder().Build();
-            _tsCommandsMock.Verify(ts => ts.Create(
-                It.Is<string>(key => key.StartsWith(_tsPrefix)),
-                It.IsAny<long?>(),
-                It.IsAny<IReadOnlyCollection<TimeSeriesLabel>>(),
-                It.IsAny<bool?>(),
-                It.IsAny<long?>(),
-                It.IsAny<TsDuplicatePolicy?>()),
+            // We check that the series got created and data got added
+            _tsCommandsMock.Verify(ts =>
+                ts.CreateAsync(
+                    It.Is<string>(key => key.StartsWith(_tsPrefix)),
+                    It.IsAny<TsCreateParams>(),
+                    It.IsAny<CommandFlags>()),
                 Times.Exactly(2));
 
-            var addParams = new TsAddParamsBuilder().Build();
-            _tsCommandsMock.Verify(ts => ts.Add(
-                It.Is<string>(key => key.StartsWith(_tsPrefix)),
-                It.IsAny<long>(),
-                It.IsAny<double>(),
-                It.IsAny<long?>(),
-                It.IsAny<IReadOnlyCollection<TimeSeriesLabel>>(),
-                It.IsAny<bool?>(),
-                It.IsAny<long?>(),
-                It.IsAny<TsDuplicatePolicy?>()),
+            _tsCommandsMock.Verify(ts =>
+                ts.AddAsync(
+                    It.Is<string>(key => key.StartsWith(_tsPrefix)),
+                    It.IsAny<TimeStamp>(),
+                    It.IsAny<double>(),
+                    It.IsAny<TsAddParams>(),
+                    It.IsAny<CommandFlags>()),
                 Times.Exactly(2));
         }
     }
