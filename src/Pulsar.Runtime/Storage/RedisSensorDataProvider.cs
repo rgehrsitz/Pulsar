@@ -1,16 +1,17 @@
 // Filename: RedisSensorDataProvider.cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NRedisStack;
-using NRedisStack.RedisStackCommands;
 using NRedisStack.DataTypes;
 using NRedisStack.Literals.Enums;
-using StackExchange.Redis;
-using Serilog;
+using NRedisStack.RedisStackCommands;
+using NRedisStack.TimeSeries; // Add this line
 using Pulsar.Runtime.Engine;
-using System.Threading;
-using System.Collections.Generic;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
+using Serilog;
+using StackExchange.Redis;
 
 namespace Pulsar.Runtime.Storage
 {
@@ -33,7 +34,8 @@ namespace Pulsar.Runtime.Storage
             IConnectionMultiplexer connection,
             ILogger logger,
             string keyPrefix = "sensor:",
-            string tsPrefix = "ts:")
+            string tsPrefix = "ts:"
+        )
         {
             _connection = connection;
             _logger = logger.ForContext<RedisSensorDataProvider>();
@@ -81,7 +83,10 @@ namespace Pulsar.Runtime.Storage
         /// <summary>
         /// Wraps any Redis operation in retry logic for connection failures.
         /// </summary>
-        private async Task<T> ExecuteWithRetryAsync<T>(Func<IDatabase, Task<T>> operation, string operationName)
+        private async Task<T> ExecuteWithRetryAsync<T>(
+            Func<IDatabase, Task<T>> operation,
+            string operationName
+        )
         {
             for (int attempt = 1; attempt <= MaxRetries; attempt++)
             {
@@ -92,9 +97,13 @@ namespace Pulsar.Runtime.Storage
                 }
                 catch (RedisConnectionException ex)
                 {
-                    _logger.Warning(ex,
+                    _logger.Warning(
+                        ex,
                         "Redis connection error during {Operation} (attempt {Attempt}/{MaxRetries})",
-                        operationName, attempt, MaxRetries);
+                        operationName,
+                        attempt,
+                        MaxRetries
+                    );
 
                     if (attempt == MaxRetries)
                         throw; // Re-throw on final attempt
@@ -110,65 +119,86 @@ namespace Pulsar.Runtime.Storage
                 }
             }
 
-            throw new InvalidOperationException($"Failed to execute {operationName} after {MaxRetries} attempts");
+            throw new InvalidOperationException(
+                $"Failed to execute {operationName} after {MaxRetries} attempts"
+            );
         }
 
         public async Task<IDictionary<string, double>> GetCurrentDataAsync()
         {
-            return await ExecuteWithRetryAsync(async db =>
-            {
-                var result = new Dictionary<string, double>();
-                var keys = await GetAllSensorKeysAsync(db);
-
-                if (!keys.Any())
+            return await ExecuteWithRetryAsync(
+                async db =>
                 {
+                    var result = new Dictionary<string, double>();
+                    var keys = await GetAllSensorKeysAsync(db);
+
+                    if (!keys.Any())
+                    {
+                        return result;
+                    }
+
+                    var values = await db.StringGetAsync(keys.ToArray());
+                    for (var i = 0; i < keys.Length; i++)
+                    {
+                        var key = keys[i];
+                        var redisValue = values[i];
+
+                        if (!redisValue.HasValue)
+                        {
+                            continue;
+                        }
+
+                        if (double.TryParse(redisValue.ToString(), out var doubleValue))
+                        {
+                            // Strip off our prefix to get the sensor name
+                            var sensorName = key.ToString().Substring(_keyPrefix.Length);
+                            result[sensorName] = doubleValue;
+                        }
+                        else
+                        {
+                            _logger.Warning(
+                                "Invalid value format for key {Key}: {Value}",
+                                key,
+                                redisValue
+                            );
+                        }
+                    }
+
                     return result;
-                }
-
-                var values = await db.StringGetAsync(keys.ToArray());
-                for (var i = 0; i < keys.Length; i++)
-                {
-                    var key = keys[i];
-                    var redisValue = values[i];
-
-                    if (!redisValue.HasValue)
-                    {
-                        continue;
-                    }
-
-                    if (double.TryParse(redisValue.ToString(), out var doubleValue))
-                    {
-                        // Strip off our prefix to get the sensor name
-                        var sensorName = key.ToString().Substring(_keyPrefix.Length);
-                        result[sensorName] = doubleValue;
-                    }
-                    else
-                    {
-                        _logger.Warning("Invalid value format for key {Key}: {Value}", key, redisValue);
-                    }
-                }
-
-                return result;
-            }, "GetCurrentData");
+                },
+                "GetCurrentData"
+            );
         }
 
-        public async Task<IReadOnlyList<(DateTime Timestamp, double Value)>> GetHistoricalDataAsync(string sensorName, TimeSpan duration)
+        public async Task<IReadOnlyList<(DateTime Timestamp, double Value)>> GetHistoricalDataAsync(
+            string sensorName,
+            TimeSpan duration
+        )
         {
-            return await ExecuteWithRetryAsync(async db =>
-            {
-                // 1) Use db.TS() instead of db.TSAsync()
-                var ts = db.TS();
-                var tsKey = $"{_tsPrefix}{sensorName}";
+            return await ExecuteWithRetryAsync(
+                async db =>
+                {
+                    // 1) Use db.TS() instead of db.TSAsync()
+                    var ts = db.TS();
+                    var tsKey = $"{_tsPrefix}{sensorName}";
 
-                var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                var fromMs = nowMs - (long)duration.TotalMilliseconds;
+                    var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    var fromMs = nowMs - (long)duration.TotalMilliseconds;
 
-                var range = await ts.RangeAsync(tsKey, fromMs, nowMs);
-                return range.Select(entry => (
-                    Timestamp: DateTimeOffset.FromUnixTimeMilliseconds(entry.Time).UtcDateTime,
-                    Value: entry.Val
-                )).ToList();
-            }, "GetHistoricalData");
+                    var range = await ts.RangeAsync(tsKey, fromMs, nowMs);
+                    return range
+                        .Select(entry =>
+                            (
+                                Timestamp: DateTimeOffset
+                                    .FromUnixTimeMilliseconds(entry.Time)
+                                    .UtcDateTime,
+                                Value: entry.Val
+                            )
+                        )
+                        .ToList();
+                },
+                "GetHistoricalData"
+            );
         }
 
         public async Task SetSensorDataAsync(IDictionary<string, object> values)
@@ -179,60 +209,72 @@ namespace Pulsar.Runtime.Storage
                 return;
             }
 
-            await ExecuteWithRetryAsync(async db =>
-            {
-                // 1) Use db.TS() instead of db.TSAsync()
-                var ts = db.TS();
-                var batch = db.CreateBatch();
-                var tasks = new List<Task>();
-
-                // We'll use the same timestamp for everything for simplicity
-                var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
-                foreach (var (key, value) in values)
+            await ExecuteWithRetryAsync(
+                async db =>
                 {
-                    var redisKey = (RedisKey) ($"{_keyPrefix}{key}");
-                    var redisValue = value?.ToString() ?? string.Empty;
+                    var ts = db.TS();
+                    var batch = db.CreateBatch();
+                    var tasks = new List<Task>();
 
-                    // Queue up a StringSet in the batch
-                    tasks.Add(batch.StringSetAsync(redisKey, redisValue));
+                    // We'll use the same timestamp for everything for simplicity
+                    var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                    // If it's numeric, record in time series as well
-                    if (double.TryParse(redisValue, out var doubleValue))
+                    foreach (var (key, value) in values)
                     {
-                        var tsKey = $"{_tsPrefix}{key}";
+                        // Handle the regular Redis key-value storage
+                        var redisKey = (RedisKey)($"{_keyPrefix}{key}");
+                        var redisValue = value?.ToString() ?? string.Empty;
+                        tasks.Add(batch.StringSetAsync(redisKey, redisValue));
 
-                        // Initialize TsCreateParams using TsCreateParamsBuilder
-                        var createParamsBuilder = new TsCreateParamsBuilder()
-                            .RetentionTime(TimeSpan.FromHours(1))
-                            .Uncompressed()
-                            .ChunkSize(4096)
-                            .DuplicatePolicy(TsDuplicatePolicy.LAST)
-                            .WithLabels(new List<TimeSeriesLabel> {
-                                new("sensor", key),
-                                new("unit", "generic")
-                            });
-                        var createParams = createParamsBuilder.Build();
+                        // If the value is numeric, store it in TimeSeries as well
+                        if (double.TryParse(redisValue, out var doubleValue))
+                        {
+                            var tsKey = $"{_tsPrefix}{key}";
 
-                        // Safely create the series (no error if exists)
-                        await ts.CreateAsync(tsKey, createParams);
+                            try
+                            {
+                                // Create the TimeSeries if it doesn't exist using TimeSeriesCreateOptions
+                                var createOptions = new TimeSeriesCreateOptions
+                                {
+                                    RetentionTime = (long)TimeSpan.FromHours(1).TotalMilliseconds,
+                                    Labels = new List<TimeSeriesLabel>
+                                    {
+                                        new("sensor", key),
+                                        new("unit", "generic"),
+                                    },
+                                    Uncompressed = true,
+                                    DuplicatePolicy = TsDuplicatePolicy.LAST,
+                                };
 
-                        // Initialize TsAddParams using TsAddParamsBuilder
-                        var addParamsBuilder = new TsAddParamsBuilder()
-                            .DuplicatePolicy(TsDuplicatePolicy.SUM);
-                        var addParams = addParamsBuilder.Build();
+                                await ts.CreateAsync(tsKey, createOptions);
+                            }
+                            catch (RedisServerException ex)
+                                when (ex.Message.Contains("already exists"))
+                            {
+                                // Ignore if the TimeSeries already exists
+                            }
 
-                        // Add the measurement with timestamp
-                        await ts.AddAsync(tsKey, new TimeStamp(nowMs), doubleValue, addParams);
+                            // Add the new data point using TimeSeriesAddOptions
+                            var addOptions = new TimeSeriesAddOptions
+                            {
+                                DuplicatePolicy = TsDuplicatePolicy.SUM,
+                            };
+
+                            await ts.AddAsync(tsKey, nowMs, doubleValue, addOptions);
+
+                            var ts = db.TS();
+                            ts.
+                        }
                     }
-                }
 
-                // Execute the batch sets
-                batch.Execute();
-                await Task.WhenAll(tasks);
+                    // Execute all the batched Redis operations
+                    batch.Execute();
+                    await Task.WhenAll(tasks);
 
-                return true;
-            }, "SetSensorData");
+                    return true;
+                },
+                "SetSensorData"
+            );
         }
 
         /// <summary>
@@ -252,11 +294,14 @@ namespace Pulsar.Runtime.Storage
             }
 
             // The .KeysAsync(...) method returns IAsyncEnumerable<RedisKey> we can iterate over with 'await foreach'
-            await foreach (var key in server.KeysAsync(
-                db.Database,
-                pattern: pattern,
-                pageSize: 250,
-                flags: CommandFlags.None))
+            await foreach (
+                var key in server.KeysAsync(
+                    db.Database,
+                    pattern: pattern,
+                    pageSize: 250,
+                    flags: CommandFlags.None
+                )
+            )
             {
                 keys.Add(key);
             }

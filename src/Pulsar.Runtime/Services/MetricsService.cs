@@ -31,112 +31,94 @@ public class MetricsService : IMetricsService
         _ruleExecutionTotal = Metrics.CreateCounter(
             "pulsar_rule_execution_total",
             "Total number of rule executions",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "rule_name" }
-            });
+            new CounterConfiguration { LabelNames = new[] { "rule_name" } }
+        );
 
         _ruleExecutionErrorsTotal = Metrics.CreateCounter(
             "pulsar_rule_execution_errors_total",
             "Total number of rule execution errors",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "rule_name", "error_type" }
-            });
+            new CounterConfiguration { LabelNames = new[] { "rule_name", "error_type" } }
+        );
 
         _ruleExecutionDuration = Metrics.CreateHistogram(
             "pulsar_rule_execution_duration_seconds",
             "Duration of rule executions in seconds",
-            new HistogramConfiguration
-            {
-                LabelNames = new[] { "rule_name" }
-            });
+            new HistogramConfiguration { LabelNames = new[] { "rule_name" } }
+        );
 
         _actionExecutionTotal = Metrics.CreateCounter(
             "pulsar_action_execution_total",
             "Total number of action executions",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "rule_name", "action_type" }
-            });
+            new CounterConfiguration { LabelNames = new[] { "rule_name", "action_type" } }
+        );
 
         _actionExecutionErrorsTotal = Metrics.CreateCounter(
             "pulsar_action_execution_errors_total",
             "Total number of action execution errors",
             new CounterConfiguration
             {
-                LabelNames = new[] { "rule_name", "action_type", "error_type" }
-            });
+                LabelNames = new[] { "rule_name", "action_type", "error_type" },
+            }
+        );
 
         _timeSeriesUpdatesTotal = Metrics.CreateCounter(
             "pulsar_time_series_updates_total",
             "Total number of time series updates",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "data_source" }
-            });
+            new CounterConfiguration { LabelNames = new[] { "data_source" } }
+        );
 
         _timeSeriesOverflowTotal = Metrics.CreateCounter(
             "pulsar_time_series_overflow_total",
             "Total number of time series buffer overflows",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "data_source" }
-            });
+            new CounterConfiguration { LabelNames = new[] { "data_source" } }
+        );
 
         _sensorReadErrorsTotal = Metrics.CreateCounter(
             "pulsar_sensor_read_errors_total",
             "Total number of sensor read errors",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "sensor_name", "error_type" }
-            });
+            new CounterConfiguration { LabelNames = new[] { "sensor_name", "error_type" } }
+        );
 
         _timeSeriesBufferSize = Metrics.CreateGauge(
             "pulsar_time_series_buffer_size",
             "Current size of time series buffer",
-            new GaugeConfiguration
-            {
-                LabelNames = new[] { "data_source" }
-            });
+            new GaugeConfiguration { LabelNames = new[] { "data_source" } }
+        );
 
         _sensorValue = Metrics.CreateGauge(
             "pulsar_sensor_value",
             "Current value of a sensor",
-            new GaugeConfiguration
-            {
-                LabelNames = new[] { "sensor_name" }
-            });
+            new GaugeConfiguration { LabelNames = new[] { "sensor_name" } }
+        );
 
         _sensorUpdatesTotal = Metrics.CreateCounter(
             "pulsar_sensor_updates_total",
             "Total number of sensor updates",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "sensor_name" }
-            });
+            new CounterConfiguration { LabelNames = new[] { "sensor_name" } }
+        );
 
         _nodeStatus = Metrics.CreateGauge(
             "pulsar_redis_node_status",
             "Status of Redis cluster nodes (1 = connected, 0 = disconnected)",
-            new GaugeConfiguration
-            {
-                LabelNames = new[] { "node_type", "endpoint", "building_id" }
-            });
+            new GaugeConfiguration { LabelNames = new[] { "node_type", "endpoint", "building_id" } }
+        );
 
         _pulsarStatus = Metrics.CreateGauge(
             "pulsar_instance_status",
             "Status of Pulsar instance (1 = active, 0 = passive)",
-            new GaugeConfiguration
-            {
-                LabelNames = new[] { "building_id" }
-            });
+            new GaugeConfiguration { LabelNames = new[] { "building_id" } }
+        );
     }
 
     public void RecordConditionEvaluation(string ruleName, string conditionType, bool result)
     {
         _ruleExecutionTotal.WithLabels(ruleName).Inc();
-        _logger.Debug("Recorded condition evaluation: {RuleName}, {ConditionType}, {Result}", ruleName, conditionType, result);
+        _logger.Debug(
+            "Recorded condition evaluation: {RuleName}, {ConditionType}, {Result}",
+            ruleName,
+            conditionType,
+            result
+        );
     }
 
     public void RecordRuleExecution(string ruleName)
@@ -148,7 +130,11 @@ public class MetricsService : IMetricsService
     public void RecordRuleExecutionError(string ruleName, string errorType)
     {
         _ruleExecutionErrorsTotal.WithLabels(ruleName, errorType).Inc();
-        _logger.Debug("Recorded rule execution error: {RuleName}, {ErrorType}", ruleName, errorType);
+        _logger.Debug(
+            "Recorded rule execution error: {RuleName}, {ErrorType}",
+            ruleName,
+            errorType
+        );
     }
 
     public IDisposable MeasureRuleExecutionDuration(string ruleName)
@@ -165,7 +151,12 @@ public class MetricsService : IMetricsService
     public void RecordActionExecutionError(string ruleName, string actionType, string errorType)
     {
         _actionExecutionErrorsTotal.WithLabels(ruleName, actionType, errorType).Inc();
-        _logger.Debug("Recorded action execution error: {RuleName}, {ActionType}, {ErrorType}", ruleName, actionType, errorType);
+        _logger.Debug(
+            "Recorded action execution error: {RuleName}, {ActionType}, {ErrorType}",
+            ruleName,
+            actionType,
+            errorType
+        );
     }
 
     public void RecordTimeSeriesUpdate(string dataSource)
@@ -183,7 +174,11 @@ public class MetricsService : IMetricsService
     public void RecordSensorReadError(string sensorName, string errorType)
     {
         _sensorReadErrorsTotal.WithLabels(sensorName, errorType).Inc();
-        _logger.Debug("Recorded sensor read error: {SensorName}, {ErrorType}", sensorName, errorType);
+        _logger.Debug(
+            "Recorded sensor read error: {SensorName}, {ErrorType}",
+            sensorName,
+            errorType
+        );
     }
 
     public void UpdateTimeSeriesBufferSize(string dataSource, double size)
@@ -204,17 +199,30 @@ public class MetricsService : IMetricsService
         _logger.Debug("Recorded sensor update for {SensorName}", sensorName);
     }
 
-    public void RecordNodeStatus(string nodeType, string endpoint, bool isConnected, string buildingId)
+    public void RecordNodeStatus(
+        string nodeType,
+        string endpoint,
+        bool isConnected,
+        string buildingId
+    )
     {
         _nodeStatus.WithLabels(nodeType, endpoint, buildingId).Set(isConnected ? 1 : 0);
-        _logger.Debug("Recorded node status: {NodeType} {Endpoint} in Building {BuildingId} = {Status}", 
-            nodeType, endpoint, buildingId, isConnected ? "Connected" : "Disconnected");
+        _logger.Debug(
+            "Recorded node status: {NodeType} {Endpoint} in Building {BuildingId} = {Status}",
+            nodeType,
+            endpoint,
+            buildingId,
+            isConnected ? "Connected" : "Disconnected"
+        );
     }
 
     public void RecordPulsarStatus(string buildingId, bool isActive)
     {
         _pulsarStatus.WithLabels(buildingId).Set(isActive ? 1 : 0);
-        _logger.Debug("Recorded Pulsar status in Building {BuildingId} = {Status}",
-            buildingId, isActive ? "Active" : "Passive");
+        _logger.Debug(
+            "Recorded Pulsar status in Building {BuildingId} = {Status}",
+            buildingId,
+            isActive ? "Active" : "Passive"
+        );
     }
 }

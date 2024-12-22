@@ -23,7 +23,10 @@ public class TimeSeriesService
         _logger = logger.ForContext<TimeSeriesService>();
         _metrics = metrics;
         _defaultCapacity = defaultCapacity;
-        _logger.Debug("Created new time series service with default capacity {DefaultCapacity}", defaultCapacity);
+        _logger.Debug(
+            "Created new time series service with default capacity {DefaultCapacity}",
+            defaultCapacity
+        );
     }
 
     /// <summary>
@@ -35,14 +38,25 @@ public class TimeSeriesService
     public void Update(string dataSource, double value, DateTime? timestamp = null)
     {
         var actualTimestamp = timestamp ?? DateTime.UtcNow;
-        var buffer = _buffers.GetOrAdd(dataSource, _ => {
-            _logger.Debug("Creating new buffer for data source {DataSource} with capacity {Capacity}", 
-                dataSource, _defaultCapacity);
-            return new TimeSeriesBuffer(dataSource, _defaultCapacity, _logger, _metrics);
-        });
-        
-        _logger.Debug("Adding value {Value} at {Timestamp} to {DataSource}", 
-            value, actualTimestamp, dataSource);
+        var buffer = _buffers.GetOrAdd(
+            dataSource,
+            _ =>
+            {
+                _logger.Debug(
+                    "Creating new buffer for data source {DataSource} with capacity {Capacity}",
+                    dataSource,
+                    _defaultCapacity
+                );
+                return new TimeSeriesBuffer(dataSource, _defaultCapacity, _logger, _metrics);
+            }
+        );
+
+        _logger.Debug(
+            "Adding value {Value} at {Timestamp} to {DataSource}",
+            value,
+            actualTimestamp,
+            dataSource
+        );
         buffer.Add(actualTimestamp, value);
 
         // Update sensor metrics
@@ -57,21 +71,29 @@ public class TimeSeriesService
     /// <param name="dataSource">The name of the data source</param>
     /// <param name="duration">The duration of the time window</param>
     /// <returns>An array of timestamp-value pairs within the window</returns>
-    public IEnumerable<(DateTime Timestamp, double Value)> GetTimeWindow(string dataSource, TimeSpan duration)
+    public IEnumerable<(DateTime Timestamp, double Value)> GetTimeWindow(
+        string dataSource,
+        TimeSpan duration
+    )
     {
         if (!_buffers.TryGetValue(dataSource, out var buffer))
         {
-            _logger.Warning("No buffer found for data source {DataSource}. Available sources: {@Sources}", 
-                dataSource, _buffers.Keys);
+            _logger.Warning(
+                "No buffer found for data source {DataSource}. Available sources: {@Sources}",
+                dataSource,
+                _buffers.Keys
+            );
             _metrics.RecordSensorReadError(dataSource, "BufferNotFound");
             return Array.Empty<(DateTime, double)>();
         }
 
-        _logger.Debug("Retrieving time window of {Duration} for {DataSource}", 
-            duration, dataSource);
+        _logger.Debug(
+            "Retrieving time window of {Duration} for {DataSource}",
+            duration,
+            dataSource
+        );
         var values = buffer.GetTimeWindow(duration);
-        _logger.Debug("Retrieved {Count} values for {DataSource}", 
-            values.Length, dataSource);
+        _logger.Debug("Retrieved {Count} values for {DataSource}", values.Length, dataSource);
 
         return values;
     }
@@ -99,7 +121,10 @@ public class TimeSeriesService
     /// </summary>
     public void ClearAll()
     {
-        _logger.Information("Clearing all time series buffers. Current sources: {@Sources}", _buffers.Keys);
+        _logger.Information(
+            "Clearing all time series buffers. Current sources: {@Sources}",
+            _buffers.Keys
+        );
         foreach (var buffer in _buffers.Values)
         {
             buffer.Clear();

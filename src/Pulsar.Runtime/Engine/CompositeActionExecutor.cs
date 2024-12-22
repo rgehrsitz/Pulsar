@@ -13,7 +13,10 @@ public class CompositeActionExecutor : IActionExecutor
     private readonly IReadOnlyDictionary<string, IActionExecutor> _executors;
     private readonly ILogger _logger;
 
-    public CompositeActionExecutor(IReadOnlyDictionary<string, IActionExecutor> executors, ILogger logger)
+    public CompositeActionExecutor(
+        IReadOnlyDictionary<string, IActionExecutor> executors,
+        ILogger logger
+    )
     {
         _executors = executors;
         _logger = logger.ForContext<CompositeActionExecutor>();
@@ -24,14 +27,20 @@ public class CompositeActionExecutor : IActionExecutor
         var results = new List<bool>();
 
         // Handle SetValue actions
-        if (action.SetValue?.Count > 0 && _executors.TryGetValue("setValue", out var setValueExecutor))
+        if (
+            action.SetValue?.Count > 0
+            && _executors.TryGetValue("setValue", out var setValueExecutor)
+        )
         {
             var result = await setValueExecutor.ExecuteAsync(action);
             results.Add(result);
         }
 
         // Handle SendMessage actions
-        if (action.SendMessage?.Count > 0 && _executors.TryGetValue("sendMessage", out var sendMessageExecutor))
+        if (
+            action.SendMessage?.Count > 0
+            && _executors.TryGetValue("sendMessage", out var sendMessageExecutor)
+        )
         {
             var result = await sendMessageExecutor.ExecuteAsync(action);
             results.Add(result);
@@ -54,7 +63,10 @@ public class CompositeActionExecutor : IActionExecutor
     /// <returns>A dictionary containing all pending updates, or an empty dictionary if no SetValueActionExecutor is available</returns>
     public IDictionary<string, object> GetAndClearPendingUpdates()
     {
-        if (_executors.TryGetValue("setValue", out var executor) && executor is SetValueActionExecutor setValueExecutor)
+        if (
+            _executors.TryGetValue("setValue", out var executor)
+            && executor is SetValueActionExecutor setValueExecutor
+        )
         {
             return setValueExecutor.GetAndClearPendingUpdates();
         }
@@ -69,7 +81,10 @@ public class CompositeActionExecutor : IActionExecutor
     /// <returns>A dictionary containing current pending updates, or an empty dictionary if no SetValueActionExecutor is available</returns>
     public IDictionary<string, object> GetPendingUpdates()
     {
-        if (_executors.TryGetValue("setValue", out var executor) && executor is SetValueActionExecutor setValueExecutor)
+        if (
+            _executors.TryGetValue("setValue", out var executor)
+            && executor is SetValueActionExecutor setValueExecutor
+        )
         {
             return setValueExecutor.GetPendingUpdates();
         }

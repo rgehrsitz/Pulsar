@@ -23,7 +23,8 @@ public class PulsarStateManager : BackgroundService
         ILogger logger,
         RedisClusterConfiguration clusterConfig,
         RuleEngine ruleEngine,
-        TimeSpan? checkInterval = null)
+        TimeSpan? checkInterval = null
+    )
     {
         _logger = logger.ForContext<PulsarStateManager>();
         _clusterConfig = clusterConfig;
@@ -34,8 +35,10 @@ public class PulsarStateManager : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.Information("Starting Pulsar state manager with {Interval}s check interval", 
-            _checkInterval.TotalSeconds);
+        _logger.Information(
+            "Starting Pulsar state manager with {Interval}s check interval",
+            _checkInterval.TotalSeconds
+        );
 
         while (!stoppingToken.IsCancellationRequested)
         {

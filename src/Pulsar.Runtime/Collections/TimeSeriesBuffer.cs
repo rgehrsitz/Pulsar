@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Serilog;
 using Pulsar.Runtime.Services;
+using Serilog;
 
 namespace Pulsar.Runtime.Collections;
 
@@ -56,7 +56,8 @@ public class TimeSeriesBuffer
         string dataSource,
         int capacity,
         ILogger? logger = null,
-        IMetricsService? metrics = null)
+        IMetricsService? metrics = null
+    )
     {
         if (capacity <= 0)
             throw new ArgumentException("Capacity must be greater than 0", nameof(capacity));
@@ -70,7 +71,11 @@ public class TimeSeriesBuffer
         _oldestTimestamp = DateTime.MinValue;
         _newestTimestamp = DateTime.MinValue;
 
-        _logger.Debug("Created new time series buffer for {DataSource} with capacity {Capacity}", dataSource, capacity);
+        _logger.Debug(
+            "Created new time series buffer for {DataSource} with capacity {Capacity}",
+            dataSource,
+            capacity
+        );
     }
 
     /// <summary>
@@ -91,8 +96,12 @@ public class TimeSeriesBuffer
     {
         if (_count > 0 && timestamp < _newestTimestamp)
         {
-            _logger.Warning("Out of order timestamp detected for {DataSource}. New: {NewTimestamp}, Last: {LastTimestamp}",
-                _dataSource, timestamp, _newestTimestamp);
+            _logger.Warning(
+                "Out of order timestamp detected for {DataSource}. New: {NewTimestamp}, Last: {LastTimestamp}",
+                _dataSource,
+                timestamp,
+                _newestTimestamp
+            );
             return;
         }
 

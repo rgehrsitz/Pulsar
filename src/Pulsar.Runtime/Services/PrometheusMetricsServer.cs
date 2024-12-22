@@ -25,7 +25,7 @@ public class PrometheusMetricsServer : IHostedService
         _port = port;
         _server = new MetricServer(_host, _port);
         _isStarted = false;
-        
+
         _logger.Information("Created Prometheus metrics server on {Host}:{Port}", host, port);
     }
 
@@ -35,7 +35,11 @@ public class PrometheusMetricsServer : IHostedService
         {
             _server.Start();
             _isStarted = true;
-            _logger.Information("Started Prometheus metrics server on http://{Host}:{Port}/metrics", _host, _port);
+            _logger.Information(
+                "Started Prometheus metrics server on http://{Host}:{Port}/metrics",
+                _host,
+                _port
+            );
             return Task.CompletedTask;
         }
         catch (Exception ex)

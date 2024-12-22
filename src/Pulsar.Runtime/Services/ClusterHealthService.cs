@@ -25,7 +25,8 @@ public class ClusterHealthService : BackgroundService
         MetricsService metrics,
         PulsarStateManager stateManager,
         string buildingId,
-        TimeSpan? checkInterval = null)
+        TimeSpan? checkInterval = null
+    )
     {
         _logger = logger.ForContext<ClusterHealthService>();
         _clusterConfig = clusterConfig;
@@ -37,8 +38,10 @@ public class ClusterHealthService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.Information("Starting cluster health monitoring with {Interval}s interval", 
-            _checkInterval.TotalSeconds);
+        _logger.Information(
+            "Starting cluster health monitoring with {Interval}s interval",
+            _checkInterval.TotalSeconds
+        );
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -60,25 +63,33 @@ public class ClusterHealthService : BackgroundService
         try
         {
             var connection = _clusterConfig.GetConnection();
-            
+
             // Check master node
             var master = _clusterConfig.GetCurrentMaster();
             var masterServer = connection.GetServer(master);
             var masterInfo = await masterServer.InfoAsync();
-            
+
             _metrics.RecordNodeStatus("master", master, masterServer.IsConnected, _buildingId);
-            _logger.Debug("Master node status: {Status} at {Endpoint} in Building {BuildingId}", 
-                masterServer.IsConnected ? "Connected" : "Disconnected", master, _buildingId);
+            _logger.Debug(
+                "Master node status: {Status} at {Endpoint} in Building {BuildingId}",
+                masterServer.IsConnected ? "Connected" : "Disconnected",
+                master,
+                _buildingId
+            );
 
             // Check slave nodes
             foreach (var slave in _clusterConfig.GetSlaves())
             {
                 var slaveServer = connection.GetServer(slave);
                 var slaveInfo = await slaveServer.InfoAsync();
-                
+
                 _metrics.RecordNodeStatus("slave", slave, slaveServer.IsConnected, _buildingId);
-                _logger.Debug("Slave node status: {Status} at {Endpoint} in Building {BuildingId}",
-                    slaveServer.IsConnected ? "Connected" : "Disconnected", slave, _buildingId);
+                _logger.Debug(
+                    "Slave node status: {Status} at {Endpoint} in Building {BuildingId}",
+                    slaveServer.IsConnected ? "Connected" : "Disconnected",
+                    slave,
+                    _buildingId
+                );
             }
 
             // Record Pulsar status
@@ -86,7 +97,11 @@ public class ClusterHealthService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Failed to check cluster health in Building {BuildingId}", _buildingId);
+            _logger.Error(
+                ex,
+                "Failed to check cluster health in Building {BuildingId}",
+                _buildingId
+            );
             throw;
         }
     }

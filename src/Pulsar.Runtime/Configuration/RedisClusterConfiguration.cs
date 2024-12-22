@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using StackExchange.Redis;
-using Serilog;
 using Newtonsoft.Json.Linq;
+using Serilog;
+using StackExchange.Redis;
 
 namespace Pulsar.Runtime.Configuration;
 
@@ -28,7 +28,8 @@ public class RedisClusterConfiguration
         string currentHostname,
         string? password = null,
         int connectTimeout = 5000,
-        int syncTimeout = 5000)
+        int syncTimeout = 5000
+    )
     {
         _logger = logger.ForContext<RedisClusterConfiguration>();
         _masterName = masterName;
@@ -43,7 +44,7 @@ public class RedisClusterConfiguration
             ConnectTimeout = connectTimeout,
             SyncTimeout = syncTimeout,
             TieBreaker = "",
-            AbortOnConnectFail = false
+            AbortOnConnectFail = false,
         };
 
         foreach (var host in sentinelHosts)
@@ -51,8 +52,12 @@ public class RedisClusterConfiguration
             _configurationOptions.EndPoints.Add(host);
         }
 
-        _logger.Information("Redis cluster configuration initialized on host {CurrentHost} with {SentinelCount} sentinels for master {MasterName}", 
-            _currentHostname, sentinelHosts.Length, masterName);
+        _logger.Information(
+            "Redis cluster configuration initialized on host {CurrentHost} with {SentinelCount} sentinels for master {MasterName}",
+            _currentHostname,
+            sentinelHosts.Length,
+            masterName
+        );
     }
 
     /// <summary>
@@ -76,11 +81,15 @@ public class RedisClusterConfiguration
             {
                 _connection?.Dispose();
                 _connection = ConnectionMultiplexer.Connect(_configurationOptions);
-                
+
                 // Subscribe to connection events
                 _connection.ConnectionFailed += (sender, args) =>
                 {
-                    _logger.Error(args.Exception, "Redis connection failed to {EndPoint}", args.EndPoint);
+                    _logger.Error(
+                        args.Exception,
+                        "Redis connection failed to {EndPoint}",
+                        args.EndPoint
+                    );
                 };
 
                 _connection.ConnectionRestored += (sender, args) =>
@@ -108,7 +117,17 @@ public class RedisClusterConfiguration
         {
             var sentinel = GetConnection().GetServer(_sentinelHosts[0]);
             var masterInfo = sentinel.SentinelMaster(_masterName);
-            var masterData = JObject.Parse(masterInfo.ToString());
+            if (masterInfo == null)
+            {
+                throw new InvalidOperationException("Master info is null");
+            }
+            if (masterInfo == null)
+            {
+                throw new InvalidOperationException("Master info is null");
+            }
+            var masterData = JObject.Parse(
+                masterInfo?.ToString() ?? throw new InvalidOperationException("Master info is null")
+            );
             return $"{masterData["ip"]}:{masterData["port"]}";
         }
         catch (Exception ex)
@@ -130,7 +149,16 @@ public class RedisClusterConfiguration
 
             foreach (var slaveInfo in sentinel.SentinelReplicas(_masterName))
             {
-                var slaveData = JObject.Parse(slaveInfo.ToString());
+                if (slaveInfo == null)
+                {
+                    throw new InvalidOperationException("Slave info is null");
+                }
+                var slaveJson = slaveInfo.ToString();
+                if (string.IsNullOrEmpty(slaveJson))
+                {
+                    throw new InvalidOperationException("Slave info JSON is null or empty");
+                }
+                var slaveData = JObject.Parse(slaveJson);
                 slaves.Add($"{slaveData["ip"]}:{slaveData["port"]}");
             }
 
@@ -152,13 +180,19 @@ public class RedisClusterConfiguration
         {
             var currentMaster = GetCurrentMaster();
             var masterHost = currentMaster.Split(':')[0];
-            var shouldBeActive = masterHost.Equals(_currentHostname, StringComparison.OrdinalIgnoreCase);
+            var shouldBeActive = masterHost.Equals(
+                _currentHostname,
+                StringComparison.OrdinalIgnoreCase
+            );
 
             if (_isPulsarActive != shouldBeActive)
             {
                 _logger.Information(
-                    shouldBeActive ? "Activating Pulsar on {Host}" : "Deactivating Pulsar on {Host}",
-                    _currentHostname);
+                    shouldBeActive
+                        ? "Activating Pulsar on {Host}"
+                        : "Deactivating Pulsar on {Host}",
+                    _currentHostname
+                );
                 _isPulsarActive = shouldBeActive;
             }
 
