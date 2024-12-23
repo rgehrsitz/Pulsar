@@ -4,17 +4,20 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Moq;
-using NRedisStack;
-using NRedisStack.RedisStackCommands;
+using StackExchange.Redis;
 using Xunit;
 using Pulsar.Runtime.Configuration;
 using Pulsar.Runtime.Services;
 using Serilog;
+using Pulsar.Runtime.Tests.Helpers;
 
 namespace Pulsar.Runtime.Tests.Services
 {
     public class ClusterHealthServiceTests
     {
+        private readonly Mock<ConnectionMultiplexer> _connection;
+        private readonly Mock<IServer> _masterServer;
+        private readonly Mock<IServer> _slaveServer;
         private readonly Mock<IConnectionMultiplexer> _multiplexerMock;
         private readonly Mock<IServer> _sentinelMock;
         private readonly Mock<IServer> _serverMock;
@@ -26,6 +29,9 @@ namespace Pulsar.Runtime.Tests.Services
 
         public ClusterHealthServiceTests()
         {
+            _connection = new Mock<ConnectionMultiplexer>();
+            _masterServer = new Mock<IServer>();
+            _slaveServer = new Mock<IServer>();
             _multiplexerMock = new Mock<IConnectionMultiplexer>();
             _sentinelMock = new Mock<IServer>();
             _serverMock = new Mock<IServer>();
@@ -205,8 +211,12 @@ namespace Pulsar.Runtime.Tests.Services
         private void SetupHealthyCluster(string masterEndpoint, string[] slaveEndpoints)
         {
             // Setup sentinel responses
+            var masterEp = new IPEndPoint(
+                IPAddress.Parse(masterEndpoint.Split(':')[0]),
+                int.Parse(masterEndpoint.Split(':')[1])
+            );
             _sentinelMock.Setup(s => s.SentinelGetMasterAddressByNameAsync("master", CommandFlags.None))
-                .Returns(() => Task.FromResult<EndPoint>(new IPEndPoint(IPAddress.Parse(masterEndpoint.Split(':')[0]), int.Parse(masterEndpoint.Split(':')[1]))));
+                .Returns(Task.FromResult<EndPoint?>(masterEp));
 
             var replicaInfo = slaveEndpoints.Select(endpoint => new[]
             {
@@ -266,9 +276,12 @@ namespace Pulsar.Runtime.Tests.Services
 
         private void SetupClusterWithFailedMaster(string masterEndpoint, string[] slaveEndpoints)
         {
-            // Setup sentinel responses
+            var masterEp = new IPEndPoint(
+                IPAddress.Parse(masterEndpoint.Split(':')[0]),
+                int.Parse(masterEndpoint.Split(':')[1])
+            );
             _sentinelMock.Setup(s => s.SentinelGetMasterAddressByNameAsync("master", CommandFlags.None))
-                .Returns(() => Task.FromResult<EndPoint>(new IPEndPoint(IPAddress.Parse(masterEndpoint.Split(':')[0]), int.Parse(masterEndpoint.Split(':')[1]))));
+                .Returns(Task.FromResult<EndPoint?>(masterEp));
 
             // Setup master server
             var masterServer = new Mock<IServer>();

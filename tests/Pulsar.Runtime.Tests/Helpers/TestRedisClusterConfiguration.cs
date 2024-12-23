@@ -1,48 +1,48 @@
 using System;
-using System.Threading.Tasks;
 using NRedisStack;
-using NRedisStack.RedisStackCommands;
+using StackExchange.Redis;
 using Pulsar.Runtime.Configuration;
 using Serilog;
 
-namespace Pulsar.Runtime.Tests.Helpers;
-
-public class TestRedisClusterConfiguration : RedisClusterConfiguration
+namespace Pulsar.Runtime.Tests.Helpers
 {
-    private readonly TestRedisServer _testServer;
-    private readonly IConnectionMultiplexer _mockMultiplexer;
-
-    public TestRedisClusterConfiguration(
-        ILogger logger,
-        string masterName,
-        string[] sentinelHosts,
-        string currentHostname,
-        TestRedisServer testServer,
-        IConnectionMultiplexer mockMultiplexer
-    )
-        : base(logger, masterName, sentinelHosts, currentHostname)
+    public class TestRedisClusterConfiguration : RedisClusterConfiguration
     {
-        _testServer = testServer;
-        _mockMultiplexer = mockMultiplexer;
-    }
+        private readonly ILogger _logger;
+        private readonly ConnectionMultiplexer _mockConnection;
+        private readonly TestRedisServer _testServer;
 
-    public override IConnectionMultiplexer GetConnection()
-    {
-        return _mockMultiplexer;
-    }
+        public TestRedisClusterConfiguration(
+            ILogger logger,
+            string masterName,
+            string[] sentinelHosts,
+            string currentHostname,
+            ConnectionMultiplexer mockConnection
+        ) : base(logger, masterName, sentinelHosts, currentHostname)
+        {
+            _logger = logger;
+            _mockConnection = mockConnection;
+            _testServer = new TestRedisServer();
+        }
 
-    public override string GetCurrentMaster()
-    {
-        return _testServer.IsMaster ? _testServer.Endpoint : "otherslave:6379";
-    }
+        public override ConnectionMultiplexer GetConnection()
+        {
+            return _mockConnection;
+        }
 
-    public void SimulateFailover()
-    {
-        _testServer.SetMaster(false);
-    }
+        public override string GetCurrentMaster()
+        {
+            return _testServer.IsMaster ? _testServer.Endpoint.ToString() : "otherslave:6379";
+        }
 
-    public void SimulateRecovery()
-    {
-        _testServer.SetMaster(true);
+        public void SimulateFailover()
+        {
+            _testServer.SetMaster(false);
+        }
+
+        public void SimulateRecovery()
+        {
+            _testServer.SetMaster(true);
+        }
     }
 }

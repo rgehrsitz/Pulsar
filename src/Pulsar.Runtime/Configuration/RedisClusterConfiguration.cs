@@ -151,10 +151,18 @@ public class RedisClusterConfiguration : IDisposable
     {
         try
         {
-            var endpoints = _connection.GetServer(_connection.GetEndPoints()[0]);
-            var replicas = endpoints.SentinelGetReplicaAddresses(_masterName);
+            var connection = GetConnection();
+            if (connection == null)
+            {
+                _logger.Warning("No Redis connection available");
+                return Enumerable.Empty<string>();
+            }
 
-            return replicas.Select(r => $"{r}");
+            var endpoints = connection.GetServer(_connection?.GetEndPoints().FirstOrDefault()
+                ?? throw new InvalidOperationException("No Redis endpoints available"));
+
+            var replicas = endpoints.SentinelGetReplicaAddresses(_masterName);
+            return replicas.Select(r => r.ToString());
         }
         catch (Exception ex)
         {

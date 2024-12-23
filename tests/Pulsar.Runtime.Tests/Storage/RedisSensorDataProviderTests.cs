@@ -4,9 +4,10 @@ using System.Net;
 using System.Threading.Tasks;
 using Moq;
 using NRedisStack;
-using NRedisStack.RedisStackCommands;
+using StackExchange.Redis;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Storage;
+using Pulsar.Runtime.Tests.Helpers;
 using Serilog;
 using Xunit;
 
@@ -14,22 +15,28 @@ namespace Pulsar.Runtime.Tests.Storage
 {
     public class RedisSensorDataProviderTests
     {
-        private readonly Mock<IConnectionMultiplexer> _connection;
+        private readonly Mock<ConnectionMultiplexer> _connection;
         private readonly Mock<IDatabase> _database;
         private readonly Mock<ILogger> _logger;
         private readonly Mock<ISensorTemporalBufferService> _temporalBuffer;
         private readonly RedisSensorDataProvider _provider;
+        private readonly TestRedisServer _testServer;
 
         public RedisSensorDataProviderTests()
         {
-            _connection = new Mock<IConnectionMultiplexer>();
+            _connection = new Mock<ConnectionMultiplexer>();
             _database = new Mock<IDatabase>();
             _logger = new Mock<ILogger>();
             _temporalBuffer = new Mock<ISensorTemporalBufferService>();
+            _testServer = new TestRedisServer();
 
             _connection
                 .Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object>()))
                 .Returns(_database.Object);
+
+            _connection
+                .Setup(x => x.IsConnected)
+                .Returns(true);
 
             _logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(_logger.Object);
 

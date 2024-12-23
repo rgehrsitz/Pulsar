@@ -119,10 +119,12 @@ namespace Pulsar.Runtime.Storage
                         return result;
                     }
 
-                    var values = await db.StringGetAsync(keys.ToArray());
-                    for (var i = 0; i < keys.Length; i++)
+                    var redisKeys = keys.ToArray();
+                    var values = await db.StringGetAsync(redisKeys);
+
+                    for (var i = 0; i < redisKeys.Count(); i++)
                     {
-                        var key = keys[i];
+                        var key = redisKeys[i];
                         var redisValue = values[i];
 
                         if (!redisValue.HasValue)
