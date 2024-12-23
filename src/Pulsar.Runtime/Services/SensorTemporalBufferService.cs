@@ -22,21 +22,33 @@ namespace Pulsar.Runtime.Services
             _maxDuration = TimeSpan.FromHours(1);
         }
 
-        public async Task<IEnumerable<(DateTime Timestamp, double Value)>> GetSensorHistory(string sensorId, TimeSpan maxDuration)
+        public Task<IEnumerable<(DateTime Timestamp, double Value)>> GetSensorHistory(
+            string sensorId,
+            TimeSpan maxDuration
+        )
         {
             if (!_buffers.TryGetValue(sensorId, out var buffer))
             {
-                return Array.Empty<(DateTime, double)>();
+                return Task.FromResult<IEnumerable<(DateTime, double)>>(Array.Empty<(DateTime, double)>());
             }
 
             var cutoff = DateTime.UtcNow - maxDuration;
-            return buffer.GetValues().Where(x => x.Timestamp >= cutoff).ToList();
+            var results = buffer.GetValues().Where(x => x.Timestamp >= cutoff).ToList();
+            return Task.FromResult<IEnumerable<(DateTime, double)>>(results);
         }
 
         public Task AddSensorValue(string sensorId, double value)
         {
             UpdateSensor(sensorId, value);
             return Task.CompletedTask;
+        }
+
+        public async Task HandleSensorDataAsync(CancellationToken cancellationToken)
+        {
+            // ...existing code...
+            await Task.Delay(1, cancellationToken);
+            // ...existing code...
+            return;
         }
 
         private void UpdateSensor(string sensorName, double value)

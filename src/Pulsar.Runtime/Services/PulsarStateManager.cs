@@ -11,7 +11,7 @@ namespace Pulsar.Runtime.Services;
 /// <summary>
 /// Manages Pulsar's active/passive state based on Redis master location
 /// </summary>
-public class PulsarStateManager : BackgroundService
+public class PulsarStateManager : BackgroundService, IDisposable
 {
     private readonly ILogger _logger;
     private readonly RedisClusterConfiguration _redisConfig;
@@ -78,4 +78,15 @@ public class PulsarStateManager : BackgroundService
     }
 
     public bool IsActive => _isActive;
+
+    public override void Dispose()
+    {
+        if (!_disposed)
+        {
+            // ...existing cleanup code...
+            _disposed = true;
+        }
+
+        base.Dispose();
+    }
 }
