@@ -1,8 +1,9 @@
 using System;
 using System.Threading;
+using NRedisStack;
+using NRedisStack.RedisStackCommands;
 using Pulsar.Runtime.Configuration;
 using Serilog;
-using StackExchange.Redis;
 
 namespace Pulsar.Runtime.Tests.Mocks;
 
@@ -19,7 +20,8 @@ public class MockRedisClusterConfiguration : RedisClusterConfiguration
     public MockRedisClusterConfiguration(
         ILogger logger,
         string currentHostname,
-        string initialMasterHost = "other-host") 
+        string initialMasterHost = "other-host"
+    )
         : base(logger, "test-master", new[] { "localhost:26379" }, currentHostname)
     {
         _logger = logger;
@@ -36,13 +38,17 @@ public class MockRedisClusterConfiguration : RedisClusterConfiguration
             return false;
         }
 
-        var shouldBeActive = _currentMasterHost.Equals(_currentHostname, StringComparison.OrdinalIgnoreCase);
+        var shouldBeActive = _currentMasterHost.Equals(
+            _currentHostname,
+            StringComparison.OrdinalIgnoreCase
+        );
         _logger.Information(
-            "Checking if Pulsar should be active. Master: {Master}, Current: {Current}, Result: {Result}", 
-            _currentMasterHost, 
-            _currentHostname, 
-            shouldBeActive);
-            
+            "Checking if Pulsar should be active. Master: {Master}, Current: {Current}, Result: {Result}",
+            _currentMasterHost,
+            _currentHostname,
+            shouldBeActive
+        );
+
         return shouldBeActive;
     }
 
@@ -51,7 +57,11 @@ public class MockRedisClusterConfiguration : RedisClusterConfiguration
     /// </summary>
     public void SimulateFailover(string newMasterHost)
     {
-        _logger.Information("Simulating failover from {OldMaster} to {NewMaster}", _currentMasterHost, newMasterHost);
+        _logger.Information(
+            "Simulating failover from {OldMaster} to {NewMaster}",
+            _currentMasterHost,
+            newMasterHost
+        );
         _currentMasterHost = newMasterHost;
     }
 

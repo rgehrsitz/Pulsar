@@ -1,8 +1,9 @@
 using System;
 using System.Threading.Tasks;
-using StackExchange.Redis;
-using Serilog;
+using NRedisStack;
+using NRedisStack.RedisStackCommands;
 using Pulsar.Runtime.Configuration;
+using Serilog;
 
 namespace Pulsar.Runtime.Tests.Helpers;
 
@@ -17,7 +18,8 @@ public class TestRedisClusterConfiguration : RedisClusterConfiguration
         string[] sentinelHosts,
         string currentHostname,
         TestRedisServer testServer,
-        IConnectionMultiplexer mockMultiplexer)
+        IConnectionMultiplexer mockMultiplexer
+    )
         : base(logger, masterName, sentinelHosts, currentHostname)
     {
         _testServer = testServer;

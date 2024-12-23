@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using StackExchange.Redis;
+using NRedisStack;
+using NRedisStack.RedisStackCommands;
 
 namespace Pulsar.Runtime.Tests.Helpers;
 
@@ -40,8 +41,8 @@ public class TestRedisServer : IDisposable
         EnsureConnected();
         lock (_lock)
         {
-            return Task.FromResult(_data.TryGetValue(key.ToString(), out var value) 
-                ? value 
+            return Task.FromResult(_data.TryGetValue(key.ToString(), out var value)
+                ? value
                 : RedisValue.Null);
         }
     }

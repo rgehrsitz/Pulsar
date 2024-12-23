@@ -15,6 +15,12 @@ public class RuleParserTests
   private readonly string _sampleRulesPath;
   private readonly string _systemConfigPath;
 
+  /*************  ✨ Codeium Command ⭐  *************/
+  /// <summary>
+  /// Tests the <see cref="RuleParser"/> class. This class is responsible for parsing
+  /// rule definition YAML files into strongly-typed objects.
+  /// </summary>
+  /******  4d93c6a5-879e-4908-85d5-76d36ccf5e93  *******/
   public RuleParserTests()
   {
     _parser = new RuleParser();

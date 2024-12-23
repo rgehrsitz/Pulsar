@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using NRedisStack;
+using NRedisStack.RedisStackCommands;
 using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
 using Serilog;
@@ -16,18 +18,18 @@ namespace Pulsar.Runtime.Storage
     /// </summary>
     public class RedisSensorDataProvider : ISensorDataProvider
     {
-        private readonly IConnectionMultiplexer _connection;
+        private readonly ConnectionMultiplexer _connection;
         private readonly ILogger _logger;
         private readonly string _keyPrefix;
         private readonly SemaphoreSlim _reconnectLock = new SemaphoreSlim(1, 1);
         private readonly ISensorTemporalBufferService _temporalBuffer;
 
-        private IDatabase? _db; // We lazily acquire and test the DB connection
+        private IDatabase? _db;
         private const int MaxRetries = 3;
         private const int RetryDelayMs = 1000;
 
         public RedisSensorDataProvider(
-            IConnectionMultiplexer connection,
+            ConnectionMultiplexer connection,
             ILogger logger,
             ISensorTemporalBufferService temporalBuffer,
             string keyPrefix = "sensor:"
@@ -44,28 +46,18 @@ namespace Pulsar.Runtime.Storage
         /// </summary>
         private async Task<IDatabase> GetDatabaseAsync()
         {
-            if (_db != null)
+            if (_db != null && _connection.IsConnected)
             {
-                try
-                {
-                    // Quick test of the connection
-                    await _db.PingAsync();
-                    return _db;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Warning(ex, "Redis connection test failed, attempting to reconnect");
-                    _db = null; // Force reconnection
-                }
+                return _db;
             }
 
             await _reconnectLock.WaitAsync();
             try
             {
-                if (_db == null)
+                if (_db == null || !_connection.IsConnected)
                 {
-                    // Acquire a fresh database from the shared multiplexer
                     _db = _connection.GetDatabase();
+                    await _db.PingAsync();
                     _logger.Information("Successfully connected to Redis");
                 }
                 return _db;
@@ -91,27 +83,21 @@ namespace Pulsar.Runtime.Storage
                     var db = await GetDatabaseAsync();
                     return await operation(db);
                 }
-                catch (RedisConnectionException ex)
+                catch (RedisException ex)
                 {
                     _logger.Warning(
                         ex,
-                        "Redis connection error during {Operation} (attempt {Attempt}/{MaxRetries})",
+                        "Redis operation error during {Operation} (attempt {Attempt}/{MaxRetries})",
                         operationName,
                         attempt,
                         MaxRetries
                     );
 
                     if (attempt == MaxRetries)
-                        throw; // Re-throw on final attempt
+                        throw;
 
-                    // Exponential-ish backoff
                     await Task.Delay(RetryDelayMs * attempt);
-                    _db = null; // Force reconnection on next attempt
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error during {Operation}", operationName);
-                    throw;
+                    _db = null;
                 }
             }
 
@@ -264,31 +250,18 @@ namespace Pulsar.Runtime.Storage
         /// <summary>
         /// Returns all keys matching the <see cref="_keyPrefix"/>, using the same database index as <paramref name="db"/>.
         /// </summary>
-        private async Task<RedisKey[]> GetAllSensorKeysAsync(IDatabase db)
+        private async Task<List<RedisKey>> GetAllSensorKeysAsync(IDatabase db)
         {
             var pattern = $"{_keyPrefix}*";
             var keys = new List<RedisKey>();
+            var server = _connection.GetServer(_connection.GetEndPoints().First());
 
-            var server = _connection.GetServer("localhost", 6379);
-            if (server == null)
-            {
-                _logger.Warning("Unable to get Redis server for host=localhost:6379");
-                return Array.Empty<RedisKey>();
-            }
-
-            await foreach (
-                var key in server.KeysAsync(
-                    db.Database,
-                    pattern: pattern,
-                    pageSize: 250,
-                    flags: CommandFlags.None
-                )
-            )
+            await foreach (var key in server.KeysAsync(db.Database, pattern))
             {
                 keys.Add(key);
             }
 
-            return keys.ToArray();
+            return keys;
         }
     }
 }
