@@ -50,6 +50,7 @@ public abstract class RedisIntegrationTestBase : IAsyncLifetime
         Logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(Logger.Object);
 
         // Configure services
+        services.AddSingleton(Logger.Object);
         RedisConfig = new MockRedisClusterConfiguration(Logger.Object, Environment.MachineName);
 
         var metricsService = new Mock<MetricsService>(Logger.Object);
@@ -70,7 +71,7 @@ public abstract class RedisIntegrationTestBase : IAsyncLifetime
         services.AddSingleton(RuleEngine.Object);
         services.AddSingleton<ClusterHealthService>();
         services.AddSingleton<MetricsService>();
-        services.AddSingleton<SensorTemporalBufferService>();
+        services.AddSingleton<ISensorTemporalBufferService, SensorTemporalBufferService>();
         services.AddSingleton<RedisSensorDataProvider>();
 
         var serviceProvider = services.BuildServiceProvider();

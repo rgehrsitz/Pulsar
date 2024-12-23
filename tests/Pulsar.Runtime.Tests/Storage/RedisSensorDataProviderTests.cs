@@ -13,155 +13,141 @@ namespace Pulsar.Runtime.Tests.Storage
 {
     public class RedisSensorDataProviderTests
     {
-        private readonly Mock<IConnectionMultiplexer> _multiplexerMock;
-        private readonly Mock<IDatabase> _databaseMock;
-        private readonly Mock<ILogger> _loggerMock;
-        private readonly Mock<SensorTemporalBufferService> _temporalBufferMock;
+        private readonly Mock<IConnectionMultiplexer> _connection;
+        private readonly Mock<IDatabase> _database;
+        private readonly Mock<ILogger> _logger;
+        private readonly Mock<ISensorTemporalBufferService> _temporalBuffer;
         private readonly RedisSensorDataProvider _provider;
-
-        private const string _keyPrefix = "sensor:";
 
         public RedisSensorDataProviderTests()
         {
-            _multiplexerMock = new Mock<IConnectionMultiplexer>(MockBehavior.Strict);
-            _databaseMock = new Mock<IDatabase>(MockBehavior.Strict);
-            _loggerMock = new Mock<ILogger>(MockBehavior.Loose);
-            _temporalBufferMock = new Mock<SensorTemporalBufferService>(MockBehavior.Strict);
+            _connection = new Mock<IConnectionMultiplexer>();
+            _database = new Mock<IDatabase>();
+            _logger = new Mock<ILogger>();
+            _temporalBuffer = new Mock<ISensorTemporalBufferService>();
 
-            // When production calls _connection.GetDatabase(), we return _databaseMock
-            _multiplexerMock
-                .Setup(m => m.GetDatabase(-1, null))
-                .Returns(_databaseMock.Object);
+            _connection.Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object>()))
+                .Returns(_database.Object);
 
-            // We'll also mock out GetServer(...) so we can control the KeysAsync(...) call
-            var serverMock = new Mock<IServer>(MockBehavior.Strict);
-            var serverEndpoint = new DnsEndPoint("localhost", 6379);
-            _multiplexerMock
-                .Setup(m => m.GetServer(serverEndpoint, CommandFlags.None))
-                .Returns(serverMock.Object);
+            _logger.Setup(l => l.ForContext<It.IsAnyType>())
+                .Returns(_logger.Object);
 
             _provider = new RedisSensorDataProvider(
-                _multiplexerMock.Object,
-                _loggerMock.Object,
-                _temporalBufferMock.Object,
-                _keyPrefix
+                _connection.Object,
+                _logger.Object,
+                _temporalBuffer.Object
             );
-
-            // Setup common temporal buffer behavior
-            _temporalBufferMock
-                .Setup(t => t.HasTemporalBuffer(It.IsAny<string>()))
-                .Returns(false);
         }
 
         [Fact]
         public async Task SetSensorDataAsync_StoresData()
         {
             // Arrange
-            var values = new Dictionary<string, object>
-            {
-                { "sensor1", 42.0 },
-                { "sensor2", "test" }
-            };
+            var sensorId = "test-sensor";
+            var value = 42.0;
 
-            var batch = new Mock<IBatch>(MockBehavior.Strict);
-            _databaseMock.Setup(d => d.CreateBatch(null)).Returns(batch.Object);
-            
-            batch.Setup(b => b.StringSetAsync($"{_keyPrefix}sensor1", "42", null, When.Always, CommandFlags.None))
-                .ReturnsAsync(true);
-            batch.Setup(b => b.StringSetAsync($"{_keyPrefix}sensor2", "test", null, When.Always, CommandFlags.None))
-                .ReturnsAsync(true);
-            batch.Setup(b => b.Execute());
-
-            // Setup temporal buffer mock for sensor1
-            _temporalBufferMock
-                .Setup(t => t.HasTemporalBuffer("sensor1"))
-                .Returns(true);
-            _temporalBufferMock
-                .Setup(t => t.UpdateSensor("sensor1", 42.0, It.IsAny<DateTime>()));
+            _database.Setup(x => x.StringSetAsync(
+                It.Is<RedisKey>(k => k.ToString().EndsWith(sensorId)),
+                It.Is<RedisValue>(v => v.ToString() == value.ToString()),
+                null,
+                When.Always,
+                CommandFlags.None
+            )).ReturnsAsync(true);
 
             // Act
-            await _provider.SetSensorDataAsync(values);
+            await _provider.SetSensorDataAsync(sensorId, value);
 
             // Assert
-            batch.VerifyAll();
-            _temporalBufferMock.Verify(
-                t => t.UpdateSensor("sensor1", 42.0, It.IsAny<DateTime>()),
-                Times.Once
-            );
+            _database.Verify(x => x.StringSetAsync(
+                It.Is<RedisKey>(k => k.ToString().EndsWith(sensorId)),
+                It.Is<RedisValue>(v => v.ToString() == value.ToString()),
+                null,
+                When.Always,
+                CommandFlags.None
+            ), Times.Once);
+
+            _temporalBuffer.Verify(x => x.AddSensorValue(sensorId, value), Times.Once);
         }
 
         [Fact]
         public async Task GetHistoricalDataAsync_UsesTemporalBuffer_WhenAvailable()
         {
             // Arrange
-            var sensorName = "sensor1";
-            var duration = TimeSpan.FromSeconds(1);
+            var sensorId = "test-sensor";
+            var duration = TimeSpan.FromMinutes(5);
             var historicalData = new[]
             {
-                (DateTime.UtcNow.AddSeconds(-1), 41.0),
-                (DateTime.UtcNow, 42.0)
+                (DateTime.UtcNow.AddMinutes(-4), 42.0),
+                (DateTime.UtcNow.AddMinutes(-2), 43.0)
             };
 
-            _temporalBufferMock
-                .Setup(t => t.HasTemporalBuffer(sensorName))
-                .Returns(true);
-            _temporalBufferMock
-                .Setup(t => t.GetSensorHistory(sensorName, duration))
-                .Returns(historicalData);
+            _temporalBuffer.Setup(x => x.GetSensorHistory(sensorId, duration))
+                .ReturnsAsync(historicalData);
 
             // Act
-            var result = await _provider.GetHistoricalDataAsync(sensorName, duration);
+            var result = await _provider.GetHistoricalDataAsync(sensorId, duration);
 
             // Assert
             Assert.Equal(historicalData, result);
-            _databaseMock.Verify(
-                d => d.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()),
-                Times.Never
-            );
+            _temporalBuffer.Verify(x => x.GetSensorHistory(sensorId, duration), Times.Once);
+            _database.Verify(x => x.StringGetAsync(It.IsAny<RedisKey>(), CommandFlags.None), Times.Never);
         }
 
         [Fact]
         public async Task GetHistoricalDataAsync_UsesCurrentValue_WhenNoTemporalBuffer()
         {
             // Arrange
-            var sensorName = "sensor1";
-            var duration = TimeSpan.FromSeconds(1);
+            var sensorId = "test-sensor";
+            var duration = TimeSpan.FromMinutes(5);
             var currentValue = "42.0";
 
-            _temporalBufferMock
-                .Setup(t => t.HasTemporalBuffer(sensorName))
-                .Returns(false);
-            _databaseMock
-                .Setup(d => d.StringGetAsync($"{_keyPrefix}{sensorName}", CommandFlags.None))
-                .ReturnsAsync(currentValue);
+            _temporalBuffer.Setup(x => x.GetSensorHistory(sensorId, duration))
+                .ReturnsAsync(Array.Empty<(DateTime, double)>());
+
+            _database.Setup(x => x.StringGetAsync(
+                It.Is<RedisKey>(k => k.ToString().EndsWith(sensorId)),
+                CommandFlags.None
+            )).ReturnsAsync(currentValue);
 
             // Act
-            var result = await _provider.GetHistoricalDataAsync(sensorName, duration);
+            var result = await _provider.GetHistoricalDataAsync(sensorId, duration);
 
             // Assert
             Assert.Single(result);
             Assert.Equal(42.0, result[0].Value);
+            _temporalBuffer.Verify(x => x.GetSensorHistory(sensorId, duration), Times.Once);
+            _database.Verify(x => x.StringGetAsync(
+                It.Is<RedisKey>(k => k.ToString().EndsWith(sensorId)),
+                CommandFlags.None
+            ), Times.Once);
         }
 
         [Fact]
         public async Task GetHistoricalDataAsync_HandlesInvalidValue()
         {
             // Arrange
-            var sensorName = "sensor1";
-            var duration = TimeSpan.FromSeconds(1);
+            var sensorId = "test-sensor";
+            var duration = TimeSpan.FromMinutes(5);
+            var invalidValue = "not-a-number";
 
-            _temporalBufferMock
-                .Setup(t => t.HasTemporalBuffer(sensorName))
-                .Returns(false);
-            _databaseMock
-                .Setup(d => d.StringGetAsync($"{_keyPrefix}{sensorName}", CommandFlags.None))
-                .ReturnsAsync("not a number");
+            _temporalBuffer.Setup(x => x.GetSensorHistory(sensorId, duration))
+                .ReturnsAsync(Array.Empty<(DateTime, double)>());
+
+            _database.Setup(x => x.StringGetAsync(
+                It.Is<RedisKey>(k => k.ToString().EndsWith(sensorId)),
+                CommandFlags.None
+            )).ReturnsAsync(invalidValue);
 
             // Act
-            var result = await _provider.GetHistoricalDataAsync(sensorName, duration);
+            var result = await _provider.GetHistoricalDataAsync(sensorId, duration);
 
             // Assert
             Assert.Empty(result);
+            _temporalBuffer.Verify(x => x.GetSensorHistory(sensorId, duration), Times.Once);
+            _database.Verify(x => x.StringGetAsync(
+                It.Is<RedisKey>(k => k.ToString().EndsWith(sensorId)),
+                CommandFlags.None
+            ), Times.Once);
         }
     }
 }

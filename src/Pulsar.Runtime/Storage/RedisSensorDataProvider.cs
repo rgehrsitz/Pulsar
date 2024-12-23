@@ -20,7 +20,7 @@ namespace Pulsar.Runtime.Storage
         private readonly ILogger _logger;
         private readonly string _keyPrefix;
         private readonly SemaphoreSlim _reconnectLock = new SemaphoreSlim(1, 1);
-        private readonly SensorTemporalBufferService _temporalBuffer;
+        private readonly ISensorTemporalBufferService _temporalBuffer;
 
         private IDatabase? _db; // We lazily acquire and test the DB connection
         private const int MaxRetries = 3;
@@ -29,7 +29,7 @@ namespace Pulsar.Runtime.Storage
         public RedisSensorDataProvider(
             IConnectionMultiplexer connection,
             ILogger logger,
-            SensorTemporalBufferService temporalBuffer,
+            ISensorTemporalBufferService temporalBuffer,
             string keyPrefix = "sensor:"
         )
         {
@@ -167,68 +167,94 @@ namespace Pulsar.Runtime.Storage
         }
 
         public async Task<IReadOnlyList<(DateTime Timestamp, double Value)>> GetHistoricalDataAsync(
-            string sensorName,
+            string sensorId,
             TimeSpan duration
         )
         {
-            // First check the temporal buffer
-            if (_temporalBuffer.HasTemporalBuffer(sensorName))
+            try
             {
-                return _temporalBuffer.GetSensorHistory(sensorName, duration);
-            }
+                var db = await GetDatabaseAsync();
+                var key = $"{_keyPrefix}{sensorId}";
 
-            // If no temporal buffer, just return the current value if available
-            return await ExecuteWithRetryAsync(
-                async db =>
+                // Try to get data from the temporal buffer first
+                var temporalData = await _temporalBuffer.GetSensorHistory(sensorId, duration);
+                var temporalList = temporalData.ToList();
+
+                if (temporalList.Any())
                 {
-                    var result = new List<(DateTime Timestamp, double Value)>();
-                    var key = $"{_keyPrefix}{sensorName}";
-                    var value = await db.StringGetAsync(key);
+                    return temporalList;
+                }
 
-                    if (value.HasValue && double.TryParse(value.ToString(), out var doubleValue))
-                    {
-                        result.Add((DateTime.UtcNow, doubleValue));
-                    }
+                // If no temporal data, get the current value
+                var value = await db.StringGetAsync(key);
+                if (!value.HasValue)
+                {
+                    return Array.Empty<(DateTime, double)>();
+                }
 
-                    return result;
-                },
-                "GetHistoricalData"
-            );
+                if (!double.TryParse(value.ToString(), out var doubleValue))
+                {
+                    _logger.Warning("Invalid value for sensor {SensorId}: {Value}", sensorId, value);
+                    return Array.Empty<(DateTime, double)>();
+                }
+
+                return new[] { (DateTime.UtcNow, doubleValue) };
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error getting historical data for sensor {SensorId}", sensorId);
+                return Array.Empty<(DateTime, double)>();
+            }
+        }
+
+        public async Task SetSensorDataAsync(string sensorId, double value)
+        {
+            try
+            {
+                var db = await GetDatabaseAsync();
+                var key = $"{_keyPrefix}{sensorId}";
+
+                await db.StringSetAsync(key, value.ToString());
+                await _temporalBuffer.AddSensorValue(sensorId, value);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error setting data for sensor {SensorId}", sensorId);
+            }
         }
 
         public async Task SetSensorDataAsync(IDictionary<string, object> values)
         {
-            if (!values.Any())
+            if (values == null || !values.Any())
             {
                 return;
             }
 
-            await ExecuteWithRetryAsync(
-                async db =>
+            try
+            {
+                var db = await GetDatabaseAsync();
+                var batch = db.CreateBatch();
+                var tasks = new List<Task>();
+
+                foreach (var (key, value) in values)
                 {
-                    var batch = db.CreateBatch();
-                    var tasks = new List<Task>();
-                    var timestamp = DateTime.UtcNow;
+                    var redisKey = $"{_keyPrefix}{key}";
+                    var redisValue = value?.ToString() ?? string.Empty;
+                    tasks.Add(batch.StringSetAsync(redisKey, redisValue));
 
-                    foreach (var (key, value) in values)
+                    if (double.TryParse(redisValue, out var doubleValue))
                     {
-                        var redisKey = (RedisKey)$"{_keyPrefix}{key}";
-                        var redisValue = value?.ToString() ?? string.Empty;
-                        tasks.Add(batch.StringSetAsync(redisKey, redisValue));
-
-                        // If this sensor needs temporal data and the value is numeric, add it to the buffer
-                        if (_temporalBuffer.HasTemporalBuffer(key) && double.TryParse(redisValue, out var doubleValue))
-                        {
-                            _temporalBuffer.UpdateSensor(key, doubleValue, timestamp);
-                        }
+                        tasks.Add(_temporalBuffer.AddSensorValue(key, doubleValue));
                     }
+                }
 
-                    batch.Execute();
-                    await Task.WhenAll(tasks);
-                    return true;
-                },
-                "SetSensorData"
-            );
+                batch.Execute();
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error setting sensor data for {Count} sensors", values.Count);
+            }
         }
 
         /// <summary>

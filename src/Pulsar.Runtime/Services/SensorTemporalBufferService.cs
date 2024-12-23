@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Pulsar.Runtime.Collections;
 using Serilog;
 
 namespace Pulsar.Runtime.Services
@@ -10,86 +9,74 @@ namespace Pulsar.Runtime.Services
     /// <summary>
     /// Service that maintains temporal buffers for sensors that need short-term historical data
     /// </summary>
-    public class SensorTemporalBufferService
+    public class SensorTemporalBufferService : ISensorTemporalBufferService
     {
         private readonly ConcurrentDictionary<string, TimeSeriesBuffer> _buffers;
         private readonly ILogger _logger;
-        private readonly IMetricsService _metrics;
-        private readonly int _defaultBufferCapacity;
-        private readonly TimeSpan _maxBufferDuration;
+        private readonly TimeSpan _maxDuration;
 
-        public SensorTemporalBufferService(
-            ILogger logger,
-            IMetricsService metrics,
-            int defaultBufferCapacity = 60, // 60 samples by default
-            TimeSpan? maxBufferDuration = null // Default 5 seconds
-        )
+        public SensorTemporalBufferService(ILogger logger)
         {
-            if (logger == null) throw new ArgumentNullException(nameof(logger));
-            if (metrics == null) throw new ArgumentNullException(nameof(metrics));
-            if (defaultBufferCapacity <= 0) throw new ArgumentException("Buffer capacity must be positive", nameof(defaultBufferCapacity));
-
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _buffers = new ConcurrentDictionary<string, TimeSeriesBuffer>();
-            _logger = logger.ForContext<SensorTemporalBufferService>();
-            _metrics = metrics;
-            _defaultBufferCapacity = defaultBufferCapacity;
-            _maxBufferDuration = maxBufferDuration ?? TimeSpan.FromSeconds(5);
+            _maxDuration = TimeSpan.FromHours(1);
         }
 
-        /// <summary>
-        /// Updates the value for a sensor, creating a buffer if one doesn't exist
-        /// </summary>
-        public void UpdateSensor(string sensorName, double value, DateTime? timestamp = null)
+        public async Task<IEnumerable<(DateTime Timestamp, double Value)>> GetSensorHistory(string sensorId, TimeSpan maxDuration)
         {
-            var buffer = _buffers.GetOrAdd(
-                sensorName,
-                name => new TimeSeriesBuffer(name, _defaultBufferCapacity, _logger, _metrics)
-            );
-
-            buffer.Add(timestamp ?? DateTime.UtcNow, value);
-        }
-
-        /// <summary>
-        /// Gets historical values for a sensor within the specified duration
-        /// </summary>
-        /// <returns>Empty array if no buffer exists for the sensor</returns>
-        public (DateTime Timestamp, double Value)[] GetSensorHistory(string sensorName, TimeSpan duration)
-        {
-            if (duration > _maxBufferDuration)
+            if (!_buffers.TryGetValue(sensorId, out var buffer))
             {
-                _logger.Warning(
-                    "Requested duration {Duration} exceeds max buffer duration {MaxDuration}",
-                    duration,
-                    _maxBufferDuration
-                );
-                duration = _maxBufferDuration;
+                return Array.Empty<(DateTime, double)>();
             }
 
-            if (_buffers.TryGetValue(sensorName, out var buffer))
-            {
-                return buffer.GetTimeWindow(duration);
-            }
-
-            return Array.Empty<(DateTime, double)>();
+            var cutoff = DateTime.UtcNow - maxDuration;
+            return buffer.GetValues().Where(x => x.Timestamp >= cutoff).ToList();
         }
 
-        /// <summary>
-        /// Removes the temporal buffer for a sensor
-        /// </summary>
-        public void RemoveSensor(string sensorName)
+        public Task AddSensorValue(string sensorId, double value)
         {
-            if (_buffers.TryRemove(sensorName, out var buffer))
-            {
-                buffer.Clear();
-            }
+            UpdateSensor(sensorId, value);
+            return Task.CompletedTask;
         }
 
-        /// <summary>
-        /// Gets whether a sensor has a temporal buffer
-        /// </summary>
-        public bool HasTemporalBuffer(string sensorName)
+        private void UpdateSensor(string sensorName, double value)
         {
-            return _buffers.ContainsKey(sensorName);
+            var buffer = _buffers.GetOrAdd(sensorName, _ => new TimeSeriesBuffer(_maxDuration));
+            buffer.Add(value);
+        }
+
+        private class TimeSeriesBuffer
+        {
+            private readonly List<(DateTime Timestamp, double Value)> _values;
+            private readonly TimeSpan _maxDuration;
+            private readonly object _lock = new();
+
+            public TimeSeriesBuffer(TimeSpan maxDuration)
+            {
+                _values = new List<(DateTime, double)>();
+                _maxDuration = maxDuration;
+            }
+
+            public void Add(double value)
+            {
+                lock (_lock)
+                {
+                    var now = DateTime.UtcNow;
+                    _values.Add((now, value));
+
+                    // Remove old values
+                    var cutoff = now - _maxDuration;
+                    _values.RemoveAll(x => x.Timestamp < cutoff);
+                }
+            }
+
+            public IEnumerable<(DateTime Timestamp, double Value)> GetValues()
+            {
+                lock (_lock)
+                {
+                    return _values.ToList();
+                }
+            }
         }
     }
 }

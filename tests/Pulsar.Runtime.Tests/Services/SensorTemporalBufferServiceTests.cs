@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Moq;
 using Pulsar.Runtime.Services;
 using Serilog;
@@ -9,98 +10,87 @@ namespace Pulsar.Runtime.Tests.Services
 {
     public class SensorTemporalBufferServiceTests
     {
-        private readonly Mock<ILogger> _loggerMock;
-        private readonly Mock<IMetricsService> _metricsMock;
+        private readonly Mock<ILogger> _logger;
         private readonly SensorTemporalBufferService _service;
 
         public SensorTemporalBufferServiceTests()
         {
-            _loggerMock = new Mock<ILogger>(MockBehavior.Loose);
-            _loggerMock.Setup(l => l.ForContext<SensorTemporalBufferService>()).Returns(_loggerMock.Object);
-            _metricsMock = new Mock<IMetricsService>(MockBehavior.Loose);
-            _service = new SensorTemporalBufferService(
-                _loggerMock.Object,
-                _metricsMock.Object,
-                defaultBufferCapacity: 5,
-                maxBufferDuration: TimeSpan.FromSeconds(2)
-            );
+            _logger = new Mock<ILogger>();
+            _logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(_logger.Object);
+
+            _service = new SensorTemporalBufferService(_logger.Object);
         }
 
         [Fact]
-        public void UpdateSensor_CreatesBuffer_WhenNotExists()
+        public async Task AddSensorValue_AddsValueToBuffer()
         {
+            // Arrange
+            var sensorId = "test-sensor";
+            var value = 42.0;
+
             // Act
-            _service.UpdateSensor("test1", 42.0);
+            await _service.AddSensorValue(sensorId, value);
+            var history = await _service.GetSensorHistory(sensorId, TimeSpan.FromSeconds(1));
 
             // Assert
-            Assert.True(_service.HasTemporalBuffer("test1"));
+            var values = history.ToList();
+            Assert.Single(values);
+            Assert.Equal(value, values[0].Value);
         }
 
         [Fact]
-        public void GetSensorHistory_ReturnsEmpty_WhenNoBuffer()
+        public async Task GetSensorHistory_ReturnsEmptyArray_WhenNoData()
         {
+            // Arrange
+            var sensorId = "test-sensor";
+            var duration = TimeSpan.FromSeconds(1);
+
             // Act
-            var result = _service.GetSensorHistory("nonexistent", TimeSpan.FromSeconds(1));
+            var result = await _service.GetSensorHistory(sensorId, duration);
 
             // Assert
             Assert.Empty(result);
         }
 
         [Fact]
-        public void GetSensorHistory_ReturnsData_WithinTimeWindow()
+        public async Task GetSensorHistory_ReturnsValuesWithinDuration()
         {
             // Arrange
-            var now = DateTime.UtcNow;
-            _service.UpdateSensor("test1", 1.0, now.AddSeconds(-2));
-            _service.UpdateSensor("test1", 2.0, now.AddSeconds(-1));
-            _service.UpdateSensor("test1", 3.0, now);
+            var sensorId = "test-sensor";
+            var duration = TimeSpan.FromSeconds(5);
+
+            // Add values
+            await _service.AddSensorValue(sensorId, 41.0);
+            await _service.AddSensorValue(sensorId, 42.0);
+            await _service.AddSensorValue(sensorId, 43.0);
 
             // Act
-            var result = _service.GetSensorHistory("test1", TimeSpan.FromSeconds(1.5));
+            var result = await _service.GetSensorHistory(sensorId, duration);
 
             // Assert
-            Assert.Equal(2, result.Length);
-            Assert.Equal(2.0, result[0].Value);
-            Assert.Equal(3.0, result[1].Value);
+            var values = result.ToList();
+            Assert.Equal(3, values.Count);
+            Assert.Equal(41.0, values[0].Value);
+            Assert.Equal(42.0, values[1].Value);
+            Assert.Equal(43.0, values[2].Value);
         }
 
         [Fact]
-        public void GetSensorHistory_LimitsToMaxDuration()
+        public async Task GetSensorHistory_RemovesOldValues()
         {
             // Arrange
-            var now = DateTime.UtcNow;
-            _service.UpdateSensor("test1", 1.0, now.AddSeconds(-3));
-            _service.UpdateSensor("test1", 2.0, now.AddSeconds(-1));
+            var sensorId = "test-sensor";
+            var duration = TimeSpan.FromMilliseconds(1);
 
-            // Act - Request 3 seconds but service is configured for max 2 seconds
-            var result = _service.GetSensorHistory("test1", TimeSpan.FromSeconds(3));
-
-            // Assert
-            Assert.Single(result);
-            Assert.Equal(2.0, result[0].Value);
-            _loggerMock.Verify(
-                l => l.Warning(
-                    It.Is<string>(s => s.Contains("exceeds max buffer duration")),
-                    It.IsAny<TimeSpan>(),
-                    It.IsAny<TimeSpan>()
-                ),
-                Times.Once
-            );
-        }
-
-        [Fact]
-        public void RemoveSensor_ClearsBuffer()
-        {
-            // Arrange
-            _service.UpdateSensor("test1", 42.0);
-            Assert.True(_service.HasTemporalBuffer("test1"));
+            // Add a value and wait
+            await _service.AddSensorValue(sensorId, 42.0);
+            await Task.Delay(10); // Wait longer than the duration
 
             // Act
-            _service.RemoveSensor("test1");
+            var result = await _service.GetSensorHistory(sensorId, duration);
 
             // Assert
-            Assert.False(_service.HasTemporalBuffer("test1"));
-            Assert.Empty(_service.GetSensorHistory("test1", TimeSpan.FromSeconds(1)));
+            Assert.Empty(result);
         }
     }
 }

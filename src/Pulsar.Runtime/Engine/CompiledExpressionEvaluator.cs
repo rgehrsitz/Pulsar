@@ -24,7 +24,7 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
         _logger = logger;
     }
 
-    public Task<bool> EvaluateAsync(Condition condition, IDictionary<string, double> sensorData)
+    public async Task<bool> EvaluateAsync(Condition condition, IDictionary<string, double> sensorData)
     {
         if (condition is not ExpressionCondition expressionCondition)
         {
@@ -40,7 +40,7 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
 
         try
         {
-            return Task.FromResult(compiledExpression(sensorData));
+            return await Task.Run(() => compiledExpression(sensorData));
         }
         catch (KeyNotFoundException ex)
         {
@@ -48,7 +48,7 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
                 "Missing variable during expression evaluation: {Message}",
                 ex.Message
             );
-            return Task.FromResult(false); // Log and skip instead of throwing
+            return false; // Log and skip instead of throwing
         }
         catch (Exception ex)
         {
@@ -57,7 +57,7 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
                 expressionCondition.Expression,
                 ex.Message
             );
-            return Task.FromResult(false); // Log and skip
+            return false; // Log and skip
         }
     }
 
@@ -73,8 +73,13 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
 
                 public class ExpressionEvaluator
                 {
-                    public bool Evaluate(IDictionary<string, double> data)
+                    public async Task<bool> EvaluateAsync(IDictionary<string, double> data)
                     {
+                        if (data == null)
+                        {
+                            throw new ArgumentNullException(nameof(data));
+                        }
+
                         try
                         {
                             // Check for unknown variables first
@@ -89,7 +94,26 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
                                 }
                             }
 
-                            return {{TransformExpression(expression)}};
+                            var result = await Task.Run(() =>
+                            {
+                                var context = new SimpleContext();
+                                foreach (var variable in data)
+                                {
+                                    context.SetValue(variable.Key, variable.Value);
+                                }
+
+                                var expr = new Expression(TransformExpression(expression));
+                                var value = expr.Evaluate(context);
+
+                                if (value is bool boolValue)
+                                {
+                                    return boolValue;
+                                }
+
+                                throw new ArgumentException($"Expression '{expression}' must evaluate to a boolean value");
+                            });
+
+                            return result;
                         }
                         catch (KeyNotFoundException ex)
                         {
@@ -145,7 +169,7 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
             var assembly = Assembly.Load(ms.ToArray());
             var type = assembly.GetType("ExpressionEvaluator");
             var obj = Activator.CreateInstance(type!);
-            var method = type!.GetMethod("Evaluate");
+            var method = type!.GetMethod("EvaluateAsync");
 
             return data => (bool)method!.Invoke(obj, new object[] { data })!;
         }
