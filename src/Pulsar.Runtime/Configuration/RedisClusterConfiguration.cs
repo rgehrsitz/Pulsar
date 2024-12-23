@@ -31,6 +31,12 @@ public class RedisClusterConfiguration
         int syncTimeout = 5000
     )
     {
+        if (logger == null) throw new ArgumentNullException(nameof(logger));
+        if (string.IsNullOrEmpty(masterName)) throw new ArgumentException("Master name cannot be empty", nameof(masterName));
+        if (sentinelHosts == null) throw new ArgumentNullException(nameof(sentinelHosts));
+        if (sentinelHosts.Length == 0) throw new ArgumentException("At least one sentinel host must be provided", nameof(sentinelHosts));
+        if (string.IsNullOrEmpty(currentHostname)) throw new ArgumentException("Current hostname cannot be empty", nameof(currentHostname));
+
         _logger = logger.ForContext<RedisClusterConfiguration>();
         _masterName = masterName;
         _sentinelHosts = sentinelHosts;
