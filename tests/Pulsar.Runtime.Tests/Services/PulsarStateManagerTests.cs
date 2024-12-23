@@ -1,18 +1,18 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Tests.Mocks;
-using Serilog;
 using Xunit;
 
 namespace Pulsar.Runtime.Tests.Services;
 
 public class PulsarStateManagerTests : IDisposable
 {
-    private readonly Mock<ILogger> _logger;
+    private readonly Mock<Serilog.ILogger> _logger;
     private readonly Mock<RuleEngine> _ruleEngine;
     private readonly MockRedisClusterConfiguration _redisConfig;
     private readonly PulsarStateManager _stateManager;
@@ -21,7 +21,7 @@ public class PulsarStateManagerTests : IDisposable
 
     public PulsarStateManagerTests()
     {
-        _logger = new Mock<ILogger>();
+        _logger = new Mock<Serilog.ILogger>();
         _logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(_logger.Object);
 
         var ruleSet = new MockCompiledRuleSet();
@@ -42,7 +42,7 @@ public class PulsarStateManagerTests : IDisposable
 
         _currentHostname = "test-host";
         _redisConfig = new MockRedisClusterConfiguration(_logger.Object, _currentHostname);
-        
+
         // Use a short check interval for faster tests
         _stateManager = new PulsarStateManager(
             _logger.Object,
@@ -63,7 +63,7 @@ public class PulsarStateManagerTests : IDisposable
     public async Task StartsInactive_WhenMasterIsOnDifferentHost()
     {
         // Arrange - MockRedisClusterConfiguration defaults to master on "other-host"
-        
+
         // Act
         var task = _stateManager.StartAsync(_cts.Token);
         await Task.Delay(200); // Allow time for first state check

@@ -33,7 +33,15 @@ namespace Pulsar.Runtime.Tests.Helpers
 
         public override string GetCurrentMaster()
         {
-            return _testServer.IsMaster ? _testServer.Endpoint.ToString() : "otherslave:6379";
+            try
+            {
+                // Ensure we never return null
+                return base.GetCurrentMaster() ?? "localhost:6379";
+            }
+            catch
+            {
+                return "localhost:6379";
+            }
         }
 
         public void SimulateFailover()

@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using NRedisStack;
-using NRedisStack.RedisStackCommands;
 using Serilog;
 using StackExchange.Redis;
 
@@ -57,13 +55,15 @@ public class RedisClusterConfiguration : IDisposable
 
         _config = new ConfigurationOptions
         {
-            ServiceName = masterName,
+            ServiceName = masterName,     // Used for Sentinel master name
             Password = password,
             ConnectTimeout = connectTimeout,
             SyncTimeout = syncTimeout,
             TieBreaker = "",
             CommandMap = CommandMap.Sentinel,
             DefaultVersion = new Version(3, 0, 0),
+            AbortOnConnectFail = false,
+            AllowAdmin = true            // Required for Sentinel operations
         };
 
         foreach (var host in sentinelHosts)
@@ -84,14 +84,14 @@ public class RedisClusterConfiguration : IDisposable
     /// </summary>
     public virtual ConnectionMultiplexer GetConnection()
     {
-        if (_connection != null && _connection.IsConnected)
+        if (_connection?.IsConnected == true)
         {
             return _connection;
         }
 
         lock (_connectionLock)
         {
-            if (_connection != null && _connection.IsConnected)
+            if (_connection?.IsConnected == true)
             {
                 return _connection;
             }
@@ -99,7 +99,12 @@ public class RedisClusterConfiguration : IDisposable
             try
             {
                 _connection?.Dispose();
-                _connection = ConnectionMultiplexer.Connect(_config);
+                _connection = ConnectionMultiplexer.SentinelConnect(_config);
+
+                if (_connection == null)
+                {
+                    throw new InvalidOperationException("Failed to create Redis connection");
+                }
 
                 _connection.ConnectionFailed += (sender, args) =>
                 {
@@ -133,9 +138,10 @@ public class RedisClusterConfiguration : IDisposable
     {
         try
         {
-            var sentinel = GetConnection().GetServer(_sentinelHosts[0]);
+            var connection = GetConnection();
+            var sentinel = connection.GetServer(_sentinelHosts[0]);
             var master = sentinel.SentinelGetMasterAddressByName(_masterName);
-            return master.ToString();
+            return master?.ToString() ?? throw new InvalidOperationException("No master found");
         }
         catch (Exception ex)
         {
@@ -152,19 +158,13 @@ public class RedisClusterConfiguration : IDisposable
         try
         {
             var connection = GetConnection();
-            if (connection == null)
-            {
-                _logger.Warning("No Redis connection available");
-                return Enumerable.Empty<string>();
-            }
-
             var endpoints = connection.GetServer(
-                _connection?.GetEndPoints().FirstOrDefault()
+                connection.GetEndPoints().FirstOrDefault()
                     ?? throw new InvalidOperationException("No Redis endpoints available")
             );
 
             var replicas = endpoints.SentinelGetReplicaAddresses(_masterName);
-            return replicas.Select(r => r.ToString());
+            return replicas.Select(r => r?.ToString() ?? string.Empty).Where(r => !string.IsNullOrEmpty(r));
         }
         catch (Exception ex)
         {

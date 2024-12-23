@@ -1,9 +1,7 @@
 using System;
-using System.Threading;
-using NRedisStack;
-using NRedisStack.RedisStackCommands;
-using Pulsar.Runtime.Configuration;
+using Moq;
 using Serilog;
+using Pulsar.Runtime.Configuration;
 
 namespace Pulsar.Runtime.Tests.Mocks;
 
@@ -12,74 +10,46 @@ namespace Pulsar.Runtime.Tests.Mocks;
 /// </summary>
 public class MockRedisClusterConfiguration : RedisClusterConfiguration
 {
-    private readonly ILogger _logger;
-    private string _currentMasterHost;
-    private bool _isConnected;
-    private readonly string _currentHostname;
+    private string _currentMaster = "other-host:6379";
+    private bool _isConnected = true;
 
-    public MockRedisClusterConfiguration(
-        ILogger logger,
-        string currentHostname,
-        string initialMasterHost = "other-host"
-    )
-        : base(logger, "test-master", new[] { "localhost:26379" }, currentHostname)
-    {
-        _logger = logger;
-        _currentHostname = currentHostname;
-        _currentMasterHost = initialMasterHost;
-        _isConnected = true;
-    }
+    public MockRedisClusterConfiguration(ILogger? logger = null)
+        : base(
+            logger ?? new Mock<ILogger>().Object,
+            "master",
+            new[] { "localhost:26379" },
+            Environment.MachineName
+        )
+    { }
 
-    public override bool ShouldPulsarBeActive()
+    public MockRedisClusterConfiguration(ILogger logger, string currentHostname)
+        : base(
+            logger,
+            "master",
+            new[] { "localhost:26379" },
+            currentHostname
+        )
+    { }
+
+    public override string GetCurrentMaster()
     {
         if (!_isConnected)
-        {
-            _logger.Information("Redis connection is down, Pulsar should not be active");
-            return false;
-        }
-
-        var shouldBeActive = _currentMasterHost.Equals(
-            _currentHostname,
-            StringComparison.OrdinalIgnoreCase
-        );
-        _logger.Information(
-            "Checking if Pulsar should be active. Master: {Master}, Current: {Current}, Result: {Result}",
-            _currentMasterHost,
-            _currentHostname,
-            shouldBeActive
-        );
-
-        return shouldBeActive;
+            throw new InvalidOperationException("Connection failed");
+        return _currentMaster;
     }
 
-    /// <summary>
-    /// Simulates a Redis master failover to a new host
-    /// </summary>
-    public void SimulateFailover(string newMasterHost)
+    public void SimulateFailover(string newMaster)
     {
-        _logger.Information(
-            "Simulating failover from {OldMaster} to {NewMaster}",
-            _currentMasterHost,
-            newMasterHost
-        );
-        _currentMasterHost = newMasterHost;
+        _currentMaster = $"{newMaster}:6379";
     }
 
-    /// <summary>
-    /// Simulates a Redis connection failure
-    /// </summary>
     public void SimulateConnectionFailure()
     {
-        _logger.Information("Simulating Redis connection failure");
         _isConnected = false;
     }
 
-    /// <summary>
-    /// Simulates a Redis connection restoration
-    /// </summary>
     public void SimulateConnectionRestoration()
     {
-        _logger.Information("Simulating Redis connection restoration");
         _isConnected = true;
     }
 }

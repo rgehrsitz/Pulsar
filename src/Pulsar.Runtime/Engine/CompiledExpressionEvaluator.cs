@@ -68,7 +68,6 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
     {
         try
         {
-            // Create the method signature
             var code = $$"""
                 using System;
                 using System.Collections.Generic;
@@ -76,7 +75,7 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
 
                 public class ExpressionEvaluator
                 {
-                    public async Task<bool> EvaluateAsync(IDictionary<string, double> data)
+                    public bool Evaluate(IDictionary<string, double> data)
                     {
                         if (data == null)
                         {
@@ -97,30 +96,21 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
                                 }
                             }
 
-                            var result = await Task.Run(() =>
+                            var context = new SimpleContext();
+                            foreach (var variable in data)
                             {
-                                var context = new SimpleContext();
-                                foreach (var variable in data)
-                                {
-                                    context.SetValue(variable.Key, variable.Value);
-                                }
+                                context.SetValue(variable.Key, variable.Value);
+                            }
 
-                                var expr = new Expression(TransformExpression(expression));
-                                var value = expr.Evaluate(context);
+                            var expr = new Expression(TransformExpression(expression));
+                            var value = expr.Evaluate(context);
 
-                                if (value is bool boolValue)
-                                {
-                                    return boolValue;
-                                }
+                            if (value is bool boolValue)
+                            {
+                                return boolValue;
+                            }
 
-                                throw new ArgumentException($"Expression '{expression}' must evaluate to a boolean value");
-                            });
-
-                            return result;
-                        }
-                        catch (KeyNotFoundException ex)
-                        {
-                            throw ex;
+                            throw new ArgumentException($"Expression '{expression}' must evaluate to a boolean value");
                         }
                         catch (Exception ex)
                         {
@@ -172,14 +162,14 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
             var assembly = Assembly.Load(ms.ToArray());
             var type = assembly.GetType("ExpressionEvaluator");
             var obj = Activator.CreateInstance(type!);
-            var method = type!.GetMethod("EvaluateAsync");
+            var method = type!.GetMethod("Evaluate");
 
             return data => (bool)method!.Invoke(obj, new object[] { data })!;
         }
         catch (Exception ex)
         {
             throw new ArgumentException(
-                $"Failed to compile expression: {expression}. Error: {ex.Message}",
+                $"Error evaluating expression: {ex.Message}",
                 ex
             );
         }

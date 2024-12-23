@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using MSLogger = Microsoft.Extensions.Logging.ILogger;
 using Moq;
+using Serilog;
 using Pulsar.Runtime.Configuration;
 using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
@@ -9,7 +11,6 @@ using Pulsar.Runtime.Storage;
 using Pulsar.Runtime.Tests.Mocks;
 using Pulsar.Compiler.Models;
 using Pulsar.RuleDefinition.Models;
-using Serilog;
 using Xunit;
 
 namespace Pulsar.Runtime.Tests.Integration;
@@ -22,7 +23,7 @@ public abstract class RedisIntegrationTestBase : IAsyncLifetime
     protected ClusterHealthService HealthService { get; private set; } = null!;
     protected RedisSensorDataProvider SensorProvider { get; private set; } = null!;
     protected MetricsService MetricsService { get; private set; } = null!;
-    protected Mock<ILogger> Logger { get; private set; } = null!;
+    protected Mock<MSLogger> Logger { get; private set; } = null!;
     protected Mock<RuleEngine> RuleEngine { get; private set; } = null!;
 
     protected virtual void SetServices(
@@ -46,12 +47,12 @@ public abstract class RedisIntegrationTestBase : IAsyncLifetime
         var services = new ServiceCollection();
 
         // Initialize mocks
-        Logger = new Mock<ILogger>();
-        Logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(Logger.Object);
+        Logger = new Mock<MSLogger>();
+        var serilogLogger = new Mock<ILogger>();
 
         // Configure services
         services.AddSingleton(Logger.Object);
-        RedisConfig = new MockRedisClusterConfiguration(Logger.Object, Environment.MachineName);
+        RedisConfig = new MockRedisClusterConfiguration(serilogLogger.Object);
 
         var metricsService = new Mock<MetricsService>(Logger.Object);
         var sensorProvider = new Mock<ISensorDataProvider>();
@@ -78,7 +79,7 @@ public abstract class RedisIntegrationTestBase : IAsyncLifetime
 
         // Initialize services
         var stateManager = new PulsarStateManager(
-            Logger.Object,
+            serilogLogger.Object,  // Use Serilog logger here
             RedisConfig,
             RuleEngine.Object,
             TimeSpan.FromMilliseconds(100));
