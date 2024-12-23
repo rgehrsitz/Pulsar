@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging;
 using Pulsar.RuleDefinition.Models;
+using System.IO; // Added
+using System.Linq; // Added
 
 namespace Pulsar.Runtime.Engine;
 
@@ -68,57 +70,50 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
     {
         try
         {
-            var code = $$"""
-                using System;
-                using System.Collections.Generic;
-                using static System.Math;
+            var transformed = TransformExpression(expression);
+            var variableChecks = GenerateVariableChecks(expression);
 
-                public class ExpressionEvaluator
-                {
-                    public bool Evaluate(IDictionary<string, double> data)
-                    {
-                        if (data == null)
-                        {
-                            throw new ArgumentNullException(nameof(data));
-                        }
+            var code = @"
+using System;
+using System.Collections.Generic;
+using static System.Math;
+using Pulsar.Runtime.Engine;
 
-                        try
-                        {
-                            // Check for unknown variables first
-                            foreach (var key in new[] { {{string.Join(
-                    ", ",
-                    ExtractVariables(expression).Select(v => $"\"{v}\"")
-                )}} })
-                            {
-                                if (!data.ContainsKey(key))
-                                {
-                                    throw new KeyNotFoundException($"Unknown variable '{key}' referenced in expression. Please ensure that the variable is defined in the sensor data.");
-                                }
-                            }
+public class ExpressionEvaluator
+{
+    public bool Evaluate(IDictionary<string, double> data)
+    {
+        if (data == null)
+        {
+            throw new ArgumentNullException(nameof(data));
+        }
 
-                            var context = new SimpleContext();
-                            foreach (var variable in data)
-                            {
-                                context.SetValue(variable.Key, variable.Value);
-                            }
+        try
+        {
+            " + variableChecks + @"
+            
+            var context = new SimpleContext();
+            foreach (var variable in data)
+            {
+                context.SetValue(variable.Key, variable.Value);
+            }
 
-                            var expr = new Expression(TransformExpression(expression));
-                            var value = expr.Evaluate(context);
+            var expr = new Expression(""" + transformed.Replace("\"", "\"\"") + @""");
+            var value = expr.Evaluate(context);
 
-                            if (value is bool boolValue)
-                            {
-                                return boolValue;
-                            }
+            if (value is bool boolValue)
+            {
+                return boolValue;
+            }
 
-                            throw new ArgumentException($"Expression '{expression}' must evaluate to a boolean value");
-                        }
-                        catch (Exception ex)
-                        {
-                            throw new InvalidOperationException($"Error evaluating expression: {ex.Message}", ex);
-                        }
-                    }
-                }
-                """;
+            throw new ArgumentException(""Expression '" + expression.Replace("\"", "\"\"") + @"' must evaluate to a boolean value"");
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($""Error evaluating expression: {ex.Message}"", ex);
+        }
+    }
+}";
 
             // Parse and compile the code
             var syntaxTree = CSharpSyntaxTree.ParseText(code);
@@ -173,6 +168,21 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
                 ex
             );
         }
+    }
+
+    // A small helper to generate the KeyNotFound checks for each variable
+    private static string GenerateVariableChecks(string expression)
+    {
+        var variables = string.Join(", ", ExtractVariables(expression).Select(v => $"\"{v}\""));
+        return $@"// Check for unknown variables first
+var variableKeys = new string[] {{ {variables} }};
+foreach (var key in variableKeys)
+{{
+    if (!data.ContainsKey(key))
+    {{
+        throw new KeyNotFoundException($""Unknown variable '{{key}}' referenced in expression. Please ensure that the variable is defined in the sensor data."");
+    }}
+}}";
     }
 
     private static string TransformExpression(string expression)

@@ -82,8 +82,14 @@ public class ConditionTypeConverter : IYamlTypeConverter
         return condition;
     }
 
-    public void WriteYaml(IEmitter emitter, object value, Type type)
+    public void WriteYaml(IEmitter emitter, object? value, Type type)
     {
+        if (value == null)
+        {
+            // Handle or skip null values as needed
+            return;
+        }
+
         var condition = (Condition)value;
 
         emitter.Emit(new MappingStart());
