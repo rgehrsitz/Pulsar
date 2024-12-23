@@ -15,10 +15,8 @@ namespace Pulsar.Runtime.Tests.Helpers
 
         public bool IsConnected => _isConnected;
         public bool IsMaster => _isMaster;
-        public EndPoint Endpoint { get; } = new System.Net.IPEndPoint(
-            System.Net.IPAddress.Parse("127.0.0.1"),
-            6379
-        );
+        public EndPoint Endpoint { get; } =
+            new System.Net.IPEndPoint(System.Net.IPAddress.Parse("127.0.0.1"), 6379);
 
         public void SetMaster(bool isMaster) => _isMaster = isMaster;
 
@@ -26,7 +24,9 @@ namespace Pulsar.Runtime.Tests.Helpers
         {
             lock (_lock)
             {
-                return Task.FromResult(_data.TryGetValue(key, out var value) ? value : RedisValue.Null);
+                return Task.FromResult(
+                    _data.TryGetValue(key, out var value) ? value : RedisValue.Null
+                );
             }
         }
 

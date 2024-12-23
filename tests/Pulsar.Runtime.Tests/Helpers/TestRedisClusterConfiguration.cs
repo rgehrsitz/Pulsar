@@ -1,8 +1,8 @@
 using System;
 using NRedisStack;
-using StackExchange.Redis;
 using Pulsar.Runtime.Configuration;
 using Serilog;
+using StackExchange.Redis;
 
 namespace Pulsar.Runtime.Tests.Helpers
 {
@@ -18,7 +18,8 @@ namespace Pulsar.Runtime.Tests.Helpers
             string[] sentinelHosts,
             string currentHostname,
             ConnectionMultiplexer mockConnection
-        ) : base(logger, masterName, sentinelHosts, currentHostname)
+        )
+            : base(logger, masterName, sentinelHosts, currentHostname)
         {
             _logger = logger;
             _mockConnection = mockConnection;

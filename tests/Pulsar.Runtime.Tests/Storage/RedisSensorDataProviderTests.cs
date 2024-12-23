@@ -4,11 +4,11 @@ using System.Net;
 using System.Threading.Tasks;
 using Moq;
 using NRedisStack;
-using StackExchange.Redis;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Storage;
 using Pulsar.Runtime.Tests.Helpers;
 using Serilog;
+using StackExchange.Redis;
 using Xunit;
 
 namespace Pulsar.Runtime.Tests.Storage
@@ -34,9 +34,7 @@ namespace Pulsar.Runtime.Tests.Storage
                 .Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object>()))
                 .Returns(_database.Object);
 
-            _connection
-                .Setup(x => x.IsConnected)
-                .Returns(true);
+            _connection.Setup(x => x.IsConnected).Returns(true);
 
             _logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(_logger.Object);
 

@@ -2,9 +2,9 @@ using System;
 using System.Linq;
 using System.Net;
 using Moq;
+using Pulsar.Runtime.Configuration;
 using Serilog;
 using Xunit;
-using Pulsar.Runtime.Configuration;
 
 namespace Pulsar.Runtime.Tests.Configuration
 {
@@ -18,7 +18,8 @@ namespace Pulsar.Runtime.Tests.Configuration
         public RedisClusterConfigurationTests()
         {
             _loggerMock = new Mock<ILogger>();
-            _loggerMock.Setup(m => m.ForContext<RedisClusterConfiguration>())
+            _loggerMock
+                .Setup(m => m.ForContext<RedisClusterConfiguration>())
                 .Returns(_loggerMock.Object);
         }
 
@@ -26,7 +27,12 @@ namespace Pulsar.Runtime.Tests.Configuration
         public void Constructor_ValidParameters_Success()
         {
             // Act
-            var config = new RedisClusterConfiguration(_loggerMock.Object, _masterNode, _nodes, _machineName);
+            var config = new RedisClusterConfiguration(
+                _loggerMock.Object,
+                _masterNode,
+                _nodes,
+                _machineName
+            );
 
             // Assert
             Assert.NotNull(config);
@@ -42,12 +48,15 @@ namespace Pulsar.Runtime.Tests.Configuration
             logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(logger.Object);
 
             // Act & Assert
-            var ex = Assert.Throws<ArgumentException>(() => new RedisClusterConfiguration(
-                logger.Object,
-                "master",
-                null!,
-                Environment.MachineName
-            ));
+            var ex = Assert.Throws<ArgumentException>(
+                () =>
+                    new RedisClusterConfiguration(
+                        logger.Object,
+                        "master",
+                        null!,
+                        Environment.MachineName
+                    )
+            );
 
             Assert.Equal("sentinelHosts", ex.ParamName);
         }
@@ -60,12 +69,15 @@ namespace Pulsar.Runtime.Tests.Configuration
             logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(logger.Object);
 
             // Act & Assert
-            var ex = Assert.Throws<ArgumentException>(() => new RedisClusterConfiguration(
-                logger.Object,
-                "master",
-                Array.Empty<string>(),
-                Environment.MachineName
-            ));
+            var ex = Assert.Throws<ArgumentException>(
+                () =>
+                    new RedisClusterConfiguration(
+                        logger.Object,
+                        "master",
+                        Array.Empty<string>(),
+                        Environment.MachineName
+                    )
+            );
 
             Assert.Equal("sentinelHosts", ex.ParamName);
         }
@@ -79,12 +91,15 @@ namespace Pulsar.Runtime.Tests.Configuration
             string? masterName = null;
 
             // Act & Assert
-            var ex = Assert.Throws<ArgumentException>(() => new RedisClusterConfiguration(
-                logger.Object,
-                masterName!,
-                new[] { "localhost:6379" },
-                Environment.MachineName
-            ));
+            var ex = Assert.Throws<ArgumentException>(
+                () =>
+                    new RedisClusterConfiguration(
+                        logger.Object,
+                        masterName!,
+                        new[] { "localhost:6379" },
+                        Environment.MachineName
+                    )
+            );
 
             Assert.Equal("masterName", ex.ParamName);
         }
@@ -97,12 +112,15 @@ namespace Pulsar.Runtime.Tests.Configuration
             logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(logger.Object);
 
             // Act & Assert
-            var ex = Assert.Throws<ArgumentException>(() => new RedisClusterConfiguration(
-                logger.Object,
-                "",
-                new[] { "localhost:6379" },
-                Environment.MachineName
-            ));
+            var ex = Assert.Throws<ArgumentException>(
+                () =>
+                    new RedisClusterConfiguration(
+                        logger.Object,
+                        "",
+                        new[] { "localhost:6379" },
+                        Environment.MachineName
+                    )
+            );
 
             Assert.Equal("masterName", ex.ParamName);
         }
@@ -115,12 +133,15 @@ namespace Pulsar.Runtime.Tests.Configuration
             logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(logger.Object);
 
             // Act & Assert
-            var ex = Assert.Throws<ArgumentException>(() => new RedisClusterConfiguration(
-                logger.Object,
-                "master",
-                new[] { "localhost:6379" },
-                null!
-            ));
+            var ex = Assert.Throws<ArgumentException>(
+                () =>
+                    new RedisClusterConfiguration(
+                        logger.Object,
+                        "master",
+                        new[] { "localhost:6379" },
+                        null!
+                    )
+            );
 
             Assert.Equal("currentHostname", ex.ParamName);
         }
@@ -133,12 +154,15 @@ namespace Pulsar.Runtime.Tests.Configuration
             logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(logger.Object);
 
             // Act & Assert
-            var ex = Assert.Throws<ArgumentException>(() => new RedisClusterConfiguration(
-                logger.Object,
-                "master",
-                new[] { "localhost:6379" },
-                ""
-            ));
+            var ex = Assert.Throws<ArgumentException>(
+                () =>
+                    new RedisClusterConfiguration(
+                        logger.Object,
+                        "master",
+                        new[] { "localhost:6379" },
+                        ""
+                    )
+            );
 
             Assert.Equal("currentHostname", ex.ParamName);
         }
@@ -147,12 +171,15 @@ namespace Pulsar.Runtime.Tests.Configuration
         public void Constructor_NullLogger_ThrowsArgumentNullException()
         {
             // Act & Assert
-            var ex = Assert.Throws<ArgumentNullException>(() => new RedisClusterConfiguration(
-                null!,
-                "master",
-                new[] { "localhost:6379" },
-                Environment.MachineName
-            ));
+            var ex = Assert.Throws<ArgumentNullException>(
+                () =>
+                    new RedisClusterConfiguration(
+                        null!,
+                        "master",
+                        new[] { "localhost:6379" },
+                        Environment.MachineName
+                    )
+            );
 
             Assert.Equal("logger", ex.ParamName);
         }

@@ -158,8 +158,10 @@ public class RedisClusterConfiguration : IDisposable
                 return Enumerable.Empty<string>();
             }
 
-            var endpoints = connection.GetServer(_connection?.GetEndPoints().FirstOrDefault()
-                ?? throw new InvalidOperationException("No Redis endpoints available"));
+            var endpoints = connection.GetServer(
+                _connection?.GetEndPoints().FirstOrDefault()
+                    ?? throw new InvalidOperationException("No Redis endpoints available")
+            );
 
             var replicas = endpoints.SentinelGetReplicaAddresses(_masterName);
             return replicas.Select(r => r.ToString());
