@@ -24,7 +24,10 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
         _logger = logger;
     }
 
-    public async Task<bool> EvaluateAsync(Condition condition, IDictionary<string, double> sensorData)
+    public async Task<bool> EvaluateAsync(
+        Condition condition,
+        IDictionary<string, double> sensorData
+    )
     {
         if (condition is not ExpressionCondition expressionCondition)
         {

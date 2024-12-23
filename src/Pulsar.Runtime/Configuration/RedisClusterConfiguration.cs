@@ -28,16 +28,23 @@ public class RedisClusterConfiguration
         string currentHostname,
         string password = null,
         int connectTimeout = 5000,
-        int syncTimeout = 1000)
+        int syncTimeout = 1000
+    )
     {
         if (string.IsNullOrEmpty(masterName))
             throw new ArgumentException("Master name cannot be empty", nameof(masterName));
 
         if (string.IsNullOrEmpty(currentHostname))
-            throw new ArgumentException("Current hostname cannot be empty", nameof(currentHostname));
+            throw new ArgumentException(
+                "Current hostname cannot be empty",
+                nameof(currentHostname)
+            );
 
         if (sentinelHosts == null || sentinelHosts.Length == 0)
-            throw new ArgumentException("At least one sentinel host is required", nameof(sentinelHosts));
+            throw new ArgumentException(
+                "At least one sentinel host is required",
+                nameof(sentinelHosts)
+            );
 
         if (logger == null)
             throw new ArgumentNullException(nameof(logger));
@@ -55,7 +62,7 @@ public class RedisClusterConfiguration
             SyncTimeout = syncTimeout,
             TieBreaker = "",
             CommandMap = CommandMap.Sentinel,
-            DefaultVersion = new Version(3, 0, 0)
+            DefaultVersion = new Version(3, 0, 0),
         };
 
         foreach (var host in _sentinelHosts)

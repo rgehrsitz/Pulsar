@@ -23,9 +23,7 @@ public class MetricsIntegrationTests : IAsyncDisposable
 
     public MetricsIntegrationTests(ITestOutputHelper output)
     {
-        _logger = new LoggerConfiguration()
-            .WriteTo.TestOutput(output)
-            .CreateLogger();
+        _logger = new LoggerConfiguration().WriteTo.TestOutput(output).CreateLogger();
 
         var port = _nextPort++;
         _metricsEndpoint = $"http://localhost:{port}/metrics";
@@ -54,14 +52,26 @@ public class MetricsIntegrationTests : IAsyncDisposable
 
         // Assert
         var metricsResponse = await _httpClient.GetStringAsync(_metricsEndpoint);
-        
+
         // Check for time series metrics
-        Assert.Contains($"pulsar_time_series_updates_total{{data_source=\"{dataSource}\"}} 2", metricsResponse);
-        Assert.Contains($"pulsar_time_series_buffer_size{{data_source=\"{dataSource}\"}} 2", metricsResponse);
-        
+        Assert.Contains(
+            $"pulsar_time_series_updates_total{{data_source=\"{dataSource}\"}} 2",
+            metricsResponse
+        );
+        Assert.Contains(
+            $"pulsar_time_series_buffer_size{{data_source=\"{dataSource}\"}} 2",
+            metricsResponse
+        );
+
         // Check for sensor metrics
-        Assert.Contains($"pulsar_sensor_value{{sensor_name=\"{dataSource}\"}} {value2}", metricsResponse);
-        Assert.Contains($"pulsar_sensor_updates_total{{sensor_name=\"{dataSource}\"}} 2", metricsResponse);
+        Assert.Contains(
+            $"pulsar_sensor_value{{sensor_name=\"{dataSource}\"}} {value2}",
+            metricsResponse
+        );
+        Assert.Contains(
+            $"pulsar_sensor_updates_total{{sensor_name=\"{dataSource}\"}} 2",
+            metricsResponse
+        );
     }
 
     [Fact]
@@ -84,8 +94,14 @@ public class MetricsIntegrationTests : IAsyncDisposable
 
         // Assert
         var metricsResponse = await _httpClient.GetStringAsync(_metricsEndpoint);
-        Assert.Contains($"pulsar_time_series_overflow_total{{data_source=\"{dataSource}\"}} 1", metricsResponse);
-        Assert.Contains($"pulsar_time_series_buffer_size{{data_source=\"{dataSource}\"}} 2", metricsResponse);
+        Assert.Contains(
+            $"pulsar_time_series_overflow_total{{data_source=\"{dataSource}\"}} 1",
+            metricsResponse
+        );
+        Assert.Contains(
+            $"pulsar_time_series_buffer_size{{data_source=\"{dataSource}\"}} 2",
+            metricsResponse
+        );
     }
 
     [Fact]
@@ -103,7 +119,10 @@ public class MetricsIntegrationTests : IAsyncDisposable
 
         // Assert
         var metricsResponse = await _httpClient.GetStringAsync(_metricsEndpoint);
-        Assert.Contains($"pulsar_sensor_read_errors_total{{sensor_name=\"{sensorName}\",error_type=\"BufferNotFound\"}} 1", metricsResponse);
+        Assert.Contains(
+            $"pulsar_sensor_read_errors_total{{sensor_name=\"{sensorName}\",error_type=\"BufferNotFound\"}} 1",
+            metricsResponse
+        );
     }
 
     public async ValueTask DisposeAsync()

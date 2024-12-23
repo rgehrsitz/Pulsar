@@ -66,7 +66,7 @@ public class ThresholdOverTimeCondition : Condition
                 "s" => (long)(value * 1000),
                 "m" => (long)(value * 60 * 1000),
                 "h" => (long)(value * 60 * 60 * 1000),
-                _ => throw new ArgumentException($"Invalid duration unit: {unit}")
+                _ => throw new ArgumentException($"Invalid duration unit: {unit}"),
             };
         }
     }

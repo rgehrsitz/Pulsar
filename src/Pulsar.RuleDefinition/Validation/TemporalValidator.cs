@@ -1,6 +1,6 @@
 using System;
-using System.Text.RegularExpressions;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace Pulsar.RuleDefinition.Validation;
 
@@ -9,7 +9,7 @@ namespace Pulsar.RuleDefinition.Validation;
 /// </summary>
 public class TemporalValidator
 {
-    private const int MinDurationMs = 100;    // Minimum 100ms
+    private const int MinDurationMs = 100; // Minimum 100ms
     private const int MaxDurationMs = 86400000; // Maximum 24 hours
     private const int MaxLookbackPeriods = 1000; // Maximum number of historical values to store
 
@@ -19,7 +19,7 @@ public class TemporalValidator
         { "s", 1000 },
         { "m", 60000 },
         { "h", 3600000 },
-        { "d", 86400000 }
+        { "d", 86400000 },
     };
 
     /// <summary>
@@ -100,7 +100,8 @@ public class TemporalValidator
     /// </summary>
     public (bool IsValid, int DataPoints, string? Error) CalculateRequiredDataPoints(
         string duration,
-        TimeSpan samplingRate)
+        TimeSpan samplingRate
+    )
     {
         var (isValid, durationMs, error) = ValidateDuration(duration);
         if (!isValid)
@@ -111,7 +112,11 @@ public class TemporalValidator
         var dataPoints = (int)(durationMs / samplingRate.TotalMilliseconds);
         if (dataPoints > MaxLookbackPeriods)
         {
-            return (false, 0, $"Duration requires too many data points ({dataPoints}). Maximum is {MaxLookbackPeriods}");
+            return (
+                false,
+                0,
+                $"Duration requires too many data points ({dataPoints}). Maximum is {MaxLookbackPeriods}"
+            );
         }
 
         return (true, dataPoints, null);

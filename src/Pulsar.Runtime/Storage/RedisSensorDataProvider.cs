@@ -4,10 +4,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using StackExchange.Redis;
-using Serilog;
 using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
+using Serilog;
+using StackExchange.Redis;
 
 namespace Pulsar.Runtime.Storage
 {
@@ -194,7 +194,11 @@ namespace Pulsar.Runtime.Storage
 
                 if (!double.TryParse(value.ToString(), out var doubleValue))
                 {
-                    _logger.Warning("Invalid value for sensor {SensorId}: {Value}", sensorId, value);
+                    _logger.Warning(
+                        "Invalid value for sensor {SensorId}: {Value}",
+                        sensorId,
+                        value
+                    );
                     return Array.Empty<(DateTime, double)>();
                 }
 

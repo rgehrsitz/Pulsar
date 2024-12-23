@@ -9,15 +9,26 @@ public class ExpressionValidator
 {
     private static readonly HashSet<string> AllowedFunctions = new()
     {
-        "min", "max", "sqrt", "abs", "round"
+        "min",
+        "max",
+        "sqrt",
+        "abs",
+        "round",
     };
 
     private static readonly HashSet<string> ComparisonOperators = new()
     {
-        ">", ">=", "<", "<=", "==", "!="
+        ">",
+        ">=",
+        "<",
+        "<=",
+        "==",
+        "!=",
     };
 
-    public (bool isValid, HashSet<string> dataSources, List<string> errors) ValidateExpression(string expression)
+    public (bool isValid, HashSet<string> dataSources, List<string> errors) ValidateExpression(
+        string expression
+    )
     {
         var errors = new List<string>();
         var dataSources = new HashSet<string>();
@@ -35,10 +46,7 @@ public class ExpressionValidator
         foreach (Match match in functionMatches)
         {
             var functionName = match.Groups[1].Value.ToLower();
-            var arguments = match.Groups[2].Value
-                .Split(',')
-                .Select(arg => arg.Trim())
-                .ToList();
+            var arguments = match.Groups[2].Value.Split(',').Select(arg => arg.Trim()).ToList();
 
             if (!AllowedFunctions.Contains(functionName))
             {
@@ -66,8 +74,11 @@ public class ExpressionValidator
         }
 
         // Check for invalid operator sequences
-        if (Regex.IsMatch(modifiedExpression, @"[<>=!]{2,}(?![=])") || // Catches >>> or <<<
-            Regex.IsMatch(modifiedExpression, @"[><]\s+[><]"))         // Catches > > or < <
+        if (
+            Regex.IsMatch(modifiedExpression, @"[<>=!]{2,}(?![=])")
+            || // Catches >>> or <<<
+            Regex.IsMatch(modifiedExpression, @"[><]\s+[><]")
+        ) // Catches > > or < <
         {
             errors.Add("Invalid operator sequence");
             return (false, dataSources, errors);
@@ -87,7 +98,8 @@ public class ExpressionValidator
         }
 
         // Extract remaining data sources (non-function arguments)
-        var remainingDataSources = Regex.Matches(modifiedExpression, @"[a-zA-Z_]\w*")
+        var remainingDataSources = Regex
+            .Matches(modifiedExpression, @"[a-zA-Z_]\w*")
             .Select(m => m.Value)
             .Where(v => !AllowedFunctions.Contains(v.ToLower()) && v != "X");
 
@@ -96,7 +108,9 @@ public class ExpressionValidator
         // Only require comparison operator for non-function expressions
         if (functionMatches.Count == 0)
         {
-            var hasComparisonOperator = ComparisonOperators.Any(op => modifiedExpression.Contains(op));
+            var hasComparisonOperator = ComparisonOperators.Any(op =>
+                modifiedExpression.Contains(op)
+            );
             if (!hasComparisonOperator)
             {
                 errors.Add("Expression must contain a comparison operator");

@@ -13,5 +13,5 @@ public enum ThresholdOperator
     /// <summary>
     /// Less than operator (<)
     /// </summary>
-    LessThan
+    LessThan,
 }

@@ -29,7 +29,8 @@ public class CompiledRuleSet
         IReadOnlyList<CompiledRule> rules,
         int layerCount,
         IReadOnlySet<string> allInputSensors,
-        IReadOnlySet<string> allOutputSensors)
+        IReadOnlySet<string> allOutputSensors
+    )
     {
         Rules = rules;
         LayerCount = layerCount;

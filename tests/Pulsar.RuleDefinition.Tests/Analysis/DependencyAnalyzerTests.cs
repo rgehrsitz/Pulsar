@@ -24,8 +24,8 @@ public class DependencyAnalyzerTests
             Rules = new List<Rule>
             {
                 CreateRule("Rule1", "temperature > 50", "output1"),
-                CreateRule("Rule2", "humidity > 80", "output2")
-            }
+                CreateRule("Rule2", "humidity > 80", "output2"),
+            },
         };
 
         // Act
@@ -47,8 +47,8 @@ public class DependencyAnalyzerTests
             Rules = new List<Rule>
             {
                 CreateRule("Rule2", "derived_temp > 100", "output2"),
-                CreateRule("Rule1", "temperature > 50", "derived_temp")
-            }
+                CreateRule("Rule1", "temperature > 50", "derived_temp"),
+            },
         };
 
         // Act
@@ -71,8 +71,8 @@ public class DependencyAnalyzerTests
             Rules = new List<Rule>
             {
                 CreateRule("Rule1", "output2 > 0", "output1"),
-                CreateRule("Rule2", "output1 > 0", "output2")
-            }
+                CreateRule("Rule2", "output1 > 0", "output2"),
+            },
         };
 
         // Act
@@ -94,8 +94,8 @@ public class DependencyAnalyzerTests
             {
                 CreateRule("Rule3", "temp2 > 0", "result"),
                 CreateRule("Rule1", "input > 0", "temp1"),
-                CreateRule("Rule2", "temp1 > 0", "temp2")
-            }
+                CreateRule("Rule2", "temp1 > 0", "temp2"),
+            },
         };
 
         // Act
@@ -116,12 +116,8 @@ public class DependencyAnalyzerTests
             {
                 All = new List<Condition>
                 {
-                    new ExpressionCondition
-                    {
-                        Type = "expression",
-                        Expression = condition
-                    }
-                }
+                    new ExpressionCondition { Type = "expression", Expression = condition },
+                },
             },
             Actions = new List<RuleAction>
             {
@@ -130,10 +126,10 @@ public class DependencyAnalyzerTests
                     SetValue = new Dictionary<string, object>
                     {
                         { "key", outputKey },
-                        { "value", "1" }
-                    }
-                }
-            }
+                        { "value", "1" },
+                    },
+                },
+            },
         };
     }
 }

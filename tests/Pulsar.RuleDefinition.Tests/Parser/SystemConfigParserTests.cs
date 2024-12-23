@@ -18,7 +18,8 @@ public class SystemConfigParserTests
     public void Parse_ValidConfig_ReturnsConfig()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 version: 1
 valid_sensors:
   - temperature
@@ -40,11 +41,12 @@ valid_sensors:
     public void Parse_InvalidYaml_ThrowsException()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 version: 1
 valid_sensors:
   - temperature
-  humidity";  // Invalid YAML indentation
+  humidity"; // Invalid YAML indentation
 
         // Act & Assert
         Assert.Throws<ArgumentException>(() => _parser.Parse(yaml));
@@ -54,7 +56,8 @@ valid_sensors:
     public void Parse_MissingVersion_ThrowsException()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 valid_sensors:
   - temperature
   - humidity";
@@ -67,7 +70,8 @@ valid_sensors:
     public void Parse_InvalidVersion_ThrowsException()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 version: 0
 valid_sensors:
   - temperature
@@ -81,7 +85,8 @@ valid_sensors:
     public void Parse_MissingValidSensors_ThrowsException()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 version: 1";
 
         // Act & Assert
@@ -92,7 +97,8 @@ version: 1";
     public void Parse_EmptySensorName_ThrowsException()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 version: 1
 valid_sensors:
   - temperature
@@ -107,12 +113,13 @@ valid_sensors:
     public void Parse_DuplicateSensorNames_ThrowsException()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 version: 1
 valid_sensors:
   - temperature
   - humidity
-  - temperature";  // Duplicate sensor name
+  - temperature"; // Duplicate sensor name
 
         // Act & Assert
         Assert.Throws<ArgumentException>(() => _parser.Parse(yaml));
@@ -122,7 +129,8 @@ valid_sensors:
     public void Parse_WhitespaceSensorName_ThrowsException()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 version: 1
 valid_sensors:
   - temperature
@@ -137,7 +145,8 @@ valid_sensors:
     public void Parse_NullSensorName_ThrowsException()
     {
         // Arrange
-        var yaml = @"
+        var yaml =
+            @"
 version: 1
 valid_sensors:
   - temperature

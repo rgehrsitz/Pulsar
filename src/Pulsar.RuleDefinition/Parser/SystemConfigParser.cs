@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
-using YamlDotNet.Core;
 using Pulsar.RuleDefinition.Models;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -57,13 +57,15 @@ public class SystemConfigParser
             }
 
             // Check for duplicate sensors
-            var duplicates = config.ValidSensors
-                .GroupBy(x => x)
+            var duplicates = config
+                .ValidSensors.GroupBy(x => x)
                 .Where(g => g.Count() > 1)
                 .Select(g => g.Key);
 
             if (duplicates.Any())
-                throw new ArgumentException($"Duplicate sensor names found: {string.Join(", ", duplicates)}");
+                throw new ArgumentException(
+                    $"Duplicate sensor names found: {string.Join(", ", duplicates)}"
+                );
 
             return config;
         }

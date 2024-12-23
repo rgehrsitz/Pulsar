@@ -1,6 +1,6 @@
 namespace Pulsar.Core.Abstractions;
 
-public interface IRule 
+public interface IRule
 {
     string Name { get; }
     bool Evaluate();

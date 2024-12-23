@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using Pulsar.RuleDefinition.Models;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
-using Pulsar.RuleDefinition.Models;
 
 namespace Pulsar.RuleDefinition.Parser;
 
@@ -41,7 +41,9 @@ public class RuleParser
             var result = _deserializer.Deserialize<RuleSetDefinition>(yamlContent);
             if (result == null)
             {
-                throw new ArgumentException("Invalid YAML: failed to deserialize to RuleSetDefinition");
+                throw new ArgumentException(
+                    "Invalid YAML: failed to deserialize to RuleSetDefinition"
+                );
             }
 
             // Validate required fields
@@ -104,7 +106,5 @@ public class RuleParser
 public class RuleParsingException : Exception
 {
     public RuleParsingException(string message, Exception? innerException = null)
-        : base(message, innerException)
-    {
-    }
+        : base(message, innerException) { }
 }

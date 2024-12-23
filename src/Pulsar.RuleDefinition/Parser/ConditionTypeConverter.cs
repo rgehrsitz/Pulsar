@@ -1,7 +1,7 @@
+using Pulsar.RuleDefinition.Models;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
-using Pulsar.RuleDefinition.Models;
 
 namespace Pulsar.RuleDefinition.Parser;
 
@@ -13,7 +13,7 @@ public class ConditionTypeConverter : IYamlTypeConverter
     {
         // Start of the mapping
         parser.Consume<MappingStart>();
-        
+
         // Read the condition type
         parser.Consume<Scalar>(); // "type" key
         var conditionType = parser.Consume<Scalar>().Value;
@@ -24,7 +24,7 @@ public class ConditionTypeConverter : IYamlTypeConverter
             "comparison" => new ComparisonCondition(),
             "threshold_over_time" => new ThresholdOverTimeCondition(),
             "expression" => new ExpressionCondition(),
-            _ => throw new YamlException($"Unknown condition type: {conditionType}")
+            _ => throw new YamlException($"Unknown condition type: {conditionType}"),
         };
 
         condition.Type = conditionType;
@@ -60,7 +60,7 @@ public class ConditionTypeConverter : IYamlTypeConverter
                     {
                         ">" or "gt" => ThresholdOperator.GreaterThan,
                         "<" or "lt" => ThresholdOperator.LessThan,
-                        _ => throw new YamlException($"Invalid threshold operator: {value}")
+                        _ => throw new YamlException($"Invalid threshold operator: {value}"),
                     };
                     break;
                 case "required_percentage" when condition is ThresholdOverTimeCondition threshold:
@@ -111,12 +111,18 @@ public class ConditionTypeConverter : IYamlTypeConverter
                 emitter.Emit(new Scalar("duration"));
                 emitter.Emit(new Scalar(threshold.Duration));
                 emitter.Emit(new Scalar("operator"));
-                emitter.Emit(new Scalar(threshold.Operator switch
-                {
-                    ThresholdOperator.GreaterThan => ">",
-                    ThresholdOperator.LessThan => "<",
-                    _ => throw new YamlException($"Invalid threshold operator: {threshold.Operator}")
-                }));
+                emitter.Emit(
+                    new Scalar(
+                        threshold.Operator switch
+                        {
+                            ThresholdOperator.GreaterThan => ">",
+                            ThresholdOperator.LessThan => "<",
+                            _ => throw new YamlException(
+                                $"Invalid threshold operator: {threshold.Operator}"
+                            ),
+                        }
+                    )
+                );
                 if (threshold.RequiredPercentage < 1.0)
                 {
                     emitter.Emit(new Scalar("required_percentage"));

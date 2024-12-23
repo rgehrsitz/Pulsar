@@ -28,12 +28,13 @@ public class RuleCompiler
                 Array.Empty<CompiledRule>(),
                 0,
                 new HashSet<string>(),
-                new HashSet<string>());
+                new HashSet<string>()
+            );
         }
 
         // Build dependency graph
         var (dependencies, inDegree) = BuildDependencyGraph(rulesList);
-        
+
         // Perform topological sort using Kahn's algorithm
         var layers = new List<List<Rule>>();
         var currentLayer = new List<Rule>();
@@ -48,14 +49,16 @@ public class RuleCompiler
             if (!independentRules.Any())
             {
                 var cycle = FindCycle(dependencies, remainingRules);
-                _logger.Error("Circular dependency detected between rules: {Cycle}", 
-                    string.Join(" -> ", cycle.Select(r => r.Name)));
+                _logger.Error(
+                    "Circular dependency detected between rules: {Cycle}",
+                    string.Join(" -> ", cycle.Select(r => r.Name))
+                );
                 throw new InvalidOperationException("Circular dependency detected in rules");
             }
 
             // Add all independent rules to current layer
             currentLayer.AddRange(independentRules);
-            
+
             // Remove processed rules and update in-degrees
             foreach (var rule in independentRules)
             {
@@ -95,7 +98,8 @@ public class RuleCompiler
                 {
                     foreach (var otherRule in rulesList)
                     {
-                        if (otherRule == rule) continue;
+                        if (otherRule == rule)
+                            continue;
 
                         if (RuleOutputsSensor(otherRule, sensor))
                         {
@@ -107,27 +111,31 @@ public class RuleCompiler
                 allInputSensors.UnionWith(inputSensors);
                 allOutputSensors.UnionWith(outputSensors);
 
-                compiledRules.Add(new CompiledRule(
-                    rule,
-                    layerIndex,
-                    ruleDependencies,
-                    inputSensors,
-                    outputSensors));
+                compiledRules.Add(
+                    new CompiledRule(
+                        rule,
+                        layerIndex,
+                        ruleDependencies,
+                        inputSensors,
+                        outputSensors
+                    )
+                );
             }
         }
 
-        _logger.Information("Compiled {RuleCount} rules into {LayerCount} layers",
-            compiledRules.Count, layers.Count);
+        _logger.Information(
+            "Compiled {RuleCount} rules into {LayerCount} layers",
+            compiledRules.Count,
+            layers.Count
+        );
 
-        return new CompiledRuleSet(
-            compiledRules,
-            layers.Count,
-            allInputSensors,
-            allOutputSensors);
+        return new CompiledRuleSet(compiledRules, layers.Count, allInputSensors, allOutputSensors);
     }
 
-    private (Dictionary<string, HashSet<string>> Dependencies, Dictionary<string, int> InDegree) 
-        BuildDependencyGraph(IReadOnlyList<Rule> rules)
+    private (
+        Dictionary<string, HashSet<string>> Dependencies,
+        Dictionary<string, int> InDegree
+    ) BuildDependencyGraph(IReadOnlyList<Rule> rules)
     {
         var dependencies = new Dictionary<string, HashSet<string>>();
         var inDegree = new Dictionary<string, int>();
@@ -144,8 +152,12 @@ public class RuleCompiler
                     {
                         if (outputs.TryGetValue(key, out var existingRule))
                         {
-                            _logger.Warning("Multiple rules trying to set the same value {Key}: {ExistingRule} and {NewRule}",
-                                key, existingRule, rule.Name);
+                            _logger.Warning(
+                                "Multiple rules trying to set the same value {Key}: {ExistingRule} and {NewRule}",
+                                key,
+                                existingRule,
+                                rule.Name
+                            );
                         }
                         outputs[key] = rule.Name;
                     }
@@ -157,7 +169,13 @@ public class RuleCompiler
         foreach (var rule in rules)
         {
             inDegree[rule.Name] = 0;
-            AnalyzeConditionDependencies(rule.Conditions, rule.Name, outputs, dependencies, inDegree);
+            AnalyzeConditionDependencies(
+                rule.Conditions,
+                rule.Name,
+                outputs,
+                dependencies,
+                inDegree
+            );
         }
 
         return (dependencies, inDegree);
@@ -168,7 +186,8 @@ public class RuleCompiler
         string ruleName,
         Dictionary<string, string> outputs,
         Dictionary<string, HashSet<string>> dependencies,
-        Dictionary<string, int> inDegree)
+        Dictionary<string, int> inDegree
+    )
     {
         if (conditions.All != null)
         {
@@ -192,7 +211,8 @@ public class RuleCompiler
         string dependentRule,
         Dictionary<string, string> outputs,
         Dictionary<string, HashSet<string>> dependencies,
-        Dictionary<string, int> inDegree)
+        Dictionary<string, int> inDegree
+    )
     {
         var sensorNames = ExtractSensorNames(condition);
 
@@ -270,11 +290,13 @@ public class RuleCompiler
 
     private bool RuleOutputsSensor(Rule rule, string sensor)
     {
-        return rule.Actions.Any(action =>
-            action.SetValue?.ContainsKey(sensor) == true);
+        return rule.Actions.Any(action => action.SetValue?.ContainsKey(sensor) == true);
     }
 
-    private IList<Rule> FindCycle(Dictionary<string, HashSet<string>> dependencies, ISet<Rule> remainingRules)
+    private IList<Rule> FindCycle(
+        Dictionary<string, HashSet<string>> dependencies,
+        ISet<Rule> remainingRules
+    )
     {
         var visited = new HashSet<string>();
         var path = new HashSet<string>();
@@ -297,7 +319,8 @@ public class RuleCompiler
         HashSet<string> visited,
         HashSet<string> path,
         List<Rule> cycle,
-        ISet<Rule> remainingRules)
+        ISet<Rule> remainingRules
+    )
     {
         if (!visited.Add(ruleName))
         {

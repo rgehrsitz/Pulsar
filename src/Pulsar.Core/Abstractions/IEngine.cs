@@ -1,6 +1,6 @@
 namespace Pulsar.Core.Abstractions;
 
-public interface IEngine 
+public interface IEngine
 {
     void Initialize();
     void EvaluateCycle();

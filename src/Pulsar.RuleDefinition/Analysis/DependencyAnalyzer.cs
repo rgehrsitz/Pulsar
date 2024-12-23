@@ -15,13 +15,19 @@ public class DependencyAnalyzer
         _logger = Log.ForContext<DependencyAnalyzer>();
     }
 
-    public (List<Rule> OrderedRules, List<string> CyclicDependencies) AnalyzeAndOrder(RuleSetDefinition ruleSet)
+    public (List<Rule> OrderedRules, List<string> CyclicDependencies) AnalyzeAndOrder(
+        RuleSetDefinition ruleSet
+    )
     {
-        _logger.Information("Starting dependency analysis for ruleset {RuleSetVersion} with {RuleCount} rules", ruleSet.Version, ruleSet.Rules.Count);
+        _logger.Information(
+            "Starting dependency analysis for ruleset {RuleSetVersion} with {RuleCount} rules",
+            ruleSet.Version,
+            ruleSet.Rules.Count
+        );
 
         // First check for duplicate rule names
-        var duplicateRules = ruleSet.Rules
-            .GroupBy(r => r.Name)
+        var duplicateRules = ruleSet
+            .Rules.GroupBy(r => r.Name)
             .Where(g => g.Count() > 1)
             .Select(g => g.Key)
             .ToList();
@@ -34,7 +40,7 @@ public class DependencyAnalyzer
 
         var rules = ruleSet.Rules.ToDictionary(r => r.Name, r => r);
         var graph = BuildDependencyGraph(rules);
-        
+
         _logger.Debug("Built dependency graph with {NodeCount} nodes", graph.Count);
         foreach (var (rule, deps) in graph)
         {
@@ -53,8 +59,11 @@ public class DependencyAnalyzer
                 _logger.Debug("Checking for cycles starting from rule {RuleName}", rule);
                 if (HasCycle(rule, graph, visited, recursionStack, cyclicDependencies))
                 {
-                    _logger.Warning("Cyclic dependency detected starting from rule {RuleName}. Cycle: {@CyclicDependencies}", 
-                        rule, cyclicDependencies);
+                    _logger.Warning(
+                        "Cyclic dependency detected starting from rule {RuleName}. Cycle: {@CyclicDependencies}",
+                        rule,
+                        cyclicDependencies
+                    );
                 }
             }
         }
@@ -62,7 +71,7 @@ public class DependencyAnalyzer
         if (!cyclicDependencies.Any())
         {
             _logger.Information("No cyclic dependencies found, proceeding with topological sort");
-            
+
             // If there are no dependencies, maintain original order
             if (!graph.Any(kv => kv.Value.Any()))
             {
@@ -80,14 +89,22 @@ public class DependencyAnalyzer
                     }
                 }
                 _logger.Information("Successfully ordered {RuleCount} rules", orderedRules.Count);
-                _logger.Debug("Rule execution order: {@RuleOrder}", orderedRules.Select(r => r.Name));
+                _logger.Debug(
+                    "Rule execution order: {@RuleOrder}",
+                    orderedRules.Select(r => r.Name)
+                );
             }
         }
         else
         {
-            _logger.Error("Found {CycleCount} cyclic dependencies in ruleset", cyclicDependencies.Count);
+            _logger.Error(
+                "Found {CycleCount} cyclic dependencies in ruleset",
+                cyclicDependencies.Count
+            );
             // Format cyclic dependencies as expected by tests
-            cyclicDependencies = cyclicDependencies.Select(c => $"Cyclic dependency detected: {c}").ToList();
+            cyclicDependencies = cyclicDependencies
+                .Select(c => $"Cyclic dependency detected: {c}")
+                .ToList();
         }
 
         return (orderedRules, cyclicDependencies);
@@ -108,8 +125,12 @@ public class DependencyAnalyzer
             var dataSources = GetDataSources(rule);
             var outputs = GetOutputs(rule);
 
-            _logger.Debug("Rule {RuleName} - DataSources: {@DataSources}, Outputs: {@Outputs}", 
-                ruleName, dataSources, outputs);
+            _logger.Debug(
+                "Rule {RuleName} - DataSources: {@DataSources}, Outputs: {@Outputs}",
+                ruleName,
+                dataSources,
+                outputs
+            );
 
             foreach (var otherRule in rules.Values.Where(r => r.Name != ruleName))
             {
@@ -123,8 +144,11 @@ public class DependencyAnalyzer
                         graph[otherRule.Name] = new HashSet<string>();
                     }
                     graph[otherRule.Name].Add(ruleName);
-                    _logger.Debug("Added dependency: {RuleName} depends on {DependencyRule}", 
-                        otherRule.Name, ruleName);
+                    _logger.Debug(
+                        "Added dependency: {RuleName} depends on {DependencyRule}",
+                        otherRule.Name,
+                        ruleName
+                    );
                 }
             }
         }
@@ -204,14 +228,22 @@ public class DependencyAnalyzer
         return outputs;
     }
 
-    private bool HasCycle(string rule, Dictionary<string, HashSet<string>> graph, HashSet<string> visited,
-        HashSet<string> recursionStack, List<string> cyclicDependencies)
+    private bool HasCycle(
+        string rule,
+        Dictionary<string, HashSet<string>> graph,
+        HashSet<string> visited,
+        HashSet<string> recursionStack,
+        List<string> cyclicDependencies
+    )
     {
         visited.Add(rule);
         recursionStack.Add(rule);
 
-        _logger.Debug("Checking cycles for rule {RuleName}. RecursionStack: {@RecursionStack}", 
-            rule, recursionStack);
+        _logger.Debug(
+            "Checking cycles for rule {RuleName}. RecursionStack: {@RecursionStack}",
+            rule,
+            recursionStack
+        );
 
         if (graph.TryGetValue(rule, out var dependencies))
         {
@@ -247,7 +279,13 @@ public class DependencyAnalyzer
         return false;
     }
 
-    private void TopologicalSort(string rule, Dictionary<string, HashSet<string>> graph, HashSet<string> visited, Dictionary<string, Rule> rules, List<Rule> orderedRules)
+    private void TopologicalSort(
+        string rule,
+        Dictionary<string, HashSet<string>> graph,
+        HashSet<string> visited,
+        Dictionary<string, Rule> rules,
+        List<Rule> orderedRules
+    )
     {
         visited.Add(rule);
 

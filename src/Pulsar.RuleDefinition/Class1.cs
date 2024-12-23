@@ -1,6 +1,3 @@
 ﻿namespace Pulsar.RuleDefinition;
 
-public class Class1
-{
-
-}
+public class Class1 { }

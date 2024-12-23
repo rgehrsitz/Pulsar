@@ -37,7 +37,8 @@ public class CompiledRule
         int layer,
         IReadOnlySet<string> dependencies,
         IReadOnlySet<string> inputSensors,
-        IReadOnlySet<string> outputSensors)
+        IReadOnlySet<string> outputSensors
+    )
     {
         Rule = rule;
         Layer = layer;

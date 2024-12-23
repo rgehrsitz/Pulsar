@@ -12,7 +12,15 @@ public class RuleValidator
     private readonly SystemConfig _config;
     private readonly DependencyAnalyzer _dependencyAnalyzer;
     private readonly ILogger _logger;
-    private static readonly HashSet<string> ValidOperators = new() { ">", "<", ">=", "<=", "==", "!=" };
+    private static readonly HashSet<string> ValidOperators = new()
+    {
+        ">",
+        "<",
+        ">=",
+        "<=",
+        "==",
+        "!=",
+    };
 
     public RuleValidator(SystemConfig config)
     {
@@ -45,10 +53,13 @@ public class RuleValidator
             return new ValidationResult(errors);
         }
 
-        _logger.Debug("Checking for duplicate rule names in {RuleCount} rules", ruleSet.Rules.Count);
+        _logger.Debug(
+            "Checking for duplicate rule names in {RuleCount} rules",
+            ruleSet.Rules.Count
+        );
         // Check for duplicate rule names
-        var duplicateRules = ruleSet.Rules
-            .GroupBy(r => r.Name)
+        var duplicateRules = ruleSet
+            .Rules.GroupBy(r => r.Name)
             .Where(g => g.Count() > 1)
             .Select(g => g.Key)
             .ToList();
@@ -70,8 +81,12 @@ public class RuleValidator
             var ruleErrors = ValidateRule(rule);
             if (ruleErrors.Any())
             {
-                _logger.Warning("Found {ErrorCount} validation errors in rule {RuleName}: {@Errors}", 
-                    ruleErrors.Count, rule.Name, ruleErrors);
+                _logger.Warning(
+                    "Found {ErrorCount} validation errors in rule {RuleName}: {@Errors}",
+                    ruleErrors.Count,
+                    rule.Name,
+                    ruleErrors
+                );
                 errors.AddRange(ruleErrors);
             }
         }
@@ -118,11 +133,20 @@ public class RuleValidator
         }
 
         // Validate conditions
-        if ((rule.Conditions.All == null || !rule.Conditions.All.Any()) &&
-            (rule.Conditions.Any == null || !rule.Conditions.Any.Any()))
+        if (
+            (rule.Conditions.All == null || !rule.Conditions.All.Any())
+            && (rule.Conditions.Any == null || !rule.Conditions.Any.Any())
+        )
         {
-            _logger.Warning("Rule {RuleName} has no conditions in either 'all' or 'any' groups", rule.Name);
-            errors.Add(new ValidationError($"Rule {rule.Name}: Must have at least one condition in 'all' or 'any' group"));
+            _logger.Warning(
+                "Rule {RuleName} has no conditions in either 'all' or 'any' groups",
+                rule.Name
+            );
+            errors.Add(
+                new ValidationError(
+                    $"Rule {rule.Name}: Must have at least one condition in 'all' or 'any' group"
+                )
+            );
         }
 
         if (rule.Conditions.All != null)
@@ -132,8 +156,12 @@ public class RuleValidator
                 var conditionErrors = ValidateCondition(condition, rule.Name);
                 if (conditionErrors.Any())
                 {
-                    _logger.Warning("Found {ErrorCount} errors in 'all' condition of rule {RuleName}: {@Errors}", 
-                        conditionErrors.Count, rule.Name, conditionErrors);
+                    _logger.Warning(
+                        "Found {ErrorCount} errors in 'all' condition of rule {RuleName}: {@Errors}",
+                        conditionErrors.Count,
+                        rule.Name,
+                        conditionErrors
+                    );
                     errors.AddRange(conditionErrors);
                 }
             }
@@ -146,8 +174,12 @@ public class RuleValidator
                 var conditionErrors = ValidateCondition(condition, rule.Name);
                 if (conditionErrors.Any())
                 {
-                    _logger.Warning("Found {ErrorCount} errors in 'any' condition of rule {RuleName}: {@Errors}", 
-                        conditionErrors.Count, rule.Name, conditionErrors);
+                    _logger.Warning(
+                        "Found {ErrorCount} errors in 'any' condition of rule {RuleName}: {@Errors}",
+                        conditionErrors.Count,
+                        rule.Name,
+                        conditionErrors
+                    );
                     errors.AddRange(conditionErrors);
                 }
             }
@@ -166,8 +198,12 @@ public class RuleValidator
                 var actionErrors = ValidateRuleAction(action, rule.Name);
                 if (actionErrors.Any())
                 {
-                    _logger.Warning("Found {ErrorCount} errors in action of rule {RuleName}: {@Errors}", 
-                        actionErrors.Count, rule.Name, actionErrors);
+                    _logger.Warning(
+                        "Found {ErrorCount} errors in action of rule {RuleName}: {@Errors}",
+                        actionErrors.Count,
+                        rule.Name,
+                        actionErrors
+                    );
                     errors.AddRange(actionErrors);
                 }
             }
@@ -213,7 +249,9 @@ public class RuleValidator
         if (action.SetValue == null || !action.SetValue.Any())
         {
             _logger.Warning("Rule '{RuleName}' has an invalid action: missing set_value", ruleName);
-            errors.Add(new ValidationError($"Rule '{ruleName}' has an invalid action: missing set_value"));
+            errors.Add(
+                new ValidationError($"Rule '{ruleName}' has an invalid action: missing set_value")
+            );
         }
         else if (!_config.ValidSensors.Contains(action.SetValue["key"]?.ToString()))
         {
