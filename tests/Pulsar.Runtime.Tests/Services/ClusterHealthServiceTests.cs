@@ -57,17 +57,20 @@ namespace Pulsar.Runtime.Tests.Services
             };
 
             _serverMock.Setup(s => s.Info("server", It.IsAny<CommandFlags>()))
-                .ReturnsAsync(serverInfo);
+                .Returns(() => Task.FromResult<IGrouping<string, KeyValuePair<string, string>>[]>(serverInfo));
 
             _serverMock.Setup(s => s.ConfigGet("maxmemory", It.IsAny<CommandFlags>()))
-                .ReturnsAsync(new[] { new KeyValuePair<string, string>("maxmemory", "4gb") });
+                .Returns(() => Task.FromResult(new[] { new KeyValuePair<string, string>("maxmemory", "4gb") }));
 
             // Setup error case
-            _serverMock.Setup(s => s.Info("server", It.IsAny<CommandFlags>()))
-                .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
+            var errorServerMock = new Mock<IServer>();
+            errorServerMock.Setup(s => s.Info("server", It.IsAny<CommandFlags>()))
+                .Returns(() => Task.FromException<IGrouping<string, KeyValuePair<string, string>>[]>(
+                    new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed")));
 
-            _serverMock.Setup(s => s.ConfigGet("maxmemory", It.IsAny<CommandFlags>()))
-                .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
+            errorServerMock.Setup(s => s.ConfigGet("maxmemory", It.IsAny<CommandFlags>()))
+                .Returns(() => Task.FromException<KeyValuePair<string, string>[]>(
+                    new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed")));
         }
 
         [Fact]
@@ -202,7 +205,7 @@ namespace Pulsar.Runtime.Tests.Services
         {
             // Setup sentinel responses
             _sentinelMock.Setup(s => s.SentinelGetMasterAddressByNameAsync("master", CommandFlags.None))
-                .ReturnsAsync(new IPEndPoint(IPAddress.Parse(masterEndpoint.Split(':')[0]), int.Parse(masterEndpoint.Split(':')[1])));
+                .Returns(() => Task.FromResult<EndPoint>(new IPEndPoint(IPAddress.Parse(masterEndpoint.Split(':')[0]), int.Parse(masterEndpoint.Split(':')[1]))));
 
             var replicaInfo = slaveEndpoints.Select(endpoint => new[]
             {
@@ -211,20 +214,25 @@ namespace Pulsar.Runtime.Tests.Services
             }).ToArray();
 
             _sentinelMock.Setup(s => s.SentinelReplicasAsync("master", CommandFlags.None))
-                .ReturnsAsync(replicaInfo);
+                .Returns(() => Task.FromResult(replicaInfo));
 
             // Setup master server
             var masterServer = new Mock<IServer>();
             masterServer.Setup(s => s.IsConnected).Returns(true);
-            
-            var replicationInfo = string.Join("\n", new[]
+
+            var replicationInfo = new[]
             {
-                "role:master",
-                "connected_slaves:1"
-            });
+                new TestGrouping<string, KeyValuePair<string, string>>(
+                    "Replication",
+                    new[]
+                    {
+                        new KeyValuePair<string, string>("role", "master"),
+                        new KeyValuePair<string, string>("connected_slaves", slaveEndpoints.Length.ToString())
+                    })
+            };
 
             masterServer.Setup(s => s.InfoAsync("replication", CommandFlags.None))
-                .ReturnsAsync(replicationInfo);
+                .Returns(() => Task.FromResult<IGrouping<string, KeyValuePair<string, string>>[]>(replicationInfo));
 
             _multiplexerMock.Setup(m => m.GetServer(It.IsAny<EndPoint>(), CommandFlags.None))
                 .Returns(masterServer.Object);
@@ -234,15 +242,21 @@ namespace Pulsar.Runtime.Tests.Services
             {
                 var slaveServer = new Mock<IServer>();
                 slaveServer.Setup(s => s.IsConnected).Returns(true);
-                
-                var slaveInfo = string.Join("\n", new[]
+
+                var slaveInfo = new[]
                 {
-                    "role:slave",
-                    $"master_host:{masterEndpoint.Split(':')[0]}"
-                });
+                    new TestGrouping<string, KeyValuePair<string, string>>(
+                        "Replication",
+                        new[]
+                        {
+                            new KeyValuePair<string, string>("role", "slave"),
+                            new KeyValuePair<string, string>("master_host", masterEndpoint.Split(':')[0]),
+                            new KeyValuePair<string, string>("master_port", masterEndpoint.Split(':')[1])
+                        })
+                };
 
                 slaveServer.Setup(s => s.InfoAsync(It.IsAny<string>(), CommandFlags.None))
-                    .ReturnsAsync(slaveInfo);
+                    .Returns(() => Task.FromResult<IGrouping<string, KeyValuePair<string, string>>[]>(slaveInfo));
 
                 _multiplexerMock.Setup(m => m.GetServer(It.IsAny<EndPoint>(), CommandFlags.None))
                     .Returns(slaveServer.Object);
@@ -253,13 +267,14 @@ namespace Pulsar.Runtime.Tests.Services
         {
             // Setup sentinel responses
             _sentinelMock.Setup(s => s.SentinelGetMasterAddressByNameAsync("master", CommandFlags.None))
-                .ReturnsAsync(new IPEndPoint(IPAddress.Parse(masterEndpoint.Split(':')[0]), int.Parse(masterEndpoint.Split(':')[1])));
+                .Returns(() => Task.FromResult<EndPoint>(new IPEndPoint(IPAddress.Parse(masterEndpoint.Split(':')[0]), int.Parse(masterEndpoint.Split(':')[1]))));
 
             // Setup master server
             var masterServer = new Mock<IServer>();
             masterServer.Setup(s => s.IsConnected).Returns(false);
             masterServer.Setup(s => s.InfoAsync(It.IsAny<string>(), CommandFlags.None))
-                .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
+                .Returns(() => Task.FromException<IGrouping<string, KeyValuePair<string, string>>[]>(
+                    new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed")));
 
             _multiplexerMock.Setup(m => m.GetServer(It.IsAny<EndPoint>(), CommandFlags.None))
                 .Returns(masterServer.Object);
@@ -275,7 +290,8 @@ namespace Pulsar.Runtime.Tests.Services
                 var slaveServer = new Mock<IServer>();
                 slaveServer.Setup(s => s.IsConnected).Returns(false);
                 slaveServer.Setup(s => s.InfoAsync(It.IsAny<string>(), CommandFlags.None))
-                    .ThrowsAsync(new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed"));
+                    .Returns(() => Task.FromException<IGrouping<string, KeyValuePair<string, string>>[]>(
+                        new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Connection failed")));
 
                 _multiplexerMock.Setup(m => m.GetServer(It.IsAny<EndPoint>(), CommandFlags.None))
                     .Returns(slaveServer.Object);

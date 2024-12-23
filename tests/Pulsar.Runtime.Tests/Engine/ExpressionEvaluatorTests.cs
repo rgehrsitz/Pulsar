@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.Runtime.Engine;
+using Microsoft.Extensions.Logging;
+using Moq;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -14,11 +16,13 @@ public class CompiledExpressionEvaluatorTests
     private readonly CompiledExpressionEvaluator _evaluator;
     private readonly Dictionary<string, double> _sensorData;
     private readonly ITestOutputHelper _output;
+    private readonly Mock<ILogger> _loggerMock;
 
     public CompiledExpressionEvaluatorTests(ITestOutputHelper output)
     {
         _output = output;
-        _evaluator = new CompiledExpressionEvaluator();
+        _loggerMock = new Mock<ILogger>();
+        _evaluator = new CompiledExpressionEvaluator(_loggerMock.Object);
         _sensorData = new Dictionary<string, double>
         {
             ["temperature"] = 25.0,

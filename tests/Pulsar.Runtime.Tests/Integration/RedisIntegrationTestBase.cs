@@ -56,8 +56,9 @@ public abstract class RedisIntegrationTestBase : IAsyncLifetime
         services.AddSingleton<RedisClusterConfiguration>(RedisConfig);
         services.AddSingleton(sp => RuleEngine.Object);
         services.AddSingleton<ClusterHealthService>();
-        services.AddSingleton<RedisSensorDataProvider>();
         services.AddSingleton<MetricsService>();
+        services.AddSingleton<SensorTemporalBufferService>();
+        services.AddSingleton<RedisSensorDataProvider>();
 
         var serviceProvider = services.BuildServiceProvider();
 
