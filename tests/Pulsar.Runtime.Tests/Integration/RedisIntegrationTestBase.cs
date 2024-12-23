@@ -7,6 +7,8 @@ using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Storage;
 using Pulsar.Runtime.Tests.Mocks;
+using Pulsar.Compiler.Models;
+using Pulsar.RuleDefinition.Models;
 using Serilog;
 using Xunit;
 
@@ -47,14 +49,25 @@ public abstract class RedisIntegrationTestBase : IAsyncLifetime
         Logger = new Mock<ILogger>();
         Logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(Logger.Object);
 
-        RuleEngine = new Mock<RuleEngine>(MockBehavior.Strict);
-        RuleEngine.Setup(r => r.StartAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-        RuleEngine.Setup(r => r.StopAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-
         // Configure services
         RedisConfig = new MockRedisClusterConfiguration(Logger.Object, Environment.MachineName);
+
+        var metricsService = new Mock<MetricsService>(Logger.Object);
+        var sensorProvider = new Mock<ISensorDataProvider>();
+        var actionExecutor = new Mock<IActionExecutor>();
+        var ruleSet = new MockCompiledRuleSet();
+
+        RuleEngine = new Mock<RuleEngine>(
+            Logger.Object,
+            metricsService.Object,
+            sensorProvider.Object,
+            actionExecutor.Object,
+            ruleSet,
+            TimeSpan.FromSeconds(1)
+        );
+
         services.AddSingleton<RedisClusterConfiguration>(RedisConfig);
-        services.AddSingleton(sp => RuleEngine.Object);
+        services.AddSingleton(RuleEngine.Object);
         services.AddSingleton<ClusterHealthService>();
         services.AddSingleton<MetricsService>();
         services.AddSingleton<SensorTemporalBufferService>();
@@ -70,16 +83,16 @@ public abstract class RedisIntegrationTestBase : IAsyncLifetime
             TimeSpan.FromMilliseconds(100));
 
         var healthService = serviceProvider.GetRequiredService<ClusterHealthService>();
-        var sensorProvider = serviceProvider.GetRequiredService<RedisSensorDataProvider>();
-        var metricsService = serviceProvider.GetRequiredService<MetricsService>();
+        var sensorDataProvider = serviceProvider.GetRequiredService<RedisSensorDataProvider>();
+        var metricsServiceInstance = serviceProvider.GetRequiredService<MetricsService>();
 
         SetServices(
             serviceProvider,
             RedisConfig,
             stateManager,
             healthService,
-            sensorProvider,
-            metricsService);
+            sensorDataProvider,
+            metricsServiceInstance);
 
         await Task.CompletedTask;
     }

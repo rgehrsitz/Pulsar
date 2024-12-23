@@ -24,7 +24,19 @@ public class PulsarStateManagerTests : IDisposable
         _logger = new Mock<ILogger>();
         _logger.Setup(l => l.ForContext<It.IsAnyType>()).Returns(_logger.Object);
 
-        _ruleEngine = new Mock<RuleEngine>(MockBehavior.Strict);
+        var ruleSet = new MockCompiledRuleSet();
+        var metrics = new Mock<MetricsService>(_logger.Object);
+        var sensorProvider = new Mock<ISensorDataProvider>();
+        var actionExecutor = new Mock<IActionExecutor>();
+
+        _ruleEngine = new Mock<RuleEngine>(
+            _logger.Object,
+            metrics.Object,
+            sensorProvider.Object,
+            actionExecutor.Object,
+            ruleSet,
+            TimeSpan.FromSeconds(1)
+        );
         _ruleEngine.Setup(r => r.StartAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
         _ruleEngine.Setup(r => r.StopAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
 

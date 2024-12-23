@@ -25,6 +25,10 @@ namespace Pulsar.Runtime.Services
             TimeSpan? maxBufferDuration = null // Default 5 seconds
         )
         {
+            if (logger == null) throw new ArgumentNullException(nameof(logger));
+            if (metrics == null) throw new ArgumentNullException(nameof(metrics));
+            if (defaultBufferCapacity <= 0) throw new ArgumentException("Buffer capacity must be positive", nameof(defaultBufferCapacity));
+
             _buffers = new ConcurrentDictionary<string, TimeSeriesBuffer>();
             _logger = logger.ForContext<SensorTemporalBufferService>();
             _metrics = metrics;

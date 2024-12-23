@@ -14,30 +14,31 @@ namespace Pulsar.Runtime.Services;
 public class PulsarStateManager : BackgroundService
 {
     private readonly ILogger _logger;
-    private readonly RedisClusterConfiguration _clusterConfig;
+    private readonly RedisClusterConfiguration _redisConfig;
     private readonly RuleEngine _ruleEngine;
-    private readonly TimeSpan _checkInterval;
+    private readonly TimeSpan _stateCheckInterval;
     private bool _isActive;
+    private bool _disposed;
 
     public PulsarStateManager(
         ILogger logger,
-        RedisClusterConfiguration clusterConfig,
+        RedisClusterConfiguration redisConfig,
         RuleEngine ruleEngine,
-        TimeSpan? checkInterval = null
-    )
+        TimeSpan stateCheckInterval)
     {
         _logger = logger.ForContext<PulsarStateManager>();
-        _clusterConfig = clusterConfig;
+        _redisConfig = redisConfig;
         _ruleEngine = ruleEngine;
-        _checkInterval = checkInterval ?? TimeSpan.FromSeconds(2);
+        _stateCheckInterval = stateCheckInterval;
         _isActive = false;
+        _disposed = false;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.Information(
             "Starting Pulsar state manager with {Interval}s check interval",
-            _checkInterval.TotalSeconds
+            _stateCheckInterval.TotalSeconds
         );
 
         while (!stoppingToken.IsCancellationRequested)
@@ -51,13 +52,13 @@ public class PulsarStateManager : BackgroundService
                 _logger.Error(ex, "Error checking Pulsar state");
             }
 
-            await Task.Delay(_checkInterval, stoppingToken);
+            await Task.Delay(_stateCheckInterval, stoppingToken);
         }
     }
 
     private async Task CheckAndUpdateState()
     {
-        var shouldBeActive = _clusterConfig.ShouldPulsarBeActive();
+        var shouldBeActive = _redisConfig.ShouldPulsarBeActive();
 
         if (shouldBeActive != _isActive)
         {

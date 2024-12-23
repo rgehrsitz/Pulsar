@@ -43,7 +43,7 @@ public class RuleEngine : IHostedService
         );
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public virtual Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.Information(
             "Starting rule engine execution cycle with {Duration}ms interval",
@@ -53,7 +53,7 @@ public class RuleEngine : IHostedService
         return ExecuteAsync(cancellationToken);
     }
 
-    public Task StopAsync(CancellationToken cancellationToken)
+    public virtual Task StopAsync(CancellationToken cancellationToken)
     {
         _logger.Information("Rule engine execution stopped");
         return Task.CompletedTask;

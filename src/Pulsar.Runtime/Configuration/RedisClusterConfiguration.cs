@@ -26,16 +26,21 @@ public class RedisClusterConfiguration
         string masterName,
         string[] sentinelHosts,
         string currentHostname,
-        string? password = null,
+        string password = null,
         int connectTimeout = 5000,
-        int syncTimeout = 5000
-    )
+        int syncTimeout = 1000)
     {
-        if (logger == null) throw new ArgumentNullException(nameof(logger));
-        if (string.IsNullOrEmpty(masterName)) throw new ArgumentException("Master name cannot be empty", nameof(masterName));
-        if (sentinelHosts == null) throw new ArgumentNullException(nameof(sentinelHosts));
-        if (sentinelHosts.Length == 0) throw new ArgumentException("At least one sentinel host must be provided", nameof(sentinelHosts));
-        if (string.IsNullOrEmpty(currentHostname)) throw new ArgumentException("Current hostname cannot be empty", nameof(currentHostname));
+        if (string.IsNullOrEmpty(masterName))
+            throw new ArgumentException("Master name cannot be empty", nameof(masterName));
+
+        if (string.IsNullOrEmpty(currentHostname))
+            throw new ArgumentException("Current hostname cannot be empty", nameof(currentHostname));
+
+        if (sentinelHosts == null || sentinelHosts.Length == 0)
+            throw new ArgumentException("At least one sentinel host is required", nameof(sentinelHosts));
+
+        if (logger == null)
+            throw new ArgumentNullException(nameof(logger));
 
         _logger = logger.ForContext<RedisClusterConfiguration>();
         _masterName = masterName;
@@ -44,16 +49,16 @@ public class RedisClusterConfiguration
 
         _configurationOptions = new ConfigurationOptions
         {
-            CommandMap = CommandMap.Sentinel,
-            ServiceName = masterName,
+            ServiceName = _masterName,
             Password = password,
             ConnectTimeout = connectTimeout,
             SyncTimeout = syncTimeout,
             TieBreaker = "",
-            AbortOnConnectFail = false,
+            CommandMap = CommandMap.Sentinel,
+            DefaultVersion = new Version(3, 0, 0)
         };
 
-        foreach (var host in sentinelHosts)
+        foreach (var host in _sentinelHosts)
         {
             _configurationOptions.EndPoints.Add(host);
         }
