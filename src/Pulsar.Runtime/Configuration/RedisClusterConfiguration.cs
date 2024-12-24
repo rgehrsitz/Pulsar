@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net; // Add this directive
 using Serilog;
 using StackExchange.Redis;
-using System.Net; // Add this directive
 
 namespace Pulsar.Runtime.Configuration;
 
@@ -187,12 +187,24 @@ public class RedisClusterConfiguration : IDisposable
         try
         {
             var connection = GetConnection();
-            var endpoint = connection.GetEndPoints().FirstOrDefault() ?? throw new InvalidOperationException("No Redis endpoints available");
-            var host = endpoint is DnsEndPoint dnsEndPoint ? dnsEndPoint.Host : endpoint.ToString();
-            var server = connection.GetServer(host, 26379);
+            var endpoint = connection.GetEndPoints().FirstOrDefault()
+                ?? throw new InvalidOperationException("No Redis endpoints available");
 
+            var host = endpoint switch
+            {
+                DnsEndPoint dns => dns.Host,
+                IPEndPoint ip => ip.Address.ToString(),
+                _ => endpoint.ToString()
+            };
+
+            if (string.IsNullOrEmpty(host))
+                throw new InvalidOperationException("Invalid endpoint host");
+
+            var server = connection.GetServer(host, 26379);
             var replicas = server.SentinelGetReplicaAddresses(_masterName);
-            return replicas.Select(r => r?.ToString() ?? string.Empty).Where(r => !string.IsNullOrEmpty(r));
+            return replicas
+                .Select(r => r?.ToString() ?? string.Empty)
+                .Where(r => !string.IsNullOrEmpty(r));
         }
         catch (Exception ex)
         {

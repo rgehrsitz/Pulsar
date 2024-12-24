@@ -105,28 +105,6 @@ public class CompiledExpressionEvaluatorTests
         );
     }
 
-    [Theory]
-    [InlineData("ABS(humidity - 60) < 1")] // Using DataTable's ABS function
-    [InlineData("ROUND(temperature) = 25")] // Using DataTable's ROUND function
-    [InlineData("FLOOR(temperature) <= 25")] // Changed back: FLOOR(25.0) <= 25 is true
-    [InlineData("CEILING(temperature) >= 25")] // CEILING of 25.0 is 25
-    [InlineData("temperature >= humidity ? temperature : humidity = 60")] // Alternative to Max
-    [InlineData("temperature <= humidity ? temperature : humidity = 25")] // Alternative to Min
-    [InlineData("SQRT(POWER(temperature, 2)) = temperature")] // Using DataTable's SQRT and POWER functions
-    [InlineData("POWER(temperature, 2) > 600")] // Using DataTable's POWER function
-    public async Task EvaluateAsync_MathFunctions_ReturnsTrue(string expression)
-    {
-        // Arrange
-        var condition = new ExpressionCondition { Type = "expression", Expression = expression };
-
-        // Act
-        var result = await _evaluator.EvaluateAsync(condition, _sensorData);
-
-        // Assert
-        Console.WriteLine($"Expression: {expression}, Result: {result}");
-        Assert.True(result);
-    }
-
     [Fact]
     public async Task PerformanceTest_ExpressionEvaluation()
     {

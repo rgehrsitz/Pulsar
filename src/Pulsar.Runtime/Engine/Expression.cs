@@ -14,10 +14,31 @@ public class Expression
         _expression = TransformExpression(expression);
         _table = new DataTable();
 
-        // Add a column for each variable to support DataTable expression evaluation
+        // Add a result column first
         _table.Columns.Add("result", typeof(double));
-        // Enable all built-in functions
-        _table.Columns[0].Expression = "0";
+
+        // Add a row to hold values
+        _table.Rows.Add(_table.NewRow());
+
+        // Register custom functions
+        var functions = new Dictionary<string, Func<double[], double>>
+        {
+            // Remove SQRT and POWER columns
+            ["SQRT"] = args => Math.Sqrt(args[0]),
+            ["FLOOR"] = args => Math.Floor(args[0]),
+            ["POWER"] = args => Math.Pow(args[0], args[1]),
+            ["ABS"] = args => Math.Abs(args[0]),
+            ["ROUND"] = args => Math.Round(args[0]),
+            ["FLOOR"] = args => Math.Floor(args[0]),
+            ["CEILING"] = args => Math.Ceiling(args[0]),
+            ["MAX"] = args => Math.Max(args[0], args[1]),
+            ["MIN"] = args => Math.Min(args[0], args[1]),
+        };
+
+        foreach (var func in functions)
+        {
+            _table.Columns.Add(new DataColumn(func.Key, typeof(double), null));
+        }
     }
 
     public bool Evaluate(SimpleContext context)
@@ -46,7 +67,7 @@ public class Expression
             int i => i != 0,
             double d => Math.Abs(d) > double.Epsilon,
             decimal m => m != 0m,
-            _ => Convert.ToBoolean(result)
+            _ => Convert.ToBoolean(result),
         };
     }
 
@@ -58,14 +79,31 @@ public class Expression
         // Make equals operator SQL-compatible
         expr = expr.Replace("==", "=");
 
+        // Transform logical operators to SQL-style AND/OR
+        expr = expr.Replace("&&", "AND")
+                  .Replace("||", "OR");
+
         // Handle math functions
-        expr = expr
-            .Replace("Abs(", "ABS(")
+        expr = expr.Replace("Abs(", "ABS(")
             .Replace("Round(", "ROUND(")
             .Replace("Floor(", "FLOOR(")
-            .Replace("Ceiling(", "CEILING(")
-            .Replace("Sqrt(", "SQRT(")
-            .Replace("Pow(", "POWER(");
+            .Replace("Ceiling(", "CEILING(");
+
+        // Replace SQRT(...) with ( ... )^0.5
+        expr = Regex.Replace(
+            expr,
+            @"SQRT\s*\(\s*([^()]+)\s*\)",
+            @"($1)^0.5",
+            RegexOptions.IgnoreCase
+        );
+
+        // Replace POWER(x,y) with ( x )^( y )
+        expr = Regex.Replace(
+            expr,
+            @"POWER\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)",
+            @"($1)^($2)",
+            RegexOptions.IgnoreCase
+        );
 
         // Handle Max/Min using IIF
         expr = Regex.Replace(expr, @"Max\(([^,]+),([^)]+)\)", "IIF($1 > $2, $1, $2)");

@@ -31,10 +31,14 @@ namespace Pulsar.Runtime.Tests.Configuration
             var mockConnectionMultiplexer = new Mock<IRedisConnectionMultiplexer>();
             var mockServer = new Mock<IServer>();
             mockServer
-                .Setup(s => s.SentinelGetMasterAddressByName(It.IsAny<string>(), It.IsAny<CommandFlags>()))
+                .Setup(s =>
+                    s.SentinelGetMasterAddressByName(It.IsAny<string>(), It.IsAny<CommandFlags>())
+                )
                 .Returns(new DnsEndPoint("localhost", 26379));
             mockServer
-                .Setup(s => s.SentinelGetReplicaAddresses(It.IsAny<string>(), It.IsAny<CommandFlags>()))
+                .Setup(s =>
+                    s.SentinelGetReplicaAddresses(It.IsAny<string>(), It.IsAny<CommandFlags>())
+                )
                 .Returns(new[] { new DnsEndPoint("localhost", 26380) });
 
             mockConnectionMultiplexer
@@ -43,9 +47,7 @@ namespace Pulsar.Runtime.Tests.Configuration
             mockConnectionMultiplexer
                 .Setup(c => c.GetEndPoints(It.IsAny<bool>()))
                 .Returns(new EndPoint[] { new DnsEndPoint("localhost", 26379) });
-            mockConnectionMultiplexer
-                .Setup(c => c.IsConnected)
-                .Returns(true);
+            mockConnectionMultiplexer.Setup(c => c.IsConnected).Returns(true);
 
             var config = new RedisClusterConfiguration(
                 _loggerMock.Object,

@@ -1,5 +1,5 @@
-using StackExchange.Redis;
 using System.Net;
+using StackExchange.Redis;
 
 namespace Pulsar.Runtime.Configuration
 {
