@@ -3,13 +3,14 @@ using NRedisStack;
 using Pulsar.Runtime.Configuration;
 using Serilog;
 using StackExchange.Redis;
+using Moq;
 
 namespace Pulsar.Runtime.Tests.Helpers
 {
     public class TestRedisClusterConfiguration : RedisClusterConfiguration
     {
         private readonly ILogger _logger;
-        private readonly ConnectionMultiplexer _mockConnection;
+        private readonly Mock<IRedisConnectionMultiplexer> _mockConnectionMultiplexer;
         private readonly TestRedisServer _testServer;
 
         public TestRedisClusterConfiguration(
@@ -17,18 +18,18 @@ namespace Pulsar.Runtime.Tests.Helpers
             string masterName,
             string[] sentinelHosts,
             string currentHostname,
-            ConnectionMultiplexer mockConnection
+            Mock<IRedisConnectionMultiplexer> mockConnectionMultiplexer
         )
             : base(logger, masterName, sentinelHosts, currentHostname)
         {
             _logger = logger;
-            _mockConnection = mockConnection;
+            _mockConnectionMultiplexer = mockConnectionMultiplexer;
             _testServer = new TestRedisServer();
         }
 
-        public override ConnectionMultiplexer GetConnection()
+        public override IRedisConnectionMultiplexer GetConnection()
         {
-            return _mockConnection;
+            return _mockConnectionMultiplexer.Object;
         }
 
         public override string GetCurrentMaster()

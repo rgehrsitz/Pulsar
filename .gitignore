@@ -2,6 +2,7 @@
 *.user
 *.userosscache
 *.sln.docstates
+*.trx
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -24,3 +25,4 @@ msbuild.wrn
 
 # windsurf rules
 .windsurfrules
+

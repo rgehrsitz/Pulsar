@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Serilog;
 using StackExchange.Redis;
+using System.Net; // Add this directive
 
 namespace Pulsar.Runtime.Configuration;
 
@@ -16,7 +17,7 @@ public class RedisClusterConfiguration : IDisposable
     private readonly string _masterName;
     private readonly string _currentHostname;
     private bool _isPulsarActive;
-    private ConnectionMultiplexer? _connection;
+    private IRedisConnectionMultiplexer? _connection;
     private readonly object _connectionLock = new object();
     private readonly ConfigurationOptions _config;
 
@@ -27,7 +28,8 @@ public class RedisClusterConfiguration : IDisposable
         string currentHostname,
         string? password = null,
         int connectTimeout = 5000,
-        int syncTimeout = 1000
+        int syncTimeout = 1000,
+        IRedisConnectionMultiplexer? connection = null
     )
     {
         if (string.IsNullOrEmpty(masterName))
@@ -52,10 +54,11 @@ public class RedisClusterConfiguration : IDisposable
         _masterName = masterName;
         _sentinelHosts = sentinelHosts;
         _currentHostname = currentHostname;
+        _connection = connection;
 
         _config = new ConfigurationOptions
         {
-            ServiceName = masterName,     // Used for Sentinel master name
+            ServiceName = masterName, // Used for Sentinel master name
             Password = password,
             ConnectTimeout = connectTimeout,
             SyncTimeout = syncTimeout,
@@ -63,7 +66,7 @@ public class RedisClusterConfiguration : IDisposable
             CommandMap = CommandMap.Sentinel,
             DefaultVersion = new Version(3, 0, 0),
             AbortOnConnectFail = false,
-            AllowAdmin = true            // Required for Sentinel operations
+            AllowAdmin = true, // Required for Sentinel operations
         };
 
         foreach (var host in sentinelHosts)
@@ -82,7 +85,7 @@ public class RedisClusterConfiguration : IDisposable
     /// <summary>
     /// Gets a connection to the Redis cluster, creating a new one if necessary
     /// </summary>
-    public virtual ConnectionMultiplexer GetConnection()
+    public virtual IRedisConnectionMultiplexer GetConnection()
     {
         if (_connection?.IsConnected == true)
         {
@@ -96,38 +99,58 @@ public class RedisClusterConfiguration : IDisposable
                 return _connection;
             }
 
-            try
+            int retryCount = 3;
+            for (int attempt = 0; attempt < retryCount; attempt++)
             {
-                _connection?.Dispose();
-                _connection = ConnectionMultiplexer.SentinelConnect(_config);
-
-                if (_connection == null)
+                try
                 {
-                    throw new InvalidOperationException("Failed to create Redis connection");
-                }
+                    _connection?.Dispose();
+                    var connectionMultiplexer = ConnectionMultiplexer.SentinelConnect(_config);
+                    _connection = new RedisConnectionMultiplexer(connectionMultiplexer);
 
-                _connection.ConnectionFailed += (sender, args) =>
+                    if (_connection == null)
+                    {
+                        throw new InvalidOperationException("Failed to create Redis connection");
+                    }
+
+                    connectionMultiplexer.ConnectionFailed += (sender, args) =>
+                    {
+                        _logger.Error(
+                            args.Exception,
+                            "Redis connection failed to {Endpoint}",
+                            args.EndPoint
+                        );
+                    };
+
+                    connectionMultiplexer.ConnectionRestored += (sender, args) =>
+                    {
+                        _logger.Information(
+                            "Redis connection restored to {Endpoint}",
+                            args.EndPoint
+                        );
+                    };
+
+                    _logger.Information("Successfully connected to Redis cluster");
+                    return _connection;
+                }
+                catch (Exception ex)
                 {
                     _logger.Error(
-                        args.Exception,
-                        "Redis connection failed to {Endpoint}",
-                        args.EndPoint
+                        ex,
+                        "Failed to connect to Redis cluster on attempt {Attempt}",
+                        attempt + 1
                     );
-                };
-
-                _connection.ConnectionRestored += (sender, args) =>
-                {
-                    _logger.Information("Redis connection restored to {Endpoint}", args.EndPoint);
-                };
-
-                _logger.Information("Successfully connected to Redis cluster");
-                return _connection;
+                    if (attempt == retryCount - 1)
+                    {
+                        throw;
+                    }
+                    System.Threading.Thread.Sleep(1000); // Wait before retrying
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to connect to Redis cluster");
-                throw;
-            }
+
+            throw new InvalidOperationException(
+                "Failed to connect to Redis cluster after multiple attempts"
+            );
         }
     }
 
@@ -139,9 +162,15 @@ public class RedisClusterConfiguration : IDisposable
         try
         {
             var connection = GetConnection();
-            var sentinel = connection.GetServer(_sentinelHosts[0]);
+            var sentinel = connection.GetServer(_sentinelHosts[0], 26379);
             var master = sentinel.SentinelGetMasterAddressByName(_masterName);
-            return master?.ToString() ?? throw new InvalidOperationException("No master found");
+            if (master == null)
+                throw new InvalidOperationException("No master found");
+
+            // Extract just the host:port part without the address family
+            return master is DnsEndPoint dns
+                ? $"{dns.Host}:{dns.Port}"
+                : master.ToString()!.Split('/').Last();
         }
         catch (Exception ex)
         {
@@ -158,12 +187,11 @@ public class RedisClusterConfiguration : IDisposable
         try
         {
             var connection = GetConnection();
-            var endpoints = connection.GetServer(
-                connection.GetEndPoints().FirstOrDefault()
-                    ?? throw new InvalidOperationException("No Redis endpoints available")
-            );
+            var endpoint = connection.GetEndPoints().FirstOrDefault() ?? throw new InvalidOperationException("No Redis endpoints available");
+            var host = endpoint is DnsEndPoint dnsEndPoint ? dnsEndPoint.Host : endpoint.ToString();
+            var server = connection.GetServer(host, 26379);
 
-            var replicas = endpoints.SentinelGetReplicaAddresses(_masterName);
+            var replicas = server.SentinelGetReplicaAddresses(_masterName);
             return replicas.Select(r => r?.ToString() ?? string.Empty).Where(r => !string.IsNullOrEmpty(r));
         }
         catch (Exception ex)

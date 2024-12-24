@@ -4,6 +4,7 @@ using System.Net;
 using Moq;
 using Pulsar.Runtime.Configuration;
 using Serilog;
+using StackExchange.Redis;
 using Xunit;
 
 namespace Pulsar.Runtime.Tests.Configuration
@@ -26,18 +27,42 @@ namespace Pulsar.Runtime.Tests.Configuration
         [Fact]
         public void Constructor_ValidParameters_Success()
         {
-            // Act
+            // Arrange
+            var mockConnectionMultiplexer = new Mock<IRedisConnectionMultiplexer>();
+            var mockServer = new Mock<IServer>();
+            mockServer
+                .Setup(s => s.SentinelGetMasterAddressByName(It.IsAny<string>(), It.IsAny<CommandFlags>()))
+                .Returns(new DnsEndPoint("localhost", 26379));
+            mockServer
+                .Setup(s => s.SentinelGetReplicaAddresses(It.IsAny<string>(), It.IsAny<CommandFlags>()))
+                .Returns(new[] { new DnsEndPoint("localhost", 26380) });
+
+            mockConnectionMultiplexer
+                .Setup(c => c.GetServer(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<object>()))
+                .Returns(mockServer.Object);
+            mockConnectionMultiplexer
+                .Setup(c => c.GetEndPoints(It.IsAny<bool>()))
+                .Returns(new EndPoint[] { new DnsEndPoint("localhost", 26379) });
+            mockConnectionMultiplexer
+                .Setup(c => c.IsConnected)
+                .Returns(true);
+
             var config = new RedisClusterConfiguration(
                 _loggerMock.Object,
                 _masterNode,
                 _nodes,
-                _machineName
+                _machineName,
+                connection: mockConnectionMultiplexer.Object
             );
+
+            // Act
+            var master = config.GetCurrentMaster();
+            var slaves = config.GetSlaves();
 
             // Assert
             Assert.NotNull(config);
-            Assert.Equal(_masterNode, config.GetCurrentMaster());
-            Assert.Equal(_nodes.Count() - 1, config.GetSlaves().Count());
+            Assert.Equal("localhost:26379", master);
+            Assert.Single(slaves);
         }
 
         [Fact]

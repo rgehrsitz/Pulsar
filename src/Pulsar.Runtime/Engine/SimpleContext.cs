@@ -1,4 +1,3 @@
-
 using System.Collections.Generic;
 
 namespace Pulsar.Runtime.Engine;
@@ -15,5 +14,10 @@ public class SimpleContext
     public double GetValue(string name)
     {
         return _values[name];
+    }
+
+    public Dictionary<string, double> GetVariables()
+    {
+        return new Dictionary<string, double>(_values);
     }
 }

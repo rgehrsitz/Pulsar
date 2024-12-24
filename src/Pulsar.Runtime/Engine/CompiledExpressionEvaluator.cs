@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Pulsar.RuleDefinition.Models;
 using System.IO; // Added
 using System.Linq; // Added
+using System.Data;  // Added
 
 namespace Pulsar.Runtime.Engine;
 
@@ -77,6 +78,7 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
 using System;
 using System.Collections.Generic;
 using static System.Math;
+using System.Data;
 using Pulsar.Runtime.Engine;
 
 public class ExpressionEvaluator
@@ -99,14 +101,7 @@ public class ExpressionEvaluator
             }
 
             var expr = new Expression(""" + transformed.Replace("\"", "\"\"") + @""");
-            var value = expr.Evaluate(context);
-
-            if (value is bool boolValue)
-            {
-                return boolValue;
-            }
-
-            throw new ArgumentException(""Expression '" + expression.Replace("\"", "\"\"") + @"' must evaluate to a boolean value"");
+            return expr.Evaluate(context);
         }
         catch (Exception ex)
         {
@@ -114,7 +109,6 @@ public class ExpressionEvaluator
         }
     }
 }";
-
             // Parse and compile the code
             var syntaxTree = CSharpSyntaxTree.ParseText(code);
             var assemblyName = Path.GetRandomFileName();
@@ -123,8 +117,13 @@ public class ExpressionEvaluator
                 MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(Dictionary<,>).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(IDictionary<,>).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(SimpleContext).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Expression).Assembly.Location),
                 MetadataReference.CreateFromFile(Assembly.Load("netstandard").Location),
                 MetadataReference.CreateFromFile(Assembly.Load("System.Runtime").Location),
+                MetadataReference.CreateFromFile(Assembly.Load("System.Data.Common").Location),
+                MetadataReference.CreateFromFile(typeof(DataTable).Assembly.Location),
+                MetadataReference.CreateFromFile(Assembly.Load("System.Data").Location),
             };
 
             var compilation = CSharpCompilation.Create(
@@ -170,6 +169,12 @@ public class ExpressionEvaluator
         }
     }
 
+    private static string TransformExpression(string expression)
+    {
+        // Return the expression unchanged - let Expression class handle the transformation
+        return expression;
+    }
+
     // A small helper to generate the KeyNotFound checks for each variable
     private static string GenerateVariableChecks(string expression)
     {
@@ -183,26 +188,6 @@ foreach (var key in variableKeys)
         throw new KeyNotFoundException($""Unknown variable '{{key}}' referenced in expression. Please ensure that the variable is defined in the sensor data."");
     }}
 }}";
-    }
-
-    private static string TransformExpression(string expression)
-    {
-        // Replace sensor data references with dictionary lookups
-        var transformed = expression;
-
-        // Replace sensor names with dictionary lookups
-        transformed = System.Text.RegularExpressions.Regex.Replace(
-            transformed,
-            @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[({])",
-            match =>
-                match.Value switch
-                {
-                    "data" => "data",
-                    _ => $"data[\"{match.Value}\"]",
-                }
-        );
-
-        return transformed;
     }
 
     private static IEnumerable<string> ExtractVariables(string expression)

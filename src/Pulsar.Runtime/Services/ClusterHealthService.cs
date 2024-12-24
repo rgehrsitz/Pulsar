@@ -66,7 +66,8 @@ public class ClusterHealthService : BackgroundService
 
             // Check master node
             var master = _clusterConfig.GetCurrentMaster();
-            var masterServer = connection.GetServer(master);
+            var masterHost = master.Split(':')[0];
+            var masterServer = connection.GetServer(masterHost, 26379);
             var masterInfo = await masterServer.InfoAsync();
 
             _metrics.RecordNodeStatus("master", master, masterServer.IsConnected, _buildingId);
@@ -80,7 +81,8 @@ public class ClusterHealthService : BackgroundService
             // Check slave nodes
             foreach (var slave in _clusterConfig.GetSlaves())
             {
-                var slaveServer = connection.GetServer(slave);
+                var slaveHost = slave.Split(':')[0];
+                var slaveServer = connection.GetServer(slaveHost, 26379);
                 var slaveInfo = await slaveServer.InfoAsync();
 
                 _metrics.RecordNodeStatus("slave", slave, slaveServer.IsConnected, _buildingId);
