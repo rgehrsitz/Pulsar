@@ -249,21 +249,24 @@ public class RuleValidator
     {
         var errors = new List<ValidationError>();
 
-        if (action.SetValue == null || !action.SetValue.Any())
+        if (action.SetValue == null)
         {
             _logger.Warning("Rule '{RuleName}' has an invalid action: missing set_value", ruleName);
             errors.Add(
                 new ValidationError($"Rule '{ruleName}' has an invalid action: missing set_value")
             );
         }
-        else if (
-            action.SetValue["key"] != null
-            && action.SetValue["key"].ToString() != null
-            && !_config.ValidSensors.Contains(action.SetValue["key"].ToString())
-        )
+        else if (string.IsNullOrEmpty(action.SetValue.Key))
         {
-            _logger.Warning("Invalid data source: {DataSource}", action.SetValue["key"]);
-            errors.Add(new ValidationError($"Invalid data source: {action.SetValue["key"]}"));
+            _logger.Warning("Rule '{RuleName}' has an invalid action: missing key", ruleName);
+            errors.Add(
+                new ValidationError($"Rule '{ruleName}' has an invalid action: missing key")
+            );
+        }
+        else if (!_config.ValidSensors.Contains(action.SetValue.Key))
+        {
+            _logger.Warning("Invalid data source: {DataSource}", action.SetValue.Key);
+            errors.Add(new ValidationError($"Invalid data source: {action.SetValue.Key}"));
         }
 
         return errors;

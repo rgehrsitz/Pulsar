@@ -22,6 +22,7 @@ public class MetricsService : IMetricsService
     private readonly Counter _sensorUpdatesTotal;
     private readonly Gauge _nodeStatus;
     private readonly Gauge _pulsarStatus;
+    private readonly Counter _thresholdEvaluations;
     private readonly ILogger _logger;
 
     public MetricsService(ILogger logger)
@@ -107,6 +108,15 @@ public class MetricsService : IMetricsService
             "pulsar_instance_status",
             "Status of Pulsar instance (1 = active, 0 = passive)",
             new GaugeConfiguration { LabelNames = new[] { "building_id" } }
+        );
+
+        _thresholdEvaluations = Metrics.CreateCounter(
+            "pulsar_threshold_evaluations_total",
+            "Total number of threshold evaluations",
+            new CounterConfiguration
+            {
+                LabelNames = new[] { "sensor", "result", "duration_ms" }
+            }
         );
     }
 
@@ -224,5 +234,12 @@ public class MetricsService : IMetricsService
             buildingId,
             isActive ? "Active" : "Passive"
         );
+    }
+
+    public void RecordThresholdEvaluation(string sensor, bool result, int durationMs)
+    {
+        _thresholdEvaluations
+            .WithLabels(sensor, result.ToString(), durationMs.ToString())
+            .Inc();
     }
 }

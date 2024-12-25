@@ -1,8 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Pulsar.Core\Pulsar.Core.csproj" />
     <ProjectReference Include="..\Pulsar.RuleDefinition\Pulsar.RuleDefinition.csproj" />
+    <ProjectReference Include="..\Pulsar.Runtime\Pulsar.Runtime.csproj" />
+    <ProjectReference Include="..\Pulsar.Models\Pulsar.Models.csproj" />
   </ItemGroup>
 
   <ItemGroup>

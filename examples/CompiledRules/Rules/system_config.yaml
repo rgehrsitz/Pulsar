@@ -1,0 +1,10 @@
+version: 1
+valid_sensors:
+  - temperature
+  - humidity
+  - pressure
+  - alerts:temperature
+  - alerts:humidity
+  - alerts:pressure
+  - converted_temp
+  - system:status

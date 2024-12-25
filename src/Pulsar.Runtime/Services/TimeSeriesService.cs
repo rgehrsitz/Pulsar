@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Pulsar.Runtime.Collections;
 using Serilog;
 
@@ -16,6 +17,7 @@ public class TimeSeriesService
     private readonly ILogger _logger;
     private readonly IMetricsService _metrics;
     private readonly int _defaultCapacity;
+    private readonly Dictionary<string, Queue<(DateTime Timestamp, double Value)>> _timeSeriesData = new();
 
     public TimeSeriesService(ILogger logger, IMetricsService metrics, int defaultCapacity = 1000)
     {
@@ -129,5 +131,26 @@ public class TimeSeriesService
         {
             buffer.Clear();
         }
+    }
+
+    public async Task<IEnumerable<double>> GetHistoricalDataAsync(string sensor, TimeSpan duration)
+    {
+        if (!_timeSeriesData.TryGetValue(sensor, out var queue))
+        {
+            return await Task.FromResult<IEnumerable<double>>(Array.Empty<double>());
+        }
+
+        var cutoff = DateTime.UtcNow - duration;
+        var values = new List<double>();
+
+        foreach (var (timestamp, value) in queue)
+        {
+            if (timestamp >= cutoff)
+            {
+                values.Add(value);
+            }
+        }
+
+        return await Task.FromResult<IEnumerable<double>>(values);
     }
 }

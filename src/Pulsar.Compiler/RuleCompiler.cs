@@ -1,6 +1,11 @@
-using Pulsar.Compiler.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Pulsar.Models;
+using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
 using Serilog;
+using Pulsar.Compiler.CodeGeneration;
 
 namespace Pulsar.Compiler;
 
@@ -10,26 +15,29 @@ namespace Pulsar.Compiler;
 public class RuleCompiler
 {
     private readonly ILogger _logger;
+    private readonly RuleCodeGenerator _codeGenerator;
 
-    public RuleCompiler(ILogger logger)
+    public RuleCompiler(ILogger logger, string? @namespace = null)
     {
         _logger = logger.ForContext<RuleCompiler>();
+        _codeGenerator = new RuleCodeGenerator(logger, @namespace ?? "Pulsar.CompiledRules");
     }
 
     /// <summary>
     /// Compiles a set of rules by analyzing their dependencies and organizing them into layers
     /// </summary>
-    public CompiledRuleSet CompileRules(IEnumerable<Rule> rules)
+    public (CompiledRuleSet RuleSet, string GeneratedCode) CompileRules(IEnumerable<Rule> rules)
     {
         var rulesList = rules.ToList();
         if (!rulesList.Any())
         {
-            return new CompiledRuleSet(
+            var emptyRuleSet = new CompiledRuleSet(
                 Array.Empty<CompiledRule>(),
                 0,
                 new HashSet<string>(),
                 new HashSet<string>()
             );
+            return (emptyRuleSet, _codeGenerator.GenerateCode(emptyRuleSet));
         }
 
         // Build dependency graph
@@ -129,13 +137,18 @@ public class RuleCompiler
             layers.Count
         );
 
-        return new CompiledRuleSet(compiledRules, layers.Count, allInputSensors, allOutputSensors);
+        var compiledRuleSet = new CompiledRuleSet(compiledRules, layers.Count, allInputSensors, allOutputSensors);
+        var generatedCode = _codeGenerator.GenerateCode(compiledRuleSet);
+
+        return (compiledRuleSet, generatedCode);
     }
 
     private (
         Dictionary<string, HashSet<string>> Dependencies,
         Dictionary<string, int> InDegree
-    ) BuildDependencyGraph(IReadOnlyList<Rule> rules)
+    ) BuildDependencyGraph(
+        IEnumerable<Rule> rules
+    )
     {
         var dependencies = new Dictionary<string, HashSet<string>>();
         var inDegree = new Dictionary<string, int>();
@@ -146,21 +159,18 @@ public class RuleCompiler
         {
             foreach (var action in rule.Actions)
             {
-                if (action.SetValue != null)
+                if (action.SetValue != null && !string.IsNullOrEmpty(action.SetValue.Key))
                 {
-                    foreach (var key in action.SetValue.Keys)
+                    if (outputs.TryGetValue(action.SetValue.Key, out var existingRule))
                     {
-                        if (outputs.TryGetValue(key, out var existingRule))
-                        {
-                            _logger.Warning(
-                                "Multiple rules trying to set the same value {Key}: {ExistingRule} and {NewRule}",
-                                key,
-                                existingRule,
-                                rule.Name
-                            );
-                        }
-                        outputs[key] = rule.Name;
+                        _logger.Warning(
+                            "Multiple rules trying to set the same value {Key}: {ExistingRule} and {NewRule}",
+                            action.SetValue.Key,
+                            existingRule,
+                            rule.Name
+                        );
                     }
+                    outputs[action.SetValue.Key] = rule.Name;
                 }
             }
         }
@@ -277,12 +287,9 @@ public class RuleCompiler
         var sensors = new HashSet<string>();
         foreach (var action in rule.Actions)
         {
-            if (action.SetValue != null)
+            if (action.SetValue != null && !string.IsNullOrEmpty(action.SetValue.Key))
             {
-                foreach (var key in action.SetValue.Keys)
-                {
-                    sensors.Add(key);
-                }
+                sensors.Add(action.SetValue.Key);
             }
         }
         return sensors;
@@ -290,7 +297,9 @@ public class RuleCompiler
 
     private bool RuleOutputsSensor(Rule rule, string sensor)
     {
-        return rule.Actions.Any(action => action.SetValue?.ContainsKey(sensor) == true);
+        return rule.Actions.Any(action => 
+            action.SetValue != null && 
+            action.SetValue.Key == sensor);
     }
 
     private IList<Rule> FindCycle(

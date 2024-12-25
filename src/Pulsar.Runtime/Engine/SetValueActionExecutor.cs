@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
-using Pulsar.RuleDefinition.Models;
+using Pulsar.Models.Actions;
 using Serilog;
 
 namespace Pulsar.Runtime.Engine;
@@ -12,47 +12,52 @@ public class SetValueActionExecutor : IActionExecutor
 {
     private readonly ConcurrentDictionary<string, object> _pendingUpdates;
     protected readonly ILogger _logger;
+    private readonly IDataStore _dataStore;
 
-    public SetValueActionExecutor(ILogger logger)
+    public SetValueActionExecutor(ILogger logger, IDataStore dataStore)
     {
         _pendingUpdates = new ConcurrentDictionary<string, object>();
         _logger = logger.ForContext<SetValueActionExecutor>();
+        _dataStore = dataStore;
     }
 
-    public virtual Task<bool> ExecuteAsync(RuleAction action)
+    public virtual Task<bool> ExecuteAsync(CompiledRuleAction action)
     {
-        if (action.SetValue == null || action.SetValue.Count == 0)
+        if (action.SetValue == null)
         {
-            return Task.FromResult(true);
-        }
-
-        try
-        {
-            foreach (var (key, value) in action.SetValue)
-            {
-                if (string.IsNullOrWhiteSpace(key))
-                {
-                    _logger.Warning("Invalid key in SetValue action: {Key}", key);
-                    continue; // Skip invalid keys
-                }
-
-                if (value == null)
-                {
-                    _logger.Warning("Null value for key {Key} in SetValue action", key);
-                    continue; // Skip invalid values
-                }
-
-                _pendingUpdates.AddOrUpdate(key, value, (_, _) => value);
-                _logger.Debug("Queued value update {Key} to {Value}", key, value);
-            }
-
-            return Task.FromResult(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Failed to queue value updates");
             return Task.FromResult(false);
         }
+
+        var value = action.SetValue.Value;
+        if (action.SetValue.ValueExpression != null)
+        {
+            // TODO: Implement expression evaluation
+            _logger.Warning("Value expressions not yet implemented");
+            return Task.FromResult(false);
+        }
+
+        _logger.Information(
+            "Setting value for {Key} to {Value}",
+            action.SetValue.Key,
+            value
+        );
+
+        if (string.IsNullOrWhiteSpace(action.SetValue.Key))
+        {
+            _logger.Warning("Invalid key in SetValue action: {Key}", action.SetValue.Key);
+            return Task.FromResult(true); // Skip invalid keys
+        }
+
+        if (value == null)
+        {
+            _logger.Warning("Null value for key {Key} in SetValue action", action.SetValue.Key);
+            return Task.FromResult(true); // Skip invalid values
+        }
+
+        _pendingUpdates.AddOrUpdate(action.SetValue.Key, value, (_, _) => value);
+        _logger.Debug("Queued value update {Key} to {Value}", action.SetValue.Key, value);
+
+        return Task.FromResult(true);
     }
 
     /// <summary>

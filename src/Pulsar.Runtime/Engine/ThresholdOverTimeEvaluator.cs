@@ -95,38 +95,35 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
             );
         }
 
-        var duration = ParseDuration(thresholdCondition.Duration);
-        var values = _timeSeriesService.GetTimeWindow(dataSource, duration);
+        // Get historical data within the duration window
+        var historicalData = await _timeSeriesService.GetHistoricalDataAsync(
+            dataSource,
+            TimeSpan.FromMilliseconds(thresholdCondition.DurationMs)
+        );
 
-        if (!values.Any())
+        if (!historicalData.Any())
         {
-            _logger.Warning("No values found in time window for source {DataSource}", dataSource);
+            _logger.Warning(
+                "No historical data found for source {DataSource} within {Duration}ms",
+                dataSource,
+                thresholdCondition.DurationMs
+            );
             return false;
         }
 
-        var result = thresholdCondition.Operator switch
-        {
-            ThresholdOperator.GreaterThan => values.All(v =>
-                v.Value > thresholdCondition.Threshold
-            ),
-            ThresholdOperator.LessThan => values.All(v => v.Value < thresholdCondition.Threshold),
-            _ => false, // Invalid operator returns false
-        };
+        // Add current value to historical data
+        var allValues = historicalData.Append(currentValue);
 
-        if (
-            result == false
-            && !Enum.IsDefined(typeof(ThresholdOperator), thresholdCondition.Operator)
-        )
-        {
-            _logger.Warning(
-                "Invalid operator {Operator} in condition {Condition}",
-                thresholdCondition.Operator,
-                thresholdCondition
-            );
-        }
+        // Check if all values meet the threshold condition
+        var allMeetThreshold = allValues.All(v => v >= thresholdCondition.Threshold);
 
-        _metricsService.RecordConditionEvaluation("", "ThresholdOverTime", result);
-        return result;
+        _metricsService.RecordThresholdEvaluation(
+            dataSource,
+            allMeetThreshold,
+            thresholdCondition.DurationMs
+        );
+
+        return allMeetThreshold;
     }
 
     private static TimeSpan ParseDuration(string duration)

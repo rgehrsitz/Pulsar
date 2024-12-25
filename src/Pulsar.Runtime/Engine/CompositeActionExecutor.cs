@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Pulsar.RuleDefinition.Models;
+using Pulsar.Models.Actions;
 using Serilog;
 
 namespace Pulsar.Runtime.Engine;
@@ -10,51 +10,31 @@ namespace Pulsar.Runtime.Engine;
 /// </summary>
 public class CompositeActionExecutor : IActionExecutor
 {
-    private readonly IReadOnlyDictionary<string, IActionExecutor> _executors;
     private readonly ILogger _logger;
+    private readonly IEnumerable<IActionExecutor> _executors;
 
-    public CompositeActionExecutor(
-        IReadOnlyDictionary<string, IActionExecutor> executors,
-        ILogger logger
-    )
+    public CompositeActionExecutor(ILogger logger, IEnumerable<IActionExecutor> executors)
     {
-        _executors = executors;
         _logger = logger.ForContext<CompositeActionExecutor>();
+        _executors = executors;
     }
 
-    public async Task<bool> ExecuteAsync(RuleAction action)
+    public async Task<bool> ExecuteAsync(CompiledRuleAction action)
     {
-        var results = new List<bool>();
-
-        // Handle SetValue actions
-        if (
-            action.SetValue?.Count > 0
-            && _executors.TryGetValue("setValue", out var setValueExecutor)
-        )
+        var success = true;
+        foreach (var executor in _executors)
         {
-            var result = await setValueExecutor.ExecuteAsync(action);
-            results.Add(result);
+            try
+            {
+                success &= await executor.ExecuteAsync(action);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.Error(ex, "Action executor {Executor} failed", executor.GetType().Name);
+                success = false;
+            }
         }
-
-        // Handle SendMessage actions
-        if (
-            action.SendMessage?.Count > 0
-            && _executors.TryGetValue("sendMessage", out var sendMessageExecutor)
-        )
-        {
-            var result = await sendMessageExecutor.ExecuteAsync(action);
-            results.Add(result);
-        }
-
-        // If no executors were found for any actions, log a warning
-        if (results.Count == 0)
-        {
-            _logger.Warning("No executors found for action");
-            return false;
-        }
-
-        // Return true only if all actions were executed successfully
-        return results.All(r => r);
+        return success;
     }
 
     /// <summary>
@@ -63,8 +43,10 @@ public class CompositeActionExecutor : IActionExecutor
     /// <returns>A dictionary containing all pending updates, or an empty dictionary if no SetValueActionExecutor is available</returns>
     public IDictionary<string, object> GetAndClearPendingUpdates()
     {
+        // Note: This method is not updated to use CompiledRuleAction, it is left as is
         if (
-            _executors.TryGetValue("setValue", out var executor)
+            _executors is IReadOnlyDictionary<string, IActionExecutor> executors
+            && executors.TryGetValue("setValue", out var executor)
             && executor is SetValueActionExecutor setValueExecutor
         )
         {
@@ -81,8 +63,10 @@ public class CompositeActionExecutor : IActionExecutor
     /// <returns>A dictionary containing current pending updates, or an empty dictionary if no SetValueActionExecutor is available</returns>
     public IDictionary<string, object> GetPendingUpdates()
     {
+        // Note: This method is not updated to use CompiledRuleAction, it is left as is
         if (
-            _executors.TryGetValue("setValue", out var executor)
+            _executors is IReadOnlyDictionary<string, IActionExecutor> executors
+            && executors.TryGetValue("setValue", out var executor)
             && executor is SetValueActionExecutor setValueExecutor
         )
         {

@@ -19,4 +19,5 @@ public interface IMetricsService
     void UpdateSensorValue(string sensorName, double value);
     void RecordSensorUpdate(string sensorName);
     void RecordSensorReadError(string sensorName, string errorType);
+    void RecordThresholdEvaluation(string sensor, bool result, int durationMs);
 }

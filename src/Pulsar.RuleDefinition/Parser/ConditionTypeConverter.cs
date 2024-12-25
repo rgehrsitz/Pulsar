@@ -1,3 +1,5 @@
+using System;
+using System.Text.RegularExpressions;
 using Pulsar.RuleDefinition.Models;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
@@ -11,7 +13,17 @@ public class ConditionTypeConverter : IYamlTypeConverter
 
     public object ReadYaml(IParser parser, Type type)
     {
-        // Start of the mapping
+        // Start of the condition mapping
+        parser.Consume<MappingStart>();
+
+        // Read "condition:" key
+        var conditionKey = parser.Consume<Scalar>().Value;
+        if (conditionKey != "condition")
+        {
+            throw new YamlException($"Expected 'condition' key, got '{conditionKey}'");
+        }
+
+        // Start of the condition details mapping
         parser.Consume<MappingStart>();
 
         // Read the condition type
@@ -21,62 +33,18 @@ public class ConditionTypeConverter : IYamlTypeConverter
         // Create the appropriate condition type
         Condition condition = conditionType switch
         {
-            "comparison" => new ComparisonCondition(),
-            "threshold_over_time" => new ThresholdOverTimeCondition(),
-            "expression" => new ExpressionCondition(),
+            "comparison" => ParseComparisonCondition(parser),
+            "threshold_over_time" => ParseThresholdOverTimeCondition(parser),
+            "expression" => ParseExpressionCondition(parser),
             _ => throw new YamlException($"Unknown condition type: {conditionType}"),
         };
 
         condition.Type = conditionType;
 
-        // Parse the remaining fields based on condition type
-        while (parser.Current is Scalar scalar)
-        {
-            parser.MoveNext();
-            var value = parser.Consume<Scalar>().Value;
+        // End of condition details mapping
+        parser.Consume<MappingEnd>();
 
-            switch (scalar.Value)
-            {
-                case "data_source" when condition is ComparisonCondition comp:
-                    comp.DataSource = value;
-                    break;
-                case "operator" when condition is ComparisonCondition comp:
-                    comp.Operator = value;
-                    break;
-                case "value" when condition is ComparisonCondition comp:
-                    comp.Value = double.Parse(value);
-                    break;
-                case "data_source" when condition is ThresholdOverTimeCondition threshold:
-                    threshold.DataSource = value;
-                    break;
-                case "threshold" when condition is ThresholdOverTimeCondition threshold:
-                    threshold.Threshold = double.Parse(value);
-                    break;
-                case "duration" when condition is ThresholdOverTimeCondition threshold:
-                    threshold.Duration = value;
-                    break;
-                case "operator" when condition is ThresholdOverTimeCondition threshold:
-                    threshold.Operator = value.ToLowerInvariant() switch
-                    {
-                        ">" or "gt" => ThresholdOperator.GreaterThan,
-                        "<" or "lt" => ThresholdOperator.LessThan,
-                        _ => throw new YamlException($"Invalid threshold operator: {value}"),
-                    };
-                    break;
-                case "required_percentage" when condition is ThresholdOverTimeCondition threshold:
-                    if (value.EndsWith("%"))
-                    {
-                        value = value[..^1];
-                    }
-                    threshold.RequiredPercentage = double.Parse(value) / 100.0;
-                    break;
-                case "expression" when condition is ExpressionCondition expr:
-                    expr.Expression = value;
-                    break;
-            }
-        }
-
-        // End of the mapping
+        // End of condition mapping
         parser.Consume<MappingEnd>();
 
         return condition;
@@ -84,63 +52,137 @@ public class ConditionTypeConverter : IYamlTypeConverter
 
     public void WriteYaml(IEmitter emitter, object? value, Type type)
     {
-        if (value == null)
+        throw new NotImplementedException("Writing YAML is not supported");
+    }
+
+    private ComparisonCondition ParseComparisonCondition(IParser parser)
+    {
+        var condition = new ComparisonCondition();
+
+        while (parser.Current is Scalar scalar)
         {
-            // Handle or skip null values as needed
-            return;
+            parser.MoveNext();
+            var value = parser.Consume<Scalar>().Value;
+
+            switch (scalar.Value)
+            {
+                case "sensor":
+                    condition.DataSource = value;
+                    break;
+                case "operator":
+                    condition.Operator = value;
+                    break;
+                case "value":
+                    if (double.TryParse(value, out var doubleValue))
+                    {
+                        condition.Value = doubleValue;
+                    }
+                    else
+                    {
+                        throw new YamlException($"Invalid numeric value: {value}");
+                    }
+                    break;
+                default:
+                    throw new YamlException($"Unknown field: {scalar.Value}");
+            }
         }
 
-        var condition = (Condition)value;
+        return condition;
+    }
 
-        emitter.Emit(new MappingStart());
+    private ThresholdOverTimeCondition ParseThresholdOverTimeCondition(IParser parser)
+    {
+        var condition = new ThresholdOverTimeCondition();
 
-        // Write type
-        emitter.Emit(new Scalar("type"));
-        emitter.Emit(new Scalar(condition.Type));
-
-        // Write specific fields based on condition type
-        switch (condition)
+        while (parser.Current is Scalar scalar)
         {
-            case ComparisonCondition comp:
-                emitter.Emit(new Scalar("data_source"));
-                emitter.Emit(new Scalar(comp.DataSource));
-                emitter.Emit(new Scalar("operator"));
-                emitter.Emit(new Scalar(comp.Operator));
-                emitter.Emit(new Scalar("value"));
-                emitter.Emit(new Scalar(comp.Value.ToString()));
-                break;
-            case ThresholdOverTimeCondition threshold:
-                emitter.Emit(new Scalar("data_source"));
-                emitter.Emit(new Scalar(threshold.DataSource));
-                emitter.Emit(new Scalar("threshold"));
-                emitter.Emit(new Scalar(threshold.Threshold.ToString()));
-                emitter.Emit(new Scalar("duration"));
-                emitter.Emit(new Scalar(threshold.Duration));
-                emitter.Emit(new Scalar("operator"));
-                emitter.Emit(
-                    new Scalar(
-                        threshold.Operator switch
-                        {
-                            ThresholdOperator.GreaterThan => ">",
-                            ThresholdOperator.LessThan => "<",
-                            _ => throw new YamlException(
-                                $"Invalid threshold operator: {threshold.Operator}"
-                            ),
-                        }
-                    )
-                );
-                if (threshold.RequiredPercentage < 1.0)
-                {
-                    emitter.Emit(new Scalar("required_percentage"));
-                    emitter.Emit(new Scalar(threshold.RequiredPercentage.ToString("P0")));
-                }
-                break;
-            case ExpressionCondition expr:
-                emitter.Emit(new Scalar("expression"));
-                emitter.Emit(new Scalar(expr.Expression));
-                break;
+            parser.MoveNext();
+            var value = parser.Consume<Scalar>().Value;
+
+            switch (scalar.Value)
+            {
+                case "sensor":
+                    condition.DataSource = value;
+                    break;
+                case "threshold":
+                    if (double.TryParse(value, out var threshold))
+                    {
+                        condition.Threshold = threshold;
+                    }
+                    else
+                    {
+                        throw new YamlException($"Invalid threshold value: {value}");
+                    }
+                    break;
+                case "duration":
+                    var (isValid, durationMs, error) = TryParseTimeSpan(value);
+                    if (!isValid)
+                    {
+                        throw new YamlException($"Invalid duration: {error}");
+                    }
+                    condition.DurationMs = durationMs;
+                    break;
+                default:
+                    throw new YamlException($"Unknown field: {scalar.Value}");
+            }
         }
 
-        emitter.Emit(new MappingEnd());
+        return condition;
+    }
+
+    private ExpressionCondition ParseExpressionCondition(IParser parser)
+    {
+        var condition = new ExpressionCondition();
+
+        while (parser.Current is Scalar scalar)
+        {
+            parser.MoveNext();
+            var value = parser.Consume<Scalar>().Value;
+
+            switch (scalar.Value)
+            {
+                case "expression":
+                    condition.Expression = value;
+                    break;
+                default:
+                    throw new YamlException($"Unknown field: {scalar.Value}");
+            }
+        }
+
+        return condition;
+    }
+
+    private (bool isValid, int durationMs, string? error) TryParseTimeSpan(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (false, 0, "Duration cannot be empty");
+        }
+
+        // Parse duration with unit
+        var match = Regex.Match(value, @"^(\d+)(ms|s|m|h|d)$");
+        if (!match.Success)
+        {
+            return (false, 0, "Duration must be specified with a valid unit (ms, s, m, h, d)");
+        }
+
+        if (!int.TryParse(match.Groups[1].Value, out int numericValue))
+        {
+            return (false, 0, "Invalid duration value");
+        }
+
+        var unit = match.Groups[2].Value;
+        var multiplier = unit switch
+        {
+            "ms" => 1,
+            "s" => 1000,
+            "m" => 60 * 1000,
+            "h" => 60 * 60 * 1000,
+            "d" => 24 * 60 * 60 * 1000,
+            _ => throw new ArgumentException($"Invalid duration unit: {unit}")
+        };
+
+        var totalMs = numericValue * multiplier;
+        return (true, totalMs, null);
     }
 }

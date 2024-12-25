@@ -29,13 +29,12 @@ public class TemporalValidator
     {
         var errors = new List<string>();
 
-        // Validate duration format and value
-        var (isValid, durationMs, error) = ValidateDuration(condition.Duration);
-        if (!isValid)
+        // Validate duration value
+        if (condition.DurationMs < MinDurationMs)
         {
-            errors.Add(error!);
+            errors.Add($"Duration must be at least {MinDurationMs}ms");
         }
-        else if (durationMs > MaxDurationMs)
+        else if (condition.DurationMs > MaxDurationMs)
         {
             errors.Add($"Duration cannot exceed 24 hours ({MaxDurationMs}ms)");
         }
@@ -49,7 +48,7 @@ public class TemporalValidator
         // Validate data source
         if (string.IsNullOrWhiteSpace(condition.DataSource))
         {
-            errors.Add("Data source cannot be empty");
+            errors.Add("Data source must be specified");
         }
 
         return errors;

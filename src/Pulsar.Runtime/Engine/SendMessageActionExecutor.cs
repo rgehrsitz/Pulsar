@@ -1,5 +1,5 @@
 using System.Threading.Tasks;
-using Pulsar.RuleDefinition.Models;
+using Pulsar.Models.Actions;
 using Serilog;
 
 namespace Pulsar.Runtime.Engine;
@@ -9,35 +9,26 @@ namespace Pulsar.Runtime.Engine;
 /// </summary>
 public class SendMessageActionExecutor : IActionExecutor
 {
-    protected readonly ILogger _logger;
+    private readonly ILogger _logger;
 
     public SendMessageActionExecutor(ILogger logger)
     {
         _logger = logger.ForContext<SendMessageActionExecutor>();
     }
 
-    public virtual Task<bool> ExecuteAsync(RuleAction action)
+    public Task<bool> ExecuteAsync(CompiledRuleAction action)
     {
-        if (action.SendMessage == null || action.SendMessage.Count == 0)
+        if (action.SendMessage == null)
         {
-            return Task.FromResult(true);
-        }
-
-        try
-        {
-            foreach (var (channel, message) in action.SendMessage)
-            {
-                // TODO: Implement actual message sending logic based on channel
-                // This could be email, SMS, webhook, etc.
-                _logger.Information("Sending message to {Channel}: {Message}", channel, message);
-            }
-
-            return Task.FromResult(true);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Failed to send messages");
             return Task.FromResult(false);
         }
+
+        _logger.Information(
+            "Sending message to channel {Channel}: {Message}",
+            action.SendMessage.Channel,
+            action.SendMessage.Message
+        );
+
+        return Task.FromResult(true);
     }
 }

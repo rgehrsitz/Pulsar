@@ -214,13 +214,9 @@ public class DependencyAnalyzer
         {
             foreach (var action in rule.Actions)
             {
-                if (action.SetValue != null && action.SetValue.TryGetValue("key", out var key))
+                if (action.SetValue != null && !string.IsNullOrEmpty(action.SetValue.Key))
                 {
-                    var keyStr = key?.ToString();
-                    if (!string.IsNullOrEmpty(keyStr))
-                    {
-                        outputs.Add(keyStr);
-                    }
+                    outputs.Add(action.SetValue.Key);
                 }
             }
         }

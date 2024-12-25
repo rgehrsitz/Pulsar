@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Pulsar.RuleDefinition.Models.Actions;
 
 namespace Pulsar.RuleDefinition.Models;
 
@@ -62,6 +63,13 @@ public class ExpressionCondition : Condition
 /// </summary>
 public class RuleAction
 {
-    public Dictionary<string, object> SetValue { get; set; } = new();
-    public Dictionary<string, string> SendMessage { get; set; } = new();
+    /// <summary>
+    /// Action to set a sensor value
+    /// </summary>
+    public SetValueAction? SetValue { get; set; }
+
+    /// <summary>
+    /// Action to send a message
+    /// </summary>
+    public SendMessageAction? SendMessage { get; set; }
 }
