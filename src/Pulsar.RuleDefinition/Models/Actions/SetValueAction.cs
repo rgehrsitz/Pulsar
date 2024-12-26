@@ -1,22 +1,22 @@
 namespace Pulsar.RuleDefinition.Models.Actions;
 
 /// <summary>
-/// Action to set a sensor value
+/// Action that sets a sensor value
 /// </summary>
 public class SetValueAction
 {
     /// <summary>
-    /// The sensor key to set
+    /// The sensor to set
     /// </summary>
     public string Key { get; set; } = string.Empty;
 
     /// <summary>
-    /// The value to set
+    /// The value to set. Can be a numeric value or a string.
     /// </summary>
-    public double? Value { get; set; }
+    public object? Value { get; set; }
 
     /// <summary>
-    /// Expression to evaluate to get the value
+    /// An expression that evaluates to the value to set
     /// </summary>
     public string? ValueExpression { get; set; }
 }

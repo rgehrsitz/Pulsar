@@ -1,3 +1,5 @@
+version: 1
+
 rules:
   - name: "HighTemperatureAlert"
     description: "Alerts when temperature is >50 for 500ms"

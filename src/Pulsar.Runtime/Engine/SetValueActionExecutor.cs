@@ -1,13 +1,11 @@
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using Pulsar.Models.Actions;
+using Pulsar.Runtime.Storage;
 using Serilog;
 
 namespace Pulsar.Runtime.Engine;
 
-/// <summary>
-/// Executes actions that set values in a shared state dictionary, batching updates for efficient Redis operations
-/// </summary>
 public class SetValueActionExecutor : IActionExecutor
 {
     private readonly ConcurrentDictionary<string, object> _pendingUpdates;
@@ -36,6 +34,12 @@ public class SetValueActionExecutor : IActionExecutor
             return Task.FromResult(false);
         }
 
+        if (value == null)
+        {
+            _logger.Warning("Null value in SetValue action for key: {Key}", action.SetValue.Key);
+            return Task.FromResult(false);
+        }
+
         _logger.Information(
             "Setting value for {Key} to {Value}",
             action.SetValue.Key,
@@ -48,15 +52,7 @@ public class SetValueActionExecutor : IActionExecutor
             return Task.FromResult(true); // Skip invalid keys
         }
 
-        if (value == null)
-        {
-            _logger.Warning("Null value for key {Key} in SetValue action", action.SetValue.Key);
-            return Task.FromResult(true); // Skip invalid values
-        }
-
         _pendingUpdates.AddOrUpdate(action.SetValue.Key, value, (_, _) => value);
-        _logger.Debug("Queued value update {Key} to {Value}", action.SetValue.Key, value);
-
         return Task.FromResult(true);
     }
 
@@ -64,9 +60,9 @@ public class SetValueActionExecutor : IActionExecutor
     /// Gets all pending updates and clears the internal buffer
     /// </summary>
     /// <returns>A dictionary containing all pending updates</returns>
-    public System.Collections.Generic.IDictionary<string, object> GetAndClearPendingUpdates()
+    public virtual ConcurrentDictionary<string, object> GetAndClearPendingUpdates()
     {
-        var updates = new System.Collections.Generic.Dictionary<string, object>(_pendingUpdates);
+        var updates = new ConcurrentDictionary<string, object>(_pendingUpdates);
         _pendingUpdates.Clear();
         return updates;
     }
@@ -75,8 +71,8 @@ public class SetValueActionExecutor : IActionExecutor
     /// Gets the current pending updates without clearing them
     /// </summary>
     /// <returns>A dictionary containing current pending updates</returns>
-    public System.Collections.Generic.IDictionary<string, object> GetPendingUpdates()
+    public virtual ConcurrentDictionary<string, object> GetPendingUpdates()
     {
-        return new System.Collections.Generic.Dictionary<string, object>(_pendingUpdates);
+        return new ConcurrentDictionary<string, object>(_pendingUpdates);
     }
 }

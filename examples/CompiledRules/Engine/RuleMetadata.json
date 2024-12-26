@@ -1,0 +1,59 @@
+{
+  "LayerCount": 1,
+  "Rules": [
+    {
+      "Name": "HighTemperatureAlert",
+      "Layer": 0,
+      "InputSensors": [
+        "temperature"
+      ],
+      "OutputSensors": [
+        "alerts:temperature"
+      ],
+      "Dependencies": []
+    },
+    {
+      "Name": "HumidityPressureCheck",
+      "Layer": 0,
+      "InputSensors": [
+        "humidity",
+        "pressure"
+      ],
+      "OutputSensors": [
+        "alerts:humidity",
+        "alerts:pressure"
+      ],
+      "Dependencies": []
+    },
+    {
+      "Name": "TemperatureConversion",
+      "Layer": 0,
+      "InputSensors": [],
+      "OutputSensors": [
+        "converted_temp"
+      ],
+      "Dependencies": []
+    },
+    {
+      "Name": "SystemStatusUpdate",
+      "Layer": 0,
+      "InputSensors": [],
+      "OutputSensors": [
+        "system:status"
+      ],
+      "Dependencies": []
+    }
+  ],
+  "InputSensors": [
+    "temperature",
+    "humidity",
+    "pressure"
+  ],
+  "OutputSensors": [
+    "alerts:temperature",
+    "alerts:humidity",
+    "alerts:pressure",
+    "converted_temp",
+    "system:status"
+  ]
+}

@@ -15,16 +15,18 @@ public class ActionTypeConverter : IYamlTypeConverter
     {
         var action = new RuleAction();
 
-        // Start of the mapping for the action
         parser.Consume<MappingStart>();
 
-        // Read the action type (set_value or send_message)
-        var actionType = parser.Consume<Scalar>().Value;
+        // Each action should have exactly one key (set_value or send_message)
+        if (parser.Current is not Scalar scalar)
+        {
+            throw new YamlException("Expected action type (set_value or send_message)");
+        }
 
-        // Start of the mapping for the action details
+        parser.MoveNext();
         parser.Consume<MappingStart>();
 
-        switch (actionType)
+        switch (scalar.Value)
         {
             case "set_value":
                 action.SetValue = ParseSetValueAction(parser);
@@ -33,15 +35,10 @@ public class ActionTypeConverter : IYamlTypeConverter
                 action.SendMessage = ParseSendMessageAction(parser);
                 break;
             default:
-                // Skip unknown action types
-                parser.SkipThisAndNestedEvents();
-                break;
+                throw new YamlException($"Unknown action type: {scalar.Value}");
         }
 
-        // End of the action details mapping
         parser.Consume<MappingEnd>();
-
-        // End of the action mapping
         parser.Consume<MappingEnd>();
 
         return action;
@@ -67,14 +64,22 @@ public class ActionTypeConverter : IYamlTypeConverter
                     action.Key = value;
                     break;
                 case "value":
-                    if (double.TryParse(value, out var doubleValue))
+                    // Try parsing as number first
+                    if (double.TryParse(value, out var numericValue))
                     {
-                        action.Value = doubleValue;
+                        action.Value = numericValue;
+                    }
+                    else
+                    {
+                        // If not a number, use as string
+                        action.Value = value;
                     }
                     break;
                 case "value_expression":
                     action.ValueExpression = value;
                     break;
+                default:
+                    throw new YamlException($"Unknown field in set_value action: {scalar.Value}");
             }
         }
 
@@ -98,6 +103,8 @@ public class ActionTypeConverter : IYamlTypeConverter
                 case "message":
                     action.Message = value;
                     break;
+                default:
+                    throw new YamlException($"Unknown field in send_message action: {scalar.Value}");
             }
         }
 

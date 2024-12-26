@@ -229,17 +229,20 @@ public class RuleParser
 
     private void ValidateAction(RuleAction action, string ruleName)
     {
+        // Each action must have exactly one of SetValue or SendMessage
+        if ((action.SetValue == null && action.SendMessage == null) ||
+            (action.SetValue != null && action.SendMessage != null))
+        {
+            throw new ArgumentException($"Rule '{ruleName}' has an invalid action: must have exactly one of set_value or send_message");
+        }
+
         if (action.SetValue != null)
         {
             ValidateSetValueAction(action.SetValue, ruleName);
         }
-        else if (action.SendMessage != null)
+        else // action.SendMessage must be non-null here
         {
-            ValidateSendMessageAction(action.SendMessage, ruleName);
-        }
-        else
-        {
-            throw new ArgumentException($"Rule '{ruleName}' has invalid action type");
+            ValidateSendMessageAction(action.SendMessage!, ruleName);
         }
     }
 

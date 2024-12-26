@@ -249,24 +249,50 @@ public class RuleValidator
     {
         var errors = new List<ValidationError>();
 
-        if (action.SetValue == null)
+        // Each action must have exactly one of SetValue or SendMessage
+        if ((action.SetValue == null && action.SendMessage == null) ||
+            (action.SetValue != null && action.SendMessage != null))
         {
-            _logger.Warning("Rule '{RuleName}' has an invalid action: missing set_value", ruleName);
+            _logger.Warning("Rule '{RuleName}' has an invalid action: must have exactly one of set_value or send_message", ruleName);
             errors.Add(
-                new ValidationError($"Rule '{ruleName}' has an invalid action: missing set_value")
+                new ValidationError($"Rule '{ruleName}' has an invalid action: must have exactly one of set_value or send_message")
             );
+            return errors;
         }
-        else if (string.IsNullOrEmpty(action.SetValue.Key))
+
+        // Validate SetValue action if present
+        if (action.SetValue != null)
         {
-            _logger.Warning("Rule '{RuleName}' has an invalid action: missing key", ruleName);
-            errors.Add(
-                new ValidationError($"Rule '{ruleName}' has an invalid action: missing key")
-            );
+            if (string.IsNullOrEmpty(action.SetValue.Key))
+            {
+                _logger.Warning("Rule '{RuleName}' has an invalid action: missing key", ruleName);
+                errors.Add(
+                    new ValidationError($"Rule '{ruleName}' has an invalid action: missing key")
+                );
+            }
+            else if (!_config.ValidSensors.Contains(action.SetValue.Key))
+            {
+                _logger.Warning("Invalid data source: {DataSource}", action.SetValue.Key);
+                errors.Add(new ValidationError($"Invalid data source: {action.SetValue.Key}"));
+            }
         }
-        else if (!_config.ValidSensors.Contains(action.SetValue.Key))
+        // Validate SendMessage action if present
+        else if (action.SendMessage != null)
         {
-            _logger.Warning("Invalid data source: {DataSource}", action.SetValue.Key);
-            errors.Add(new ValidationError($"Invalid data source: {action.SetValue.Key}"));
+            if (string.IsNullOrEmpty(action.SendMessage.Channel))
+            {
+                _logger.Warning("Rule '{RuleName}' has an invalid action: missing channel", ruleName);
+                errors.Add(
+                    new ValidationError($"Rule '{ruleName}' has an invalid action: missing channel")
+                );
+            }
+            if (string.IsNullOrEmpty(action.SendMessage.Message))
+            {
+                _logger.Warning("Rule '{RuleName}' has an invalid action: missing message", ruleName);
+                errors.Add(
+                    new ValidationError($"Rule '{ruleName}' has an invalid action: missing message")
+                );
+            }
         }
 
         return errors;
