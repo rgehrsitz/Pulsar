@@ -1,5 +1,5 @@
 {
-  "LayerCount": 1,
+  "LayerCount": 2,
   "Rules": [
     {
       "Name": "HighTemperatureAlert",
@@ -28,7 +28,9 @@
     {
       "Name": "TemperatureConversion",
       "Layer": 0,
-      "InputSensors": [],
+      "InputSensors": [
+        "temperature"
+      ],
       "OutputSensors": [
         "converted_temp"
       ],
@@ -36,18 +38,28 @@
     },
     {
       "Name": "SystemStatusUpdate",
-      "Layer": 0,
-      "InputSensors": [],
+      "Layer": 1,
+      "InputSensors": [
+        "alerts:temperature",
+        "alerts:humidity",
+        "alerts:pressure"
+      ],
       "OutputSensors": [
         "system:status"
       ],
-      "Dependencies": []
+      "Dependencies": [
+        "HighTemperatureAlert",
+        "HumidityPressureCheck"
+      ]
     }
   ],
   "InputSensors": [
     "temperature",
     "humidity",
-    "pressure"
+    "pressure",
+    "alerts:temperature",
+    "alerts:humidity",
+    "alerts:pressure"
   ],
   "OutputSensors": [
     "alerts:temperature",

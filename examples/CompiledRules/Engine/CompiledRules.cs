@@ -31,9 +31,17 @@ namespace Pulsar.CompiledRules
             var data = await _dataStore.GetCurrentDataAsync();
 
             // Layer 0
+            _logger.Debug("Executing rules in layer 0");
+            _logger.Debug("Evaluating HighTemperatureAlert in layer 0");
             await EvaluateHighTemperatureAlertAsync(data);
+            _logger.Debug("Evaluating HumidityPressureCheck in layer 0");
             await EvaluateHumidityPressureCheckAsync(data);
+            _logger.Debug("Evaluating TemperatureConversion in layer 0");
             await EvaluateTemperatureConversionAsync(data);
+
+            // Layer 1
+            _logger.Debug("Executing rules in layer 1");
+            _logger.Debug("Evaluating SystemStatusUpdate in layer 1");
             await EvaluateSystemStatusUpdateAsync(data);
 
             await _actionExecutor.ExecutePendingActionsAsync();

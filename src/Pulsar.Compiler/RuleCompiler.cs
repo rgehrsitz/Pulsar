@@ -40,219 +40,125 @@ public class RuleCompiler
             return (emptyRuleSet, _codeGenerator.GenerateCode(emptyRuleSet));
         }
 
-        // Build dependency graph
-        var (dependencies, inDegree) = BuildDependencyGraph(rulesList);
+        // Map rules to their outputs for dependency analysis
+        var outputMap = rulesList.ToDictionary(
+            r => r.Name,
+            r => (Rule: r, Outputs: ExtractOutputSensors(r))
+        );
 
-        // Perform topological sort using Kahn's algorithm
-        var layers = new List<List<Rule>>();
-        var currentLayer = new List<Rule>();
-        var remainingRules = new HashSet<Rule>(rulesList);
+        // Build dependencies based on input/output relationships
+        var dependencies = new Dictionary<string, HashSet<string>>();
+        var ruleLayers = new Dictionary<Rule, int>();
 
-        while (remainingRules.Any())
+        foreach (var rule in rulesList)
         {
-            var independentRules = remainingRules
-                .Where(rule => !inDegree.ContainsKey(rule.Name) || inDegree[rule.Name] == 0)
-                .ToList();
+            var inputs = ExtractInputSensors(rule);
+            _logger.Debug("Analyzing rule {Rule} - reads: {Inputs}", rule.Name, string.Join(", ", inputs));
 
-            if (!independentRules.Any())
+            foreach (var otherRule in rulesList)
             {
-                var cycle = FindCycle(dependencies, remainingRules);
-                _logger.Error(
-                    "Circular dependency detected between rules: {Cycle}",
-                    string.Join(" -> ", cycle.Select(r => r.Name))
-                );
-                throw new InvalidOperationException("Circular dependency detected in rules");
-            }
+                if (otherRule == rule) continue;
 
-            // Add all independent rules to current layer
-            currentLayer.AddRange(independentRules);
-
-            // Remove processed rules and update in-degrees
-            foreach (var rule in independentRules)
-            {
-                remainingRules.Remove(rule);
-                if (dependencies.TryGetValue(rule.Name, out var dependents))
+                var outputs = ExtractOutputSensors(otherRule);
+                if (outputs.Overlaps(inputs))
                 {
-                    foreach (var dependent in dependents)
+                    // Current rule depends on other rule's outputs
+                    if (!dependencies.TryGetValue(rule.Name, out var deps))
                     {
-                        inDegree[dependent]--;
+                        deps = new HashSet<string>();
+                        dependencies[rule.Name] = deps;
                     }
+                    deps.Add(otherRule.Name);
+                    _logger.Debug("Added dependency: {Consumer} depends on {Producer}",
+                        rule.Name, otherRule.Name);
                 }
-            }
-
-            // If we've processed all independent rules at this level, start a new layer
-            if (currentLayer.Any())
-            {
-                layers.Add(new List<Rule>(currentLayer));
-                currentLayer.Clear();
             }
         }
 
-        // Create compiled rules with layer information
-        var compiledRules = new List<CompiledRule>();
-        var allInputSensors = new HashSet<string>();
-        var allOutputSensors = new HashSet<string>();
-
-        for (int layerIndex = 0; layerIndex < layers.Count; layerIndex++)
+        // Assign layers based on dependencies
+        foreach (var rule in rulesList)
         {
-            foreach (var rule in layers[layerIndex])
-            {
-                var ruleDependencies = new HashSet<string>();
-                var inputSensors = ExtractInputSensors(rule);
-                var outputSensors = ExtractOutputSensors(rule);
-
-                // Find dependencies by looking up which rules output our input sensors
-                foreach (var sensor in inputSensors)
-                {
-                    foreach (var otherRule in rulesList)
-                    {
-                        if (otherRule == rule)
-                            continue;
-
-                        if (RuleOutputsSensor(otherRule, sensor))
-                        {
-                            ruleDependencies.Add(otherRule.Name);
-                        }
-                    }
-                }
-
-                allInputSensors.UnionWith(inputSensors);
-                allOutputSensors.UnionWith(outputSensors);
-
-                compiledRules.Add(
-                    new CompiledRule(
-                        rule,
-                        layerIndex,
-                        ruleDependencies,
-                        inputSensors,
-                        outputSensors
-                    )
-                );
-            }
+            AssignLayer(rule, dependencies, ruleLayers, outputMap);
         }
+
+        // Create ordered compiled rule set
+        var compiledRules = rulesList
+            .Select(rule => new CompiledRule(
+                rule,
+                ruleLayers[rule],
+                dependencies.GetValueOrDefault(rule.Name, new()),
+                ExtractInputSensors(rule),
+                ExtractOutputSensors(rule)))
+            .OrderBy(r => r.Layer)
+            .ToList();
+
+        var maxLayer = compiledRules.Max(r => r.Layer);
 
         _logger.Information(
             "Compiled {RuleCount} rules into {LayerCount} layers",
             compiledRules.Count,
-            layers.Count
+            maxLayer + 1
         );
 
-        var compiledRuleSet = new CompiledRuleSet(compiledRules, layers.Count, allInputSensors, allOutputSensors);
-        var generatedCode = _codeGenerator.GenerateCode(compiledRuleSet);
+        var compiledRuleSet = new CompiledRuleSet(
+            compiledRules,
+            maxLayer + 1,
+            compiledRules.SelectMany(r => r.InputSensors).ToHashSet(),
+            compiledRules.SelectMany(r => r.OutputSensors).ToHashSet()
+        );
 
-        return (compiledRuleSet, generatedCode);
+        return (compiledRuleSet, _codeGenerator.GenerateCode(compiledRuleSet));
     }
 
-    private (
-        Dictionary<string, HashSet<string>> Dependencies,
-        Dictionary<string, int> InDegree
-    ) BuildDependencyGraph(
-        IEnumerable<Rule> rules
-    )
-    {
-        var dependencies = new Dictionary<string, HashSet<string>>();
-        var inDegree = new Dictionary<string, int>();
-        var outputs = new Dictionary<string, string>();
-
-        // First, build a map of which rule produces which outputs
-        foreach (var rule in rules)
-        {
-            foreach (var action in rule.Actions)
-            {
-                if (action.SetValue != null && !string.IsNullOrEmpty(action.SetValue.Key))
-                {
-                    if (outputs.TryGetValue(action.SetValue.Key, out var existingRule))
-                    {
-                        _logger.Warning(
-                            "Multiple rules trying to set the same value {Key}: {ExistingRule} and {NewRule}",
-                            action.SetValue.Key,
-                            existingRule,
-                            rule.Name
-                        );
-                    }
-                    outputs[action.SetValue.Key] = rule.Name;
-                }
-            }
-        }
-
-        // Then, analyze each rule's conditions to build the dependency graph
-        foreach (var rule in rules)
-        {
-            inDegree[rule.Name] = 0;
-            AnalyzeConditionDependencies(
-                rule.Conditions,
-                rule.Name,
-                outputs,
-                dependencies,
-                inDegree
-            );
-        }
-
-        return (dependencies, inDegree);
-    }
-
-    private void AnalyzeConditionDependencies(
-        ConditionGroup conditions,
-        string ruleName,
-        Dictionary<string, string> outputs,
+    private void AssignLayer(
+        Rule rule,
         Dictionary<string, HashSet<string>> dependencies,
-        Dictionary<string, int> inDegree
+        Dictionary<Rule, int> ruleLayers,
+        Dictionary<string, Rule> rulesByName
     )
     {
-        if (conditions.All != null)
-        {
-            foreach (var condition in conditions.All)
-            {
-                AddDependencyIfExists(condition, ruleName, outputs, dependencies, inDegree);
-            }
-        }
+        if (ruleLayers.ContainsKey(rule))
+            return;
 
-        if (conditions.Any != null)
+        int layer = 0;
+        if (dependencies.TryGetValue(rule.Name, out var deps))
         {
-            foreach (var condition in conditions.Any)
+            foreach (var dep in deps)
             {
-                AddDependencyIfExists(condition, ruleName, outputs, dependencies, inDegree);
-            }
-        }
-    }
-
-    private void AddDependencyIfExists(
-        Condition condition,
-        string dependentRule,
-        Dictionary<string, string> outputs,
-        Dictionary<string, HashSet<string>> dependencies,
-        Dictionary<string, int> inDegree
-    )
-    {
-        var sensorNames = ExtractSensorNames(condition);
-
-        foreach (var sensorName in sensorNames)
-        {
-            if (outputs.TryGetValue(sensorName, out var producerRule))
-            {
-                // Add dependency: producerRule -> dependentRule
-                if (!dependencies.TryGetValue(producerRule, out var dependents))
+                if (rulesByName.TryGetValue(dep, out var producer))
                 {
-                    dependents = new HashSet<string>();
-                    dependencies[producerRule] = dependents;
-                }
-                if (dependents.Add(dependentRule))
-                {
-                    inDegree[dependentRule]++;
+                    AssignLayer(producer, dependencies, ruleLayers, rulesByName);
+                    layer = Math.Max(layer, ruleLayers[producer] + 1);
                 }
             }
         }
+
+        ruleLayers[rule] = layer;
+        _logger.Debug("Assigned rule {RuleName} to layer {Layer}", rule.Name, layer);
     }
 
     private IEnumerable<string> ExtractSensorNames(Condition condition)
     {
-        if (condition is ComparisonCondition comparison)
+        switch (condition)
         {
-            yield return comparison.DataSource;
-        }
-        else if (condition is ThresholdOverTimeCondition threshold)
-        {
-            yield return threshold.DataSource;
+            case ComparisonCondition comparison:
+                yield return comparison.DataSource;
+                break;
+            case ThresholdOverTimeCondition threshold:
+                yield return threshold.DataSource;
+                break;
+            case ExpressionCondition expr:
+                // Basic expression parsing - extract sensor names from expression
+                var parts = expr.Expression.Split(new[] { ' ', '(', ')', '+', '-', '*', '/', '>', '<', '=', '&', '|', ',' },
+                    StringSplitOptions.RemoveEmptyEntries);
+                foreach (var part in parts)
+                {
+                    if (!double.TryParse(part, out _)) // If not a number, treat as sensor name
+                    {
+                        yield return part;
+                    }
+                }
+                break;
         }
     }
 
@@ -293,71 +199,5 @@ public class RuleCompiler
             }
         }
         return sensors;
-    }
-
-    private bool RuleOutputsSensor(Rule rule, string sensor)
-    {
-        return rule.Actions.Any(action => 
-            action.SetValue != null && 
-            action.SetValue.Key == sensor);
-    }
-
-    private IList<Rule> FindCycle(
-        Dictionary<string, HashSet<string>> dependencies,
-        ISet<Rule> remainingRules
-    )
-    {
-        var visited = new HashSet<string>();
-        var path = new HashSet<string>();
-        var cycle = new List<Rule>();
-
-        foreach (var rule in remainingRules)
-        {
-            if (FindCycleDFS(rule.Name, dependencies, visited, path, cycle, remainingRules))
-            {
-                return cycle;
-            }
-        }
-
-        return cycle;
-    }
-
-    private bool FindCycleDFS(
-        string ruleName,
-        Dictionary<string, HashSet<string>> dependencies,
-        HashSet<string> visited,
-        HashSet<string> path,
-        List<Rule> cycle,
-        ISet<Rule> remainingRules
-    )
-    {
-        if (!visited.Add(ruleName))
-        {
-            if (path.Contains(ruleName))
-            {
-                var rule = remainingRules.First(r => r.Name == ruleName);
-                cycle.Add(rule);
-                return true;
-            }
-            return false;
-        }
-
-        path.Add(ruleName);
-
-        if (dependencies.TryGetValue(ruleName, out var dependents))
-        {
-            foreach (var dependent in dependents)
-            {
-                if (FindCycleDFS(dependent, dependencies, visited, path, cycle, remainingRules))
-                {
-                    var rule = remainingRules.First(r => r.Name == ruleName);
-                    cycle.Insert(0, rule);
-                    return true;
-                }
-            }
-        }
-
-        path.Remove(ruleName);
-        return false;
     }
 }

@@ -72,13 +72,23 @@ public class RuleCodeGenerator
         // Generate code for each layer
         for (int layer = 0; layer < ruleSet.LayerCount; layer++)
         {
-            var layerRules = ruleSet.Rules.Where(r => r.Layer == layer);
-            sb.AppendLine($"            // Layer {layer}");
-            foreach (var rule in layerRules)
+            var layerRules = ruleSet.Rules
+                .Where(r => r.Layer == layer)
+                .OrderBy(r => r.Rule.Name) // Ensure deterministic ordering within layer
+                .ToList();
+
+            if (layerRules.Any())
             {
-                sb.AppendLine($"            await Evaluate{rule.Rule.Name}Async(data);");
+                sb.AppendLine($"            // Layer {layer}");
+                sb.AppendLine($"            _logger.Debug(\"Executing rules in layer {layer}\");");
+
+                foreach (var rule in layerRules)
+                {
+                    sb.AppendLine($"            _logger.Debug(\"Evaluating {rule.Rule.Name} in layer {layer}\");");
+                    sb.AppendLine($"            await Evaluate{rule.Rule.Name}Async(data);");
+                }
+                sb.AppendLine();
             }
-            sb.AppendLine();
         }
 
         sb.AppendLine("            await _actionExecutor.ExecutePendingActionsAsync();");
