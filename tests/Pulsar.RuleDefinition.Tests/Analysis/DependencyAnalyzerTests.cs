@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Pulsar.RuleDefinition.Analysis;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Actions;
 using Xunit;
 
 namespace Pulsar.RuleDefinition.Tests.Analysis;
@@ -121,14 +122,7 @@ public class DependencyAnalyzerTests
             },
             Actions = new List<RuleAction>
             {
-                new()
-                {
-                    SetValue = new Dictionary<string, object>
-                    {
-                        { "key", outputKey },
-                        { "value", "1" },
-                    },
-                },
+                new RuleAction { SetValue = new SetValueAction { Key = outputKey, Value = "1" } }
             },
         };
     }

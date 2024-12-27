@@ -23,7 +23,6 @@ public class RuleParserTests
   /******  4d93c6a5-879e-4908-85d5-76d36ccf5e93  *******/
   public RuleParserTests()
   {
-    _parser = new RuleParser();
     _systemConfigPath = Path.Combine(
         AppContext.BaseDirectory,
         "TestData",
@@ -33,6 +32,7 @@ public class RuleParserTests
 
     var configParser = new SystemConfigParser();
     _systemConfig = configParser.ParseFile(_systemConfigPath);
+    _parser = new RuleParser(_systemConfig);
     _validator = new RuleValidator(_systemConfig);
   }
 

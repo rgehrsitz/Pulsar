@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Actions;
 using Pulsar.RuleDefinition.Validation;
 using Xunit;
 
@@ -56,14 +57,7 @@ public class RuleValidatorTests
                     },
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "alerts:temperature" },
-                                { "value", "1" }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "alerts:temperature", Value = "1" } }
                     }
                 }
             }
@@ -158,14 +152,7 @@ public class RuleValidatorTests
                     },
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "alerts:temperature" },
-                                { "value", "1" }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "alerts:temperature", Value = "1" } }
                     }
                 }
             }
@@ -205,14 +192,7 @@ public class RuleValidatorTests
                     },
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "alerts:temperature" },
-                                { "value", "1" }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "alerts:temperature", Value = "1" } }
                     }
                 }
             }
@@ -240,14 +220,7 @@ public class RuleValidatorTests
                     Conditions = new ConditionGroup(),
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "alerts:temperature" },
-                                { "value", "1" }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "alerts:temperature", Value = "1" } }
                     }
                 }
             }
@@ -317,14 +290,7 @@ public class RuleValidatorTests
             },
             Actions = new List<RuleAction>
             {
-                new()
-                {
-                    SetValue = new Dictionary<string, object>
-                    {
-                        { "key", "alerts:temperature" },
-                        { "value", "1" }
-                    }
-                }
+                new RuleAction { SetValue = new SetValueAction { Key = "alerts:temperature", Value = "1" } }
             }
         };
     }

@@ -46,7 +46,7 @@ public class TemporalValidatorTests
         {
             DataSource = "temperature",
             Threshold = 50,
-            Duration = "500ms"
+            DurationMs = 500
         };
 
         var errors = _validator.ValidateTemporalCondition(condition);
@@ -60,7 +60,7 @@ public class TemporalValidatorTests
         {
             DataSource = "temperature",
             Threshold = double.NaN,
-            Duration = "500ms"
+            DurationMs = 500
         };
 
         var errors = _validator.ValidateTemporalCondition(condition);
@@ -75,12 +75,12 @@ public class TemporalValidatorTests
         {
             DataSource = "temperature",
             Threshold = 50,
-            Duration = "invalid"
+            DurationMs = -1
         };
 
         var errors = _validator.ValidateTemporalCondition(condition);
         Assert.Single(errors);
-        Assert.Contains("Duration must be specified with a valid unit", errors[0]);
+        Assert.Contains("Duration must be a positive integer", errors[0]);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class TemporalValidatorTests
         {
             DataSource = "",
             Threshold = 50,
-            Duration = "500ms"
+            DurationMs = 500
         };
 
         var errors = _validator.ValidateTemporalCondition(condition);

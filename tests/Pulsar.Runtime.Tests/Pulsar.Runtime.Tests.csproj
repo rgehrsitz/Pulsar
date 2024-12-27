@@ -30,6 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pulsar.Runtime\Pulsar.Runtime.csproj" />
     <ProjectReference Include="..\..\src\Pulsar.RuleDefinition\Pulsar.RuleDefinition.csproj" />
+    <ProjectReference Include="..\..\src\Pulsar.Compiler\Pulsar.Compiler.csproj" />
   </ItemGroup>
 
 </Project>

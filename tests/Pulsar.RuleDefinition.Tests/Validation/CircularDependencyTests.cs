@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Actions;
 using Pulsar.RuleDefinition.Validation;
 using Xunit;
 
@@ -46,14 +47,7 @@ public class CircularDependencyTests
                     },
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "humidity" },
-                                { "value", 50 }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "humidity", Value = 50 } }
                     }
                 },
                 new()
@@ -73,14 +67,7 @@ public class CircularDependencyTests
                     },
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "pressure" },
-                                { "value", 1000 }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "pressure", Value = 1000 } }
                     }
                 },
                 new()
@@ -100,14 +87,7 @@ public class CircularDependencyTests
                     },
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "temperature" },
-                                { "value", 25 }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "temperature", Value = 25 } }
                     }
                 }
             }
@@ -148,14 +128,7 @@ public class CircularDependencyTests
                     },
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "humidity" },
-                                { "value", 50 }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "humidity", Value = 50 } }
                     }
                 },
                 new()
@@ -175,14 +148,7 @@ public class CircularDependencyTests
                     },
                     Actions = new List<RuleAction>
                     {
-                        new()
-                        {
-                            SetValue = new Dictionary<string, object>
-                            {
-                                { "key", "pressure" },
-                                { "value", 1000 }
-                            }
-                        }
+                        new RuleAction { SetValue = new SetValueAction { Key = "pressure", Value = 1000 } }
                     }
                 }
             }
