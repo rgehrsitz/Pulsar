@@ -114,7 +114,7 @@ public class RuleCompiler
         Rule rule,
         Dictionary<string, HashSet<string>> dependencies,
         Dictionary<Rule, int> ruleLayers,
-        Dictionary<string, Rule> rulesByName
+        Dictionary<string, (Rule Rule, HashSet<string> Outputs)> outputMap
     )
     {
         if (ruleLayers.ContainsKey(rule))
@@ -125,11 +125,9 @@ public class RuleCompiler
         {
             foreach (var dep in deps)
             {
-                if (rulesByName.TryGetValue(dep, out var producer))
-                {
-                    AssignLayer(producer, dependencies, ruleLayers, rulesByName);
-                    layer = Math.Max(layer, ruleLayers[producer] + 1);
-                }
+                var producer = outputMap[dep].Rule;
+                AssignLayer(producer, dependencies, ruleLayers, outputMap);
+                layer = Math.Max(layer, ruleLayers[producer] + 1);
             }
         }
 
@@ -199,5 +197,51 @@ public class RuleCompiler
             }
         }
         return sensors;
+    }
+
+    private (
+        Dictionary<string, HashSet<string>> Dependencies,
+        Dictionary<string, int> InDegree
+    ) BuildDependencyGraph(
+        IEnumerable<Rule> rules
+    )
+    {
+        var dependencies = new Dictionary<string, HashSet<string>>();
+        var inDegree = new Dictionary<string, int>();
+        var outputs = new Dictionary<string, string>();
+
+        // Build map of outputs to their producing rules
+        foreach (var rule in rules)
+        {
+            foreach (var sensor in ExtractOutputSensors(rule))
+            {
+                outputs[sensor] = rule.Name;
+            }
+        }
+
+        // Build dependencies from inputs to outputs
+        foreach (var rule in rules)
+        {
+            inDegree[rule.Name] = 0;
+            var inputs = ExtractInputSensors(rule);
+
+            foreach (var input in inputs)
+            {
+                if (outputs.TryGetValue(input, out var producer))
+                {
+                    if (!dependencies.TryGetValue(producer, out var deps))
+                    {
+                        deps = new HashSet<string>();
+                        dependencies[producer] = deps;
+                    }
+                    if (deps.Add(rule.Name))
+                    {
+                        inDegree[rule.Name]++;
+                    }
+                }
+            }
+        }
+
+        return (dependencies, inDegree);
     }
 }
