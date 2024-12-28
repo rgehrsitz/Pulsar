@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -19,12 +20,19 @@ class Program
         // Setup Redis connection
         var redis = await ConnectionMultiplexer.ConnectAsync("localhost:6379");
         var db = redis.GetDatabase();
+        var server = redis.GetServer(redis.GetEndPoints().First());
 
         // Setup logging
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.Console()
             .CreateLogger();
+
+        // Clean up any existing user-related keys
+        await foreach (var key in server.KeysAsync(db.Database, "user:*"))
+        {
+            await db.KeyDeleteAsync(key);
+        }
 
         // Setup services
         var services = new ServiceCollection();
