@@ -7,6 +7,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Pulsar.Runtime.Engine;
+using Pulsar.Models.Actions;
+using Serilog;
 
 namespace Pulsar.CompiledRules
 {
@@ -44,7 +46,6 @@ namespace Pulsar.CompiledRules
             _logger.Debug("Evaluating SystemStatusUpdate in layer 1");
             await EvaluateSystemStatusUpdateAsync(data);
 
-            await _actionExecutor.ExecutePendingActionsAsync();
         }
 
         private async Task EvaluateHighTemperatureAlertAsync(IDictionary<string, double> data)
@@ -60,7 +61,7 @@ namespace Pulsar.CompiledRules
                 50,
                 TimeSpan.FromMilliseconds(500));
             conditionMet = thresholdResult;
-            if (!conditionMet) break;
+            if (!conditionMet) return;
             }
             catch (Exception ex)
             {
@@ -71,17 +72,17 @@ namespace Pulsar.CompiledRules
             if (conditionMet)
             {
                 _logger.Information("Rule HighTemperatureAlert conditions met, executing actions");
-                await _actionExecutor.ExecuteAsync(new CompiledRuleAction
+                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction
                 {
-                    SetValue = new SetValueAction
+                    SetValue = new Pulsar.Models.Actions.SetValueAction
                     {
                         Key = "alerts:temperature",
                         Value = 1
                     }
                 });
-                await _actionExecutor.ExecuteAsync(new CompiledRuleAction
+                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction
                 {
-                    SendMessage = new SendMessageAction
+                    SendMessage = new Pulsar.Models.Actions.SendMessageAction
                     {
                         Channel = "alerts",
                         Message = "Temperature too high!"
@@ -98,22 +99,11 @@ namespace Pulsar.CompiledRules
             try
             {
             conditionMet = false;
-            if (!data.TryGetValue("humidity", out var value))
-            {
-                _logger.Warning("Data source humidity not found");
-                conditionMet = false;
-                return;
-            }
-            conditionMet = value > 80;
-            if (conditionMet) break;
-            if (!data.TryGetValue("pressure", out var value))
-            {
-                _logger.Warning("Data source pressure not found");
-                conditionMet = false;
-                return;
-            }
-            conditionMet = value < 980;
-            if (conditionMet) break;
+            bool subConditionMet0 = true;
+            conditionMet = conditionMet || subConditionMet0;
+            bool subConditionMet1 = true;
+            conditionMet = conditionMet || subConditionMet1;
+            if (!conditionMet) return;
             }
             catch (Exception ex)
             {
@@ -124,17 +114,17 @@ namespace Pulsar.CompiledRules
             if (conditionMet)
             {
                 _logger.Information("Rule HumidityPressureCheck conditions met, executing actions");
-                await _actionExecutor.ExecuteAsync(new CompiledRuleAction
+                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction
                 {
-                    SetValue = new SetValueAction
+                    SetValue = new Pulsar.Models.Actions.SetValueAction
                     {
                         Key = "alerts:humidity",
                         Value = 1
                     }
                 });
-                await _actionExecutor.ExecuteAsync(new CompiledRuleAction
+                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction
                 {
-                    SetValue = new SetValueAction
+                    SetValue = new Pulsar.Models.Actions.SetValueAction
                     {
                         Key = "alerts:pressure",
                         Value = 1
@@ -151,9 +141,22 @@ namespace Pulsar.CompiledRules
             try
             {
             conditionMet = true;
-            // TODO: Implement expression evaluation
-            conditionMet = false;
-            if (!conditionMet) break;
+            if (!data.TryGetValue("temperature", out var value_temp))
+            {
+                _logger.Warning("Data source temperature not found");
+                conditionMet = false;
+                return;
+            }
+            await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction
+            {
+                SetValue = new Pulsar.Models.Actions.SetValueAction
+                {
+                    Key = "converted_temp",
+                    Value = (value_temp - 32.0) * (5.0 / 9.0)
+                }
+            });
+            conditionMet = (value_temp - 32.0) * (5.0 / 9.0) > 25.0;
+            if (!conditionMet) return;
             }
             catch (Exception ex)
             {
@@ -164,12 +167,12 @@ namespace Pulsar.CompiledRules
             if (conditionMet)
             {
                 _logger.Information("Rule TemperatureConversion conditions met, executing actions");
-                await _actionExecutor.ExecuteAsync(new CompiledRuleAction
+                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction
                 {
-                    SetValue = new SetValueAction
+                    SetValue = new Pulsar.Models.Actions.SetValueAction
                     {
                         Key = "converted_temp",
-                        ValueExpression = "(temperature - 32) * (5/9)"
+                        Value = (data["temperature"] - 32.0) * (5.0 / 9.0)
                     }
                 });
             }
@@ -182,10 +185,10 @@ namespace Pulsar.CompiledRules
             bool conditionMet = false;
             try
             {
-            conditionMet = true;
-            // TODO: Implement expression evaluation
             conditionMet = false;
-            if (!conditionMet) break;
+            bool subConditionMet0 = true;
+            conditionMet = conditionMet || subConditionMet0;
+            if (!conditionMet) return;
             }
             catch (Exception ex)
             {
@@ -196,12 +199,12 @@ namespace Pulsar.CompiledRules
             if (conditionMet)
             {
                 _logger.Information("Rule SystemStatusUpdate conditions met, executing actions");
-                await _actionExecutor.ExecuteAsync(new CompiledRuleAction
+                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction
                 {
-                    SetValue = new SetValueAction
+                    SetValue = new Pulsar.Models.Actions.SetValueAction
                     {
                         Key = "system:status",
-                        Value = healthy
+                        Value = "alert"
                     }
                 });
             }

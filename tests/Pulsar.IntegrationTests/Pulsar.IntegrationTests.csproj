@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="Serilog.Sinks.XUnit" Version="3.0.5" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.22" />
     <PackageReference Include="xunit" Version="2.9.0" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
@@ -22,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pulsar.Runtime\Pulsar.Runtime.csproj" />
+    <ProjectReference Include="..\..\examples\CompiledRules\Engine\CompiledRules.csproj" />
   </ItemGroup>
 
 </Project>

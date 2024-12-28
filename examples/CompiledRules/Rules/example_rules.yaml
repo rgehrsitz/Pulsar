@@ -55,11 +55,11 @@ rules:
   - name: "SystemStatusUpdate"
     description: "Updates system status based on multiple conditions"
     conditions:
-      all:
+      any:
         - condition:
             type: expression
-            expression: "alerts:temperature == 0 && alerts:humidity == 0 && alerts:pressure == 0"
+            expression: "alerts:temperature == 1 || alerts:humidity == 1 || alerts:pressure == 1"
     actions:
       - set_value:
           key: "system:status"
-          value: "healthy"
+          value: "'alert'"
