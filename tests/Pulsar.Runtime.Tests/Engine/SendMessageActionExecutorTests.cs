@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Moq;
+using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
@@ -21,6 +22,7 @@ public class MockSendMessageActionExecutor : SendMessageActionExecutor
     {
         if (action.SendMessage == null || action.SendMessage.Count == 0)
         {
+            _logger.Warning("No message to send");
             return true;
         }
 
@@ -53,11 +55,12 @@ public class SendMessageActionExecutorTests
     public async Task ExecuteAsync_SendsMessageWithCorrectContent()
     {
         // Arrange
-        var action = new RuleAction
+        var action = new CompiledRuleAction
         {
-            SendMessage = new Dictionary<string, string>
+            Message = new Message
             {
-                ["test-channel"] = "Test message"
+                Channel = "test-channel",
+                Content = "Test message"
             }
         };
 
@@ -66,17 +69,16 @@ public class SendMessageActionExecutorTests
 
         // Assert
         _mockMessageSender.Verify(m => m.SendMessageAsync(
-            It.Is<string>(s => s == "test-channel"),
-            It.Is<string>(s => s == "Test message")), Times.Once);
+            It.Is<Message>(m => m.Channel == "test-channel" && m.Content == "Test message")), Times.Once);
     }
 
     [Fact]
     public async Task ExecuteAsync_WithNullMessage_LogsWarning()
     {
         // Arrange
-        var action = new RuleAction
+        var action = new CompiledRuleAction
         {
-            SendMessage = new Dictionary<string, string>()
+            Message = null
         };
 
         // Act
@@ -84,10 +86,8 @@ public class SendMessageActionExecutorTests
 
         // Assert
         _mockLogger.Verify(l => l.Warning(
-            It.IsAny<string>(),
-            It.Is<string>(s => s == "test-channel")), Times.Never);
+            It.IsAny<string>()), Times.Once);
         _mockMessageSender.Verify(m => m.SendMessageAsync(
-            It.IsAny<string>(),
-            It.IsAny<string>()), Times.Never);
+            It.IsAny<Message>()), Times.Never);
     }
 }

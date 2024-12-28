@@ -20,6 +20,7 @@ public class SendMessageActionExecutor : IActionExecutor
     {
         if (action.SendMessage == null)
         {
+            _logger.Warning("No message to send");
             return Task.FromResult(false);
         }
 

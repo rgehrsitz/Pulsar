@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
+using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
@@ -51,7 +52,7 @@ public class SetValueActionExecutorTests
     public async Task ExecuteAsync_WithValidAction_SetsSensorValues()
     {
         // Arrange
-        var action = new RuleAction
+        var action = new CompiledRuleAction
         {
             SetValue = new Dictionary<string, object>
             {
@@ -74,7 +75,7 @@ public class SetValueActionExecutorTests
     public async Task ExecuteAsync_WithEmptyValues_LogsWarning()
     {
         // Arrange
-        var action = new RuleAction
+        var action = new CompiledRuleAction
         {
             SetValue = new Dictionary<string, object>()
         };
