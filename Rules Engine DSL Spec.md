@@ -56,164 +56,158 @@ valid_sensors:
 
 System components (e.g., data ingestion, logging services, monitoring tools) and the rules compiler all use this system_config.yaml as a single source of truth for what sensors are valid.
 
-### Rules File (e.g., rules.yaml)
+## Rule Format
 
-This file contains only the rules. It does not define global keys like valid_sensors. The rules reference sensors and conditions that must be validated against the global configuration during compilation.
+### Current Implementation
 
-Structure:
+Rules are defined in YAML using this structure:
 
 ```yaml
 rules:
-  - name: "HighTemperatureAlert"
-    description: "Alerts when temperature is >50 for 500ms"
-    conditions:
-      all:
-        - condition:
-            type: threshold_over_time
-            sensor: temperature
-            threshold: 50
-            duration: 500ms
-    actions:
-      - set_value:
-          key: "alerts:temperature"
-          value: "1"
-      - send_message:
-          channel: "alerts"
-          message: "Temperature too high!"
-
-  - name: "ComplexCondition"
-    description: "Sets converted_temp when humidity<30 or computed temp>10C"
-    conditions:
-      any:
-        - condition:
-            type: comparison
-            sensor: humidity
-            operator: "<"
-            value: 30
-        - condition:
-            type: expression
-            expression: "(temperature - 32) * (5/9) > 10"
-    actions:
-      - set_value:
-          key: "converted_temp"
-          value_expression: "(temperature - 32) * (5/9)"
-      - send_message:
-          channel: "conversion"
-          message: "Temperature converted and above threshold!"
+  - name: "ExampleRule"      # Required, unique identifier
+    description: "..."       # Optional description
+    conditions:             # Required condition group
+      all:                  # or 'any'
+        - condition:        # Individual condition
+            type: "comparison|threshold_over_time|expression"
+            # Additional fields based on type
+    actions:               # Required list of actions
+      - action_type:       # set_value or send_message
+          # Action-specific fields
 ```
 
-### Validation & Compilation Flow
+### Supported Condition Types
 
-1. System Configuration Load:
-   The compiler and other services first load system_config.yaml. From here, they obtain the valid_sensors and other global configurations.
-
-2. Rules Load & Validation:
-   The compiler then loads rules.yaml.
-
-- The DSL schema ensures structural correctness.
-- The compiler checks each referenced sensor against valid_sensors from the system configuration.
-- The compiler validates arithmetic expressions and condition types.
-
-3. Compilation:
-   On successful validation, the compiler:
-
-- Infers dependencies and optimizes the order of rule execution.
-- Generates multiple C# files (e.g., 100 rules per file) for manageability.
-- Integrates temporal conditions by generating code that references runtime-managed state.
-- Produces a metadata class describing all rules, their sensors, and actions.
-
-### Rule Structure
-
-Each rule in rules.yaml must have:
-
-- name (required): Unique identifier for the rule.
-- description (optional): A human-readable explanation.
-- conditions (required): Logical constructs using all, any, and condition.
-- actions (required): A list of actions to execute if conditions are met.
-
-### Conditions
-
-Logical Grouping:
-
-- all: All conditions in its list must be true.
-- any: At least one condition in its list must be true.
-  Condition Types:
-
-1. Comparison:
-
+1. **Comparison Condition** (Currently Implemented)
 ```yaml
 condition:
   type: comparison
-  sensor: <sensor_key>
+  sensor: "sensor_name"    # Must exist in system_config.yaml
   operator: "<|>|<=|>=|==|!="
   value: <number>
 ```
 
-2. Threshold Over Time:
-
-```yaml
-condition:
-  type: threshold_over_time
-  sensor: <sensor_key>
-  threshold: <number>
-  duration: <time_span> (e.g., 500ms, 2s)
-```
-
-3. Expression:
-
+2. **Expression Condition** (Currently Implemented)
 ```yaml
 condition:
   type: expression
-  expression: "(<sensor_key> [+-*/] <number> ...) <operator> <number>"
+  expression: "sensor_a + (sensor_b * 2) > 100"
 ```
 
-### Actions
+3. **Threshold Over Time** (In Development)
+```yaml
+condition:
+  type: threshold_over_time
+  sensor: "sensor_name"
+  threshold: <number>
+  duration: <milliseconds>
+```
 
-1. Set Value:
+### Supported Actions
+
+1. **Set Value** (Currently Implemented)
+```yaml
+set_value:
+  key: "output_sensor"     # Must exist in system_config.yaml
+  value: <static_value>    # OR
+  value_expression: "sensor_a * 2"
+```
+
+2. **Send Message** (In Development)
+```yaml
+send_message:
+  channel: "alert_channel"
+  message: "Alert text"
+```
+
+## Compilation Process
+
+1. **Validation Phase**
+   - Load and validate system configuration
+   - Parse rules YAML structure
+   - Validate all referenced sensors exist in system configuration
+   - Validate expressions and conditions
+   - Check for circular dependencies
+
+2. **Dependency Analysis**
+   - Build dependency graph from rule inputs/outputs
+   - Perform topological sort to determine evaluation order
+   - Assign layer numbers to each rule
+   - Validate no circular dependencies exist
+
+3. **Code Generation**
+   - Generate C# classes for rule evaluation
+   - Create optimized evaluation order
+   - Include temporal condition tracking where needed
+   - Generate rule metadata for runtime use
+
+### Runtime Considerations
+
+1. **Temporal Conditions**
+   - System maintains sliding window of values for temporal conditions
+   - Window size determined by longest duration needed
+   - Values tracked only for sensors used in temporal conditions
+
+2. **Expression Evaluation**
+   - Mathematical expressions compiled to C# code
+   - Sensor values accessed via array indices for performance
+   - Runtime maintains evaluation context for each cycle
+
+3. **Action Execution**
+   - Actions executed in order defined within each rule
+   - Set value actions update the data store immediately
+   - Message actions handled by message broker integration
+
+### Error Handling
+
+1. **Compilation Errors**
+   - Invalid sensor references
+   - Malformed expressions
+   - Circular dependencies
+   - Invalid duration values
+   - Type mismatches in expressions
+
+2. **Runtime Errors**
+   - Missing sensor data
+   - Expression evaluation errors
+   - Action execution failures
+
+## Example Complete Rule
 
 ```yaml
-- set_value:
-    key: <string>
-    value: <string> | value_expression: <expression_string>
+rules:
+  - name: "TemperatureConversion"
+    description: "Converts temperature and sets alert if too high"
+    conditions:
+      all:
+        - condition:
+            type: threshold_over_time
+            sensor: "temperature_f"
+            threshold: 100
+            duration: 500
+        - condition:
+            type: expression
+            expression: "(temperature_f - 32) * 5/9 > 37.8"
+    actions:
+      - set_value:
+          key: "temperature_c"
+          value_expression: "(temperature_f - 32) * 5/9"
+      - send_message:
+          channel: "alerts"
+          message: "High temperature detected!"
 ```
 
-2. Send Message:
+## Implementation Status
 
-```yaml
-- send_message:
-    channel: <string>
-    message: <string>
-```
+Current implementation supports:
+- Full YAML parsing and validation
+- Comparison and expression conditions
+- Set value actions
+- Dependency analysis and ordering
+- Redis integration
 
-### Metadata Generation
-
-A separate generated file (e.g., RuleMetadata.cs) will provide a dictionary of all rules and their characteristics. This includes:
-
-- Rule name
-- Description
-- Sensors referenced
-- Actions performed
-- Condition types
-
-This metadata aids in debugging, visualization, and documentation.
-
-### Error Handling & Logging
-
-- Compile-Time Errors:
-  - If a rule references an invalid sensor, compilation fails.
-  - If an expression is malformed, compilation fails.
-  - Descriptive error messages help identify and fix issues quickly.
-- Runtime Logging:
-  - Optional hooks in generated code for logging rule evaluations, condition checks, and actions.
-
-### Lifecycle
-
-- Development:
-  - Engineers write and edit system_config.yaml (for global sensors) and rules.yaml (for logic).
-  - The code is validated, compiled, and tested before deployment.
-- Deployment:
-  - Once deployed, the rules remain stable. Any changes require re-validation and compilation.
-
----
-
-This Updated DSL Specification serves as the authoritative reference for the rules DSL, the system configuration, and how they interact. It defines how to separate global configuration from rule logic, how to validate and compile the rules, and how to generate the necessary runtime artifacts (C# code and metadata).
+In development:
+- Threshold over time conditions
+- Send message actions
+- Enhanced error reporting
+- Monitoring and metrics

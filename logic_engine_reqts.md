@@ -1,7 +1,7 @@
 # Pulsar System Overview
 
 **What is Pulsar?**
-Pulsar is a high-performance, polling-based rules evaluation engine designed to process hundreds to thousands of key/value inputs and derived facts. It integrates tightly with a key-value store (e.g., Redis, NATS, etc.), fetching inputs, applying rules, and writing outputs back on a fixed schedule. The system’s primary goal is to provide deterministic, real-time evaluations with minimal runtime overhead.
+Pulsar is a high-performance, polling-based rules evaluation engine designed to process hundreds to thousands of key/value inputs using Redis as its data store. It fetches inputs, applies rules, and writes outputs back on a configurable schedule (default 100ms). The system's primary goal is to provide deterministic, real-time evaluations with minimal runtime overhead.
 
 **Key Concepts and Components:**
 
@@ -153,16 +153,16 @@ The compiler transforms the human-readable rules into highly optimized C# code. 
 ## Runtime
 
 **Purpose:**
-The runtime system executes the compiled rules every XXXms (as configured), integrating with external KV store (e.g., Redis, NATS, etc.), evaluating rules in the correct order, managing temporal data, and producing outputs.
+The runtime system executes the compiled rules every 100ms by default, integrating with Redis, evaluating rules in their dependency order, managing temporal data, and producing outputs.
 
 **Requirements:**
 
-1. **Data Access and I/O:**
+1. **Redis Integration:**
 
    - **Bulk Retrieval of Inputs:**
-     Fetch all current sensor values from the KV store efficiently every cycle.
-   - **Outputs Back to KV store:**
-     After evaluation, write computed results to Redis.
+     Fetch all current sensor values from Redis efficiently every cycle using pipelining.
+   - **Outputs Back to Redis:**
+     After evaluation, write computed results using atomic operations.
    - **Index-Based Access:**
      Use array or span indexing for sensors to avoid dictionary overhead in hot paths.
 
@@ -203,6 +203,25 @@ The runtime system executes the compiled rules every XXXms (as configured), inte
      Verify the entire pipeline (input retrieval, rule evaluation, output writing) under controlled conditions.
    - **Performance and Stress Testing:**
      Ensure the runtime can handle peak loads without degrading response times.
+
+---
+
+## Redis-Specific Considerations
+
+1. **Data Organization:**
+   - Use appropriate Redis data types (String, Hash, etc.) for different sensor types
+   - Implement efficient bulk operations using Redis pipelining
+   - Consider TTL for temporal data
+
+2. **Performance Optimization:**
+   - Minimize Redis round trips through batching
+   - Use Redis server-side scripts where appropriate
+   - Implement connection pooling and retry policies
+
+3. **Monitoring:**
+   - Track Redis operation latencies
+   - Monitor memory usage for temporal buffers
+   - Implement Redis-specific health checks
 
 ---
 
