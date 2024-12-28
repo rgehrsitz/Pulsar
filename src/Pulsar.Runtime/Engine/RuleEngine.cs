@@ -141,10 +141,11 @@ public class RuleEngine : IHostedService
                     return EvaluateComparison(value, comp.Operator, comp.Value);
 
                 case ThresholdOverTimeCondition threshold:
+                    var duration = TimeSpan.FromMilliseconds(threshold.DurationMs);
                     return await _dataStore.CheckThresholdOverTimeAsync(
                         threshold.DataSource,
                         threshold.Threshold,
-                        TimeSpan.FromMilliseconds(threshold.DurationMs)
+                        duration
                     );
 
                 default:

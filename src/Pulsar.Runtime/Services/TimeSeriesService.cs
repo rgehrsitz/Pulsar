@@ -17,7 +17,6 @@ public class TimeSeriesService
     private readonly ILogger _logger;
     private readonly IMetricsService _metrics;
     private readonly int _defaultCapacity;
-    private readonly Dictionary<string, Queue<(DateTime Timestamp, double Value)>> _timeSeriesData = new();
 
     public TimeSeriesService(ILogger logger, IMetricsService metrics, int defaultCapacity = 1000)
     {
@@ -133,24 +132,30 @@ public class TimeSeriesService
         }
     }
 
-    public async Task<IEnumerable<double>> GetHistoricalDataAsync(string sensor, TimeSpan duration)
+    public async Task<double[]> GetHistoricalDataAsync(string sensor, TimeSpan duration)
     {
-        if (!_timeSeriesData.TryGetValue(sensor, out var queue))
+        if (!_buffers.TryGetValue(sensor, out var buffer))
         {
-            return await Task.FromResult<IEnumerable<double>>(Array.Empty<double>());
+            _logger.Warning("No buffer found for sensor {Sensor}", sensor);
+            return Array.Empty<double>();
         }
 
-        var cutoff = DateTime.UtcNow - duration;
-        var values = new List<double>();
+        return buffer.GetValues(duration);
+    }
 
-        foreach (var (timestamp, value) in queue)
+    public async Task<bool> CheckThresholdOverTimeAsync(
+        string dataSource,
+        double threshold,
+        TimeSpan duration
+    )
+    {
+        if (!_buffers.TryGetValue(dataSource, out var buffer))
         {
-            if (timestamp >= cutoff)
-            {
-                values.Add(value);
-            }
+            _logger.Warning("No buffer found for data source {DataSource}", dataSource);
+            _metrics.RecordSensorReadError(dataSource, "BufferNotFound");
+            return false;
         }
 
-        return await Task.FromResult<IEnumerable<double>>(values);
+        return buffer.IsThresholdMaintained(threshold, duration);
     }
 }
