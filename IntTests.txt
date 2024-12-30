@@ -1,0 +1,37 @@
+I'll help you run specific test cases. Let's start with the temporal condition tests:
+
+First, ensure you're in the project root directory. Then run a specific test by name:
+dotnet test --filter "FullyQualifiedName=Pulsar.IntegrationTests.TemporalConditionTests.ThresholdOverTime_WhenValuesMaintainedAboveThreshold_ReturnsTrue"
+
+This will run just the single test case. Let's break down what each test verifies:
+
+Basic Threshold Test:
+dotnet test --filter "Name=ThresholdOverTime_WhenValuesMaintainedAboveThreshold_ReturnsTrue"
+
+Verifies that values staying above threshold return true
+Uses 500ms window
+Sets 5 values above threshold
+
+Threshold Violation Test:
+dotnet test --filter "Name=ThresholdOverTime_WhenValueDropsBelowThreshold_ReturnsFalse"
+Verifies that a single value below threshold fails the condition
+Shows how temporal conditions require ALL values to meet criteria
+
+Multiple Sensor Test:
+dotnet test --filter "Name=ThresholdOverTime_WithMultipleSensors_TracksSeparately"
+
+Demonstrates isolation between different sensors
+Shows concurrent temporal tracking
+High Frequency Test:
+dotnet test --filter "Name=ThresholdOverTime_WithHighUpdateFrequency_HandlesDataCorrectly"
+
+Tests rapid updates (10ms intervals)
+Verifies buffer handling under load
+
+To run tests with detailed output:
+dotnet test --filter "FullyQualifiedName~TemporalConditionTests" --verbosity normal --logger "console;verbosity=detailed"
+
+You can monitor Redis during test execution using redis-cli:
+redis-cli monitor
+
+Would you like me to show you how to debug a specific test case or explain the test implementation in more detail?

@@ -3,7 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Pulsar.Runtime.Collections;
+using Pulsar.Core.Collections;
+using Pulsar.Core.Services;  // Ensure using Core's interface
 using Serilog;
 
 namespace Pulsar.Runtime.Services;
@@ -15,10 +16,14 @@ public class TimeSeriesService
 {
     private readonly ConcurrentDictionary<string, TimeSeriesBuffer> _buffers;
     private readonly ILogger _logger;
-    private readonly IMetricsService _metrics;
+    private readonly Core.Services.IMetricsService _metrics;  // Use Core's interface
     private readonly int _defaultCapacity;
 
-    public TimeSeriesService(ILogger logger, IMetricsService metrics, int defaultCapacity = 1000)
+    public TimeSeriesService(
+        ILogger logger,
+        Core.Services.IMetricsService metrics,  // Use Core's interface
+        int defaultCapacity = 1000
+    )
     {
         _buffers = new ConcurrentDictionary<string, TimeSeriesBuffer>();
         _logger = logger.ForContext<TimeSeriesService>();
@@ -132,18 +137,18 @@ public class TimeSeriesService
         }
     }
 
-    public async Task<double[]> GetHistoricalDataAsync(string sensor, TimeSpan duration)
+    public Task<double[]> GetHistoricalDataAsync(string sensor, TimeSpan duration)
     {
         if (!_buffers.TryGetValue(sensor, out var buffer))
         {
             _logger.Warning("No buffer found for sensor {Sensor}", sensor);
-            return Array.Empty<double>();
+            return Task.FromResult(Array.Empty<double>());
         }
 
-        return buffer.GetValues(duration);
+        return Task.FromResult(buffer.GetValues(duration));
     }
 
-    public async Task<bool> CheckThresholdOverTimeAsync(
+    public Task<bool> CheckThresholdOverTimeAsync(
         string dataSource,
         double threshold,
         TimeSpan duration
@@ -153,9 +158,9 @@ public class TimeSeriesService
         {
             _logger.Warning("No buffer found for data source {DataSource}", dataSource);
             _metrics.RecordSensorReadError(dataSource, "BufferNotFound");
-            return false;
+            return Task.FromResult(false);
         }
 
-        return buffer.IsThresholdMaintained(threshold, duration);
+        return Task.FromResult(buffer.IsThresholdMaintained(threshold, duration));
     }
 }

@@ -7,4 +7,5 @@ public interface IMetricsService
     void RecordTimeSeriesUpdate(string sensor);
     void RecordSensorReadError(string sensor, string errorType);
     void RecordTimeSeriesBufferSize(string sensor, int size);
+    void RecordTimeSeriesOverflow(string sensor);
 }

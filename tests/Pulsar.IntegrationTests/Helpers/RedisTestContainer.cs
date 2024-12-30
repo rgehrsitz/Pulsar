@@ -2,7 +2,8 @@ using System;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Pulsar.Core.Services;
+using Microsoft.Extensions.Logging;
+using Pulsar.Core.Services;  // Ensure using Core's interface
 using Pulsar.Runtime.Services;
 using Serilog;
 using StackExchange.Redis;
@@ -15,6 +16,7 @@ public class RedisTestContainer : IAsyncDisposable
 {
     private readonly RedisContainer _container;
     private readonly ITestOutputHelper _output;
+    private readonly ILoggerFactory _loggerFactory;
     private IConnectionMultiplexer? _connection;
     private IServiceProvider? _services;
     public TestMetricsService Metrics { get; } = new();
@@ -22,7 +24,11 @@ public class RedisTestContainer : IAsyncDisposable
     public RedisTestContainer(ITestOutputHelper output)
     {
         _output = output;
-        // Use random port assignment
+        _loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddXUnit(output);
+        });
+
         _container = new RedisBuilder()
             .WithImage("redis:7.2-alpine")
             .WithPortBinding(6379, true) // This will map 6379 to a random available host port
@@ -37,15 +43,16 @@ public class RedisTestContainer : IAsyncDisposable
         _connection = await ConnectionMultiplexer.ConnectAsync(_container.GetConnectionString());
 
         var services = new ServiceCollection();
-        var logger = new LoggerConfiguration()
-            .WriteTo.TestOutput(_output)
-            .CreateLogger();
 
         services.AddSingleton(_connection);
-        services.AddSingleton<ILogger>(logger);
-        services.AddSingleton<IMetricsService>(Metrics);
+        services.AddSingleton(_loggerFactory);
+        services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+        services.AddSingleton<Core.Services.IMetricsService>(Metrics);  // Use Core's interface
         services.AddSingleton<IDataStore, RedisDataStore>();
         services.AddSingleton<TimeSeriesService>();
+
+        // Remove this line to prevent conflicting IMetricsService registrations
+        // services.AddSingleton<Pulsar.Runtime.Services.MetricsService>();
 
         _services = services.BuildServiceProvider();
     }
