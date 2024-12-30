@@ -3,9 +3,11 @@ using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Pulsar.Core.Services;  // Ensure using Core's interface
+using Pulsar.Core.Services;
 using Pulsar.Runtime.Services;
+using Pulsar.Runtime.Storage;
 using Serilog;
+using Serilog.Extensions.Logging;
 using StackExchange.Redis;
 using Testcontainers.Redis;
 using Xunit.Abstractions;
@@ -15,24 +17,27 @@ namespace Pulsar.IntegrationTests.Helpers;
 public class RedisTestContainer : IAsyncDisposable
 {
     private readonly RedisContainer _container;
-    private readonly ITestOutputHelper _output;
     private readonly ILoggerFactory _loggerFactory;
-    private IConnectionMultiplexer? _connection;
-    private IServiceProvider? _services;
-    public TestMetricsService Metrics { get; } = new();
+    private readonly TestMetricsService _metrics;
+    private ConnectionMultiplexer? _connection;
+    private ServiceProvider? _services;
 
-    public RedisTestContainer(ITestOutputHelper output)
+    public TestMetricsService Metrics => _metrics;
+
+    public RedisTestContainer(ITestOutputHelper testOutput)
     {
-        _output = output;
-        _loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.AddXUnit(output);
-        });
+        _metrics = new TestMetricsService();
+
+        var logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .WriteTo.TestOutput(testOutput)
+            .CreateLogger();
+
+        _loggerFactory = new SerilogLoggerFactory(logger);
 
         _container = new RedisBuilder()
             .WithImage("redis:7.2-alpine")
-            .WithPortBinding(6379, true) // This will map 6379 to a random available host port
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(6379))
+            .WithPortBinding(6379, 6379)
             .Build();
     }
 
@@ -47,12 +52,9 @@ public class RedisTestContainer : IAsyncDisposable
         services.AddSingleton(_connection);
         services.AddSingleton(_loggerFactory);
         services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
-        services.AddSingleton<Core.Services.IMetricsService>(Metrics);  // Use Core's interface
-        services.AddSingleton<IDataStore, RedisDataStore>();
+        services.AddSingleton<Core.Services.IMetricsService>(_metrics);
         services.AddSingleton<TimeSeriesService>();
-
-        // Remove this line to prevent conflicting IMetricsService registrations
-        // services.AddSingleton<Pulsar.Runtime.Services.MetricsService>();
+        services.AddSingleton<IDataStore, Runtime.Storage.RedisDataStore>();
 
         _services = services.BuildServiceProvider();
     }

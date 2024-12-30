@@ -8,8 +8,9 @@ using Pulsar.Models;
 using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.Runtime.Services;
+using Pulsar.Runtime.Storage;  // Add this
 using Serilog;
-using Pulsar.Core.Services;  // Add this
+using Pulsar.Core.Services;  
 
 namespace Pulsar.Runtime.Engine;
 
@@ -17,14 +18,14 @@ public class RuleEngine : IHostedService
 {
     private readonly TimeSpan _cycleDuration;
     private readonly ILogger _logger;
-    private readonly Core.Services.IMetricsService _metrics;  // Use Core's interface
+    private readonly Core.Services.IMetricsService _metrics;  
     private readonly IDataStore _dataStore;
     private readonly IActionExecutor _actionExecutor;
     private readonly CompiledRuleSet _ruleSet;
 
     public RuleEngine(
         ILogger logger,
-        Core.Services.IMetricsService metrics,  // Use Core's interface
+        Core.Services.IMetricsService metrics,  
         IDataStore dataStore,
         IActionExecutor actionExecutor,
         CompiledRuleSet ruleSet,

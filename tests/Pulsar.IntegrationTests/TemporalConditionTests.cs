@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Pulsar.IntegrationTests.Helpers;
 using Pulsar.Runtime.Services;
+using Pulsar.Runtime.Storage;
 using Xunit;
 using Xunit.Abstractions;
 
