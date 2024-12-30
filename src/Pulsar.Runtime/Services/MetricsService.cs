@@ -197,9 +197,15 @@ public class MetricsService : IMetricsService
         _logger.Debug("Updated time series buffer size for {DataSource}: {Size}", dataSource, size);
     }
 
+    public void RecordTimeSeriesBufferSize(string sensor, int size)
+    {
+        UpdateTimeSeriesBufferSize(sensor, size);
+    }
+
     public void UpdateSensorValue(string sensorName, double value)
     {
         _sensorValue.WithLabels(sensorName).Set(value);
+        _sensorUpdatesTotal.WithLabels(sensorName).Inc();
         _logger.Debug("Updated sensor value for {SensorName}: {Value}", sensorName, value);
     }
 
@@ -241,5 +247,11 @@ public class MetricsService : IMetricsService
         _thresholdEvaluations
             .WithLabels(sensor, result.ToString(), durationMs.ToString())
             .Inc();
+        _logger.Debug(
+            "Recorded threshold evaluation for {Sensor}: {Result} over {Duration}ms",
+            sensor,
+            result,
+            durationMs
+        );
     }
 }

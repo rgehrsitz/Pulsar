@@ -6,7 +6,6 @@ using Pulsar.Core;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.RuleDefinition.Validation;
 using Pulsar.Runtime.Services;
-using Pulsar.Core.Services;
 using Serilog;
 
 namespace Pulsar.Runtime.Engine;

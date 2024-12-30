@@ -122,7 +122,7 @@ public class TimeSeriesBuffer
         }
 
         _newestTimestamp = timestamp;
-        _metrics?.UpdateTimeSeriesBufferSize(_dataSource, _count);
+        _metrics?.RecordTimeSeriesBufferSize(_dataSource, _count);
     }
 
     /// <summary>

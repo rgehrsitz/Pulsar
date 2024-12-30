@@ -8,4 +8,5 @@ public interface IMetricsService
     void RecordSensorReadError(string sensor, string errorType);
     void RecordTimeSeriesBufferSize(string sensor, int size);
     void RecordTimeSeriesOverflow(string sensor);
+    void RecordThresholdEvaluation(string sensor, bool result, int durationMs);
 }
