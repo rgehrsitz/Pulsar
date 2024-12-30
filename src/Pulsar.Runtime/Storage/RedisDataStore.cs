@@ -67,7 +67,7 @@ public class RedisDataStore : IDataStore
         {
             var server = _connection.GetServer(_connection.GetEndPoints()[0]);
             var keys = server.Keys(pattern: _keyPrefix + "*");
-            
+
             foreach (var key in keys)
             {
                 var value = await _db!.StringGetAsync(key);
@@ -86,9 +86,12 @@ public class RedisDataStore : IDataStore
         return result;
     }
 
-    public async Task<bool> CheckThresholdOverTimeAsync(string sensorName, double threshold, TimeSpan duration)
+    public Task<bool> CheckThresholdOverTimeAsync(
+        string sensorName,
+        double threshold,
+        TimeSpan duration
+    )
     {
-        var historicalData = await _timeSeriesService.GetHistoricalDataAsync(sensorName, duration);
-        return historicalData.All(value => value >= threshold);
+        return _timeSeriesService.CheckThresholdOverTimeAsync(sensorName, threshold, duration);
     }
 }

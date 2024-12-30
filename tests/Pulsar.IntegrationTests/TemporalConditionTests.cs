@@ -34,6 +34,7 @@ public class TemporalConditionTests : IAsyncLifetime
     }
 
     [Fact]
+    [Trait("Category", "ThresholdTests")]
     public async Task ThresholdOverTime_WhenValuesMaintainedAboveThreshold_ReturnsTrue()
     {
         // Arrange

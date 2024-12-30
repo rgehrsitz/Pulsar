@@ -38,7 +38,7 @@ public class TimeSeriesBuffer
         _values[_head] = value;
         _timestamps[_head] = timestamp;
         _head = (_head + 1) % _capacity;
-        _count = Math.Min(_count + 1, _capacity);  // Fix capitalization of Min
+        _count = Math.Min(_count + 1, _capacity); // Fix capitalization of Min
         _metrics.RecordTimeSeriesBufferSize(_sensorName, _count);
     }
 
@@ -64,9 +64,12 @@ public class TimeSeriesBuffer
             if (_timestamps[idx] < cutoff)
                 break;
 
-            hasValidData = true;
-            if (_values[idx] <= threshold)
-                return false;
+            if (_timestamps[idx] >= cutoff)
+            {
+                hasValidData = true;
+                if (_values[idx] <= threshold)
+                    return false;
+            }
         }
 
         return hasValidData;
@@ -97,5 +100,16 @@ public class TimeSeriesBuffer
         return Array.ConvertAll(values, v => v.Value);
     }
 
-    // ...existing code...
+    public double GetAverage()
+    {
+        if (_count == 0)
+            return 0.0;
+
+        double sum = 0.0;
+        for (int i = 0; i < _count; i++)
+        {
+            sum += _values[i];
+        }
+        return sum / _count;
+    }
 }
