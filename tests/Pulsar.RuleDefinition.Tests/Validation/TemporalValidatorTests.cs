@@ -80,7 +80,7 @@ public class TemporalValidatorTests
 
         var errors = _validator.ValidateTemporalCondition(condition);
         Assert.Single(errors);
-        Assert.Contains("Duration must be a positive integer", errors[0]);
+        Assert.Contains("Duration must be at least 100ms", errors[0]);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class TemporalValidatorTests
 
         var errors = _validator.ValidateTemporalCondition(condition);
         Assert.Single(errors);
-        Assert.Contains("Data source cannot be empty", errors[0]);
+        Assert.Contains("Data source must be specified", errors[0]);
     }
 
     [Theory]

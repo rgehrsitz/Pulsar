@@ -5,10 +5,11 @@ rules:
     description: Alert when temperature is too high
     conditions:
       all:
-        - type: comparison
-          data_source: temperature
-          operator: ">"
-          value: 50
+        - condition:
+            type: comparison
+            sensor: temperature
+            operator: ">"
+            value: 50
 
     actions:
       - set_value:
@@ -19,8 +20,9 @@ rules:
     description: Test complex conditions
     conditions:
       all:
-        - type: expression
-          expression: temperature > 50 && humidity < 30
+        - condition:
+            type: expression
+            expression: temperature > 50 && humidity < 30
 
     actions:
       - set_value:
