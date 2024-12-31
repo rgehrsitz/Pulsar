@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Pulsar.Core.Collections;
-using Pulsar.Core.Services;  // Ensure using Core's interface
+using Pulsar.Core.Services; // Ensure using Core's interface
 using Serilog;
 
 namespace Pulsar.Runtime.Services;
@@ -16,12 +16,12 @@ public class TimeSeriesService
 {
     private readonly ConcurrentDictionary<string, TimeSeriesBuffer> _buffers;
     private readonly ILogger _logger;
-    private readonly Core.Services.IMetricsService _metrics;  // Use Core's interface
+    private readonly Core.Services.IMetricsService _metrics; // Use Core's interface
     private readonly int _defaultCapacity;
 
     public TimeSeriesService(
         ILogger logger,
-        Core.Services.IMetricsService metrics,  // Use Core's interface
+        Core.Services.IMetricsService metrics, // Use Core's interface
         int defaultCapacity = 1000
     )
     {
@@ -65,10 +65,12 @@ public class TimeSeriesService
         );
         buffer.Add(actualTimestamp, value);
 
+        // Update time series metrics
+        _metrics.RecordTimeSeriesUpdate(dataSource);
+        _metrics.RecordSensorUpdate(dataSource);
+
         // Update sensor metrics
         _metrics.UpdateSensorValue(dataSource, value);
-        _metrics.RecordSensorUpdate(dataSource);
-        _metrics.RecordTimeSeriesUpdate(dataSource);
     }
 
     /// <summary>

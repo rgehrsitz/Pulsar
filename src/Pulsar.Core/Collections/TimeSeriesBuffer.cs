@@ -35,10 +35,15 @@ public class TimeSeriesBuffer
 
     public void Add(DateTime timestamp, double value)
     {
+        if (_count == _capacity)
+        {
+            _metrics.RecordTimeSeriesOverflow(_sensorName);
+        }
+
         _values[_head] = value;
         _timestamps[_head] = timestamp;
         _head = (_head + 1) % _capacity;
-        _count = Math.Min(_count + 1, _capacity); // Fix capitalization of Min
+        _count = Math.Min(_count + 1, _capacity);
         _metrics.RecordTimeSeriesBufferSize(_sensorName, _count);
     }
 
