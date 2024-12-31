@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Pulsar.Core.Services;
+using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Storage;
 using Serilog;
@@ -88,6 +89,20 @@ public class RedisTestContainer : IAsyncDisposable
         services.AddSingleton<TimeSeriesService>();
         services.AddSingleton<IDataStore, Runtime.Storage.RedisDataStore>();
 
+        // Add action executor registrations
+        services.AddSingleton<SendMessageActionExecutor>();
+        services.AddSingleton<SetValueActionExecutor>();
+        services.AddSingleton<IActionExecutor>(sp =>
+        {
+            var logger = sp.GetRequiredService<Serilog.ILogger>();
+            var executors = new IActionExecutor[]
+            {
+                sp.GetRequiredService<SendMessageActionExecutor>(),
+                sp.GetRequiredService<SetValueActionExecutor>(),
+            };
+            return new CompositeActionExecutor(logger, executors);
+        });
+
         _services = services.BuildServiceProvider();
     }
 
@@ -98,6 +113,14 @@ public class RedisTestContainer : IAsyncDisposable
             throw new InvalidOperationException("Container not initialized");
 
         return _services.GetRequiredService<T>();
+    }
+
+    public IDatabase GetDatabase()
+    {
+        if (_connection == null)
+            throw new InvalidOperationException("Redis connection not initialized");
+
+        return _connection.GetDatabase();
     }
 
     public async ValueTask DisposeAsync()

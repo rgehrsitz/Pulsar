@@ -60,21 +60,29 @@ public class TimeSeriesBuffer
             return false;
 
         var cutoff = DateTime.UtcNow - duration;
-        int idx = _head;
+        int idx = (_head - 1 + _capacity) % _capacity;
         bool hasValidData = false;
 
         for (int i = 0; i < _count; i++)
         {
-            idx = (idx - 1 + _capacity) % _capacity;
-            if (_timestamps[idx] < cutoff)
-                break;
-
             if (_timestamps[idx] >= cutoff)
             {
                 hasValidData = true;
                 if (_values[idx] <= threshold)
                     return false;
             }
+            else
+            {
+                // If we encounter a timestamp older than the cutoff, we can stop checking
+                break;
+            }
+
+            idx = (idx - 1 + _capacity) % _capacity;
+        }
+
+        return hasValidData;
+    }
+            idx = (idx - 1 + _capacity) % _capacity;
         }
 
         return hasValidData;

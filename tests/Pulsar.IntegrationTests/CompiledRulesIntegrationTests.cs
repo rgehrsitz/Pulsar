@@ -1,12 +1,13 @@
 using System;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Pulsar.CompiledRules;
 using Pulsar.Core.Services;
 using Pulsar.IntegrationTests.Helpers;
+using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Storage;
-using Pulsar.Runtime.Engine;
 using Serilog;
 using StackExchange.Redis;
 using Xunit;
@@ -20,37 +21,13 @@ public class CompiledRulesIntegrationTests : IAsyncLifetime
     private readonly ITestOutputHelper _output;
     private IDataStore _dataStore = null!;
     private TimeSeriesService _timeSeriesService = null!;
-    private readonly ILogger _logger;
-    private readonly ConnectionMultiplexer _redis;
-    private readonly IDatabase _db;
-    private readonly CompiledRuleEngine _ruleEngine;
-    private readonly IActionExecutor _actionExecutor;
+    private CompiledRuleEngine _ruleEngine = null!;
+    private IDatabase _db = null!;
 
     public CompiledRulesIntegrationTests(ITestOutputHelper output)
     {
         _output = output;
         _container = new RedisTestContainer(output);
-
-        _logger = new LoggerConfiguration()
-            .WriteTo.TestOutput(output)
-            .CreateLogger();
-
-        // Connect to Redis
-        _redis = ConnectionMultiplexer.Connect("localhost:6379");
-        _db = _redis.GetDatabase();
-            
-        // Initialize services
-        var metricsService = new TestMetricsService();
-        var timeSeriesService = new TimeSeriesService(_logger, metricsService);
-        _dataStore = new RedisDataStore(_redis, _logger, timeSeriesService);
-        
-        // Create action executors
-        var sendMessageExecutor = new SendMessageActionExecutor(_logger);
-        var setValueExecutor = new SetValueActionExecutor(_logger, _dataStore);
-        _actionExecutor = new CompositeActionExecutor(_logger, new IActionExecutor[] { sendMessageExecutor, setValueExecutor });
-            
-        // Create rule engine
-        _ruleEngine = new CompiledRuleEngine(_dataStore, _actionExecutor, _logger);
     }
 
     public async Task InitializeAsync()
@@ -58,6 +35,33 @@ public class CompiledRulesIntegrationTests : IAsyncLifetime
         await _container.InitializeAsync();
         _dataStore = _container.GetService<IDataStore>();
         _timeSeriesService = _container.GetService<TimeSeriesService>();
+        _db = _container.GetDatabase();
+
+        // Get additional services from container
+        var actionExecutor = _container.GetService<IActionExecutor>();
+        var logger = _container.GetService<Serilog.ILogger>();
+
+        // Initialize rule engine with container services
+        _ruleEngine = new CompiledRuleEngine(_dataStore, actionExecutor, logger);
+    }
+
+    private async Task<bool> WaitForAlertValue(string key, string expectedValue, TimeSpan timeout)
+    {
+        var sw = Stopwatch.StartNew();
+        _output.WriteLine($"Waiting for alert value {expectedValue} on key {key}...");
+
+        while (sw.Elapsed < timeout)
+        {
+            var value = await _dataStore.GetValueAsync(key);
+            _output.WriteLine($"Current value for {key}: {value}");
+
+            if (value?.ToString() == expectedValue)
+                return true;
+
+            await _ruleEngine.ExecuteCycleAsync();
+            await Task.Delay(10); // Reduced delay for more frequent checks
+        }
+        return false;
     }
 
     [Fact]
@@ -66,19 +70,30 @@ public class CompiledRulesIntegrationTests : IAsyncLifetime
         // Arrange
         await _db.KeyDeleteAsync("temperature");
         await _db.KeyDeleteAsync("alerts:temperature");
-        
-        // Act - Set temperature above threshold (50)
-        await _db.StringSetAsync("temperature", "55.0");
-        
-        // Wait for the temporal condition (500ms)
-        await Task.Delay(600);
-        
-        // Execute rules
-        await _ruleEngine.ExecuteCycleAsync();
-        
+
+        // Act - Set temperature above threshold (50) and maintain it
+        var updateInterval = TimeSpan.FromMilliseconds(10);
+        _output.WriteLine("Setting temperature values...");
+
+        for (int i = 0; i < 50; i++) // More updates over a longer period
+        {
+            await _dataStore.SetValueAsync("temperature", 55.0);
+            await Task.Delay(updateInterval);
+
+            if (i % 10 == 0)
+            {
+                await _ruleEngine.ExecuteCycleAsync();
+                _output.WriteLine($"Executed rule cycle after {i + 1} temperature updates");
+            }
+        }
+
+        // Wait for alert with timeout
+        bool alertSet = await WaitForAlertValue("alerts:temperature", "1", TimeSpan.FromSeconds(2));
+
         // Assert
-        var alertValue = await _db.StringGetAsync("alerts:temperature");
-        Assert.True(alertValue.HasValue);
+        Assert.True(alertSet, "Alert was not set within the expected timeframe");
+        var alertValue = await _dataStore.GetValueAsync("alerts:temperature");
+        Assert.NotNull(alertValue);
         Assert.Equal("1", alertValue.ToString());
     }
 
@@ -88,14 +103,14 @@ public class CompiledRulesIntegrationTests : IAsyncLifetime
         // Arrange
         await _db.KeyDeleteAsync("temperature");
         await _db.KeyDeleteAsync("converted_temp");
-        
+
         // Act - Set temperature (32°F should be 0°C)
-        await _db.StringSetAsync("temperature", "32.0");
+        await _dataStore.SetValueAsync("temperature", 32.0);
         await _ruleEngine.ExecuteCycleAsync();
-        
+
         // Assert
-        var convertedTemp = await _db.StringGetAsync("converted_temp");
-        Assert.True(convertedTemp.HasValue);
+        var convertedTemp = await _dataStore.GetValueAsync("converted_temp");
+        Assert.NotNull(convertedTemp);
         Assert.Equal("0", convertedTemp.ToString());
     }
 
@@ -103,48 +118,57 @@ public class CompiledRulesIntegrationTests : IAsyncLifetime
     public async Task SystemStatusUpdate_ShouldDependOnAlerts()
     {
         // Arrange
-        await _db.KeyDeleteAsync("temperature");
-        await _db.KeyDeleteAsync("humidity");
-        await _db.KeyDeleteAsync("pressure");
-        await _db.KeyDeleteAsync("alerts:temperature");
-        await _db.KeyDeleteAsync("alerts:humidity");
-        await _db.KeyDeleteAsync("alerts:pressure");
-        await _db.KeyDeleteAsync("system:status");
-        
+        var keys = new[]
+        {
+            "temperature",
+            "humidity",
+            "pressure",
+            "alerts:temperature",
+            "alerts:humidity",
+            "alerts:pressure",
+            "system:status",
+        };
+        foreach (var key in keys)
+        {
+            await _db.KeyDeleteAsync(key);
+        }
+
         // Act - Set values that will trigger alerts
-        await _db.StringSetAsync("temperature", "55.0");
-        await _db.StringSetAsync("humidity", "25.0"); // Below 30 threshold
-        await _db.StringSetAsync("pressure", "1100.0"); // Above normal
-        
+        await _dataStore.SetValueAsync("temperature", 55.0);
+        await _dataStore.SetValueAsync("humidity", 25.0);
+        await _dataStore.SetValueAsync("pressure", 1100.0);
+
         // Wait for temporal conditions
         await Task.Delay(600);
-        
+
         // Execute rules
         await _ruleEngine.ExecuteCycleAsync();
-        
+
         // Assert
-        var systemStatus = await _db.StringGetAsync("system:status");
-        Assert.True(systemStatus.HasValue);
-        // System status should indicate multiple alerts are active
+        var systemStatus = await _dataStore.GetValueAsync("system:status");
+        Assert.NotNull(systemStatus);
         Assert.Contains("alert", systemStatus.ToString().ToLower());
     }
 
     public async Task DisposeAsync()
     {
-        // Clean up Redis keys
-        var keys = new[] { "temperature", "humidity", "pressure", "alerts:temperature", 
-            "alerts:humidity", "alerts:pressure", "system:status", "converted_temp" };
-        
+        var keys = new[]
+        {
+            "temperature",
+            "humidity",
+            "pressure",
+            "alerts:temperature",
+            "alerts:humidity",
+            "alerts:pressure",
+            "system:status",
+            "converted_temp",
+        };
+
         foreach (var key in keys)
         {
             await _db.KeyDeleteAsync(key);
         }
-        
-        if (_redis != null)
-        {
-            await _redis.CloseAsync();
-            _redis.Dispose();
-        }
+
         await _container.DisposeAsync();
     }
 }

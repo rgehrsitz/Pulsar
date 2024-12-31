@@ -52,6 +52,9 @@ public class RedisDataStore : IDataStore
         {
             await _db!.StringSetAsync(_keyPrefix + sensorName, value.ToString());
             _timeSeriesService.Update(sensorName, value);
+
+            // Additional logging for debugging
+            _logger.Information("Set value for {SensorName} to {Value}", sensorName, value);
         }
         catch (Exception ex)
         {
