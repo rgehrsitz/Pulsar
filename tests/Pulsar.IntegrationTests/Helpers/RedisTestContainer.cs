@@ -7,6 +7,7 @@ using Pulsar.Core.Services;
 using Pulsar.Runtime.Engine;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Storage;
+using Pulsar.CompiledRules;
 using Serilog;
 using Serilog.Extensions.Logging;
 using StackExchange.Redis;
@@ -88,6 +89,24 @@ public class RedisTestContainer : IAsyncDisposable
         services.AddSingleton<Core.Services.IMetricsService>(_metrics);
         services.AddSingleton<TimeSeriesService>();
         services.AddSingleton<IDataStore, Runtime.Storage.RedisDataStore>();
+
+        // Add rule engine registration
+        services.AddSingleton<IRuleEngine>(sp =>
+        {
+            var dataStore = sp.GetRequiredService<IDataStore>();
+            var actionExecutor = sp.GetRequiredService<IActionExecutor>();
+            var logger = sp.GetRequiredService<Serilog.ILogger>();
+            return new CompiledRuleEngine(dataStore, actionExecutor, logger);
+        });
+
+        // Add test rule engine registration
+        services.AddSingleton<TestRuleEngine>(sp =>
+        {
+            var dataStore = sp.GetRequiredService<IDataStore>();
+            var actionExecutor = sp.GetRequiredService<IActionExecutor>();
+            var logger = sp.GetRequiredService<Serilog.ILogger>();
+            return new TestRuleEngine(dataStore, actionExecutor, logger, this);
+        });
 
         // Add action executor registrations
         services.AddSingleton<SendMessageActionExecutor>();

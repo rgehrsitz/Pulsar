@@ -19,11 +19,11 @@ public class SetValueActionExecutor : IActionExecutor
         _dataStore = dataStore;
     }
 
-    public virtual Task<bool> ExecuteAsync(CompiledRuleAction action)
+    public virtual async Task<bool> ExecuteAsync(CompiledRuleAction action)
     {
         if (action.SetValue == null)
         {
-            return Task.FromResult(false);
+            return false;
         }
 
         var value = action.SetValue.Value;
@@ -31,13 +31,13 @@ public class SetValueActionExecutor : IActionExecutor
         {
             // TODO: Implement expression evaluation
             _logger.Warning("Value expressions not yet implemented");
-            return Task.FromResult(false);
+            return false;
         }
 
         if (value == null)
         {
             _logger.Warning("Null value in SetValue action for key: {Key}", action.SetValue.Key);
-            return Task.FromResult(false);
+            return false;
         }
 
         _logger.Information(
@@ -49,11 +49,45 @@ public class SetValueActionExecutor : IActionExecutor
         if (string.IsNullOrWhiteSpace(action.SetValue.Key))
         {
             _logger.Warning("Invalid key in SetValue action: {Key}", action.SetValue.Key);
-            return Task.FromResult(true); // Skip invalid keys
+            return false;
         }
 
-        _pendingUpdates.AddOrUpdate(action.SetValue.Key, value, (_, _) => value);
-        return Task.FromResult(true);
+        try
+        {
+            // Store in pending updates
+            _pendingUpdates.AddOrUpdate(action.SetValue.Key, value, (_, _) => value);
+
+            // Write to data store
+            if (double.TryParse(value.ToString(), out double doubleValue))
+            {
+                await _dataStore.SetValueAsync(action.SetValue.Key, doubleValue);
+                _logger.Debug(
+                    "Successfully wrote value {Value} to key {Key} in data store",
+                    doubleValue,
+                    action.SetValue.Key
+                );
+                return true;
+            }
+            else
+            {
+                _logger.Warning(
+                    "Could not parse value {Value} as double for key {Key}",
+                    value,
+                    action.SetValue.Key
+                );
+                return false;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            _logger.Error(
+                ex,
+                "Error writing value {Value} to key {Key}",
+                value,
+                action.SetValue.Key
+            );
+            return false;
+        }
     }
 
     /// <summary>

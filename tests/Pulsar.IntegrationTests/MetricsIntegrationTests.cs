@@ -52,6 +52,7 @@ public class MetricsIntegrationTests : IAsyncDisposable
 
         // Assert
         var metricsResponse = await _httpClient.GetStringAsync(_metricsEndpoint);
+        _logger.Information("Metrics response:\n{Response}", metricsResponse);
 
         // Check for time series metrics
         Assert.Contains(

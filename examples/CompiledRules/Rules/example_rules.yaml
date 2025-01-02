@@ -58,7 +58,7 @@ rules:
       any:
         - condition:
             type: expression
-            expression: "alerts:temperature == 1 || alerts:humidity == 1 || alerts:pressure == 1"
+            expression: "alerts:temperature == '1' || alerts:humidity == '1' || alerts:pressure == '1'"
     actions:
       - set_value:
           key: "system:status"

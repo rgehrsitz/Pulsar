@@ -67,10 +67,10 @@ public class TimeSeriesService
 
         // Update time series metrics
         _metrics.RecordTimeSeriesUpdate(dataSource);
-        _metrics.RecordSensorUpdate(dataSource);
-
+        
         // Update sensor metrics
         _metrics.UpdateSensorValue(dataSource, value);
+        _metrics.RecordSensorUpdate(dataSource);
     }
 
     /// <summary>

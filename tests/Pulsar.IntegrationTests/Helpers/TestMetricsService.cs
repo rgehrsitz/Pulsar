@@ -13,10 +13,21 @@ public class TestMetricsService : IMetricsService
 
     public IReadOnlyDictionary<string, int> UpdateCounts => _updateCounts;
 
-    public void UpdateSensorValue(string sensor, double value) { }
+    public void UpdateSensorValue(string sensor, double value) 
+    {
+        if (!_updateCounts.ContainsKey(sensor))
+        {
+            _updateCounts[sensor] = 0;
+        }
+        _updateCounts[sensor]++;
+    }
     public void RecordSensorUpdate(string sensor) 
     {
-        _updateCounts[sensor] = _updateCounts.GetValueOrDefault(sensor) + 1;
+        if (!_updateCounts.ContainsKey(sensor))
+        {
+            _updateCounts[sensor] = 0;
+        }
+        _updateCounts[sensor]++;
     }
     public void RecordTimeSeriesUpdate(string sensor) { }
     public void RecordSensorReadError(string sensor, string errorType) { }

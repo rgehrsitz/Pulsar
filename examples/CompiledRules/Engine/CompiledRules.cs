@@ -186,10 +186,22 @@ namespace Pulsar.CompiledRules
             bool conditionMet = false;
             try
             {
-            conditionMet = false;
-            bool subConditionMet0 = true;
-            conditionMet = conditionMet || subConditionMet0;
-            if (!conditionMet) return;
+                // Check if any alerts are active
+                if (!data.TryGetValue("alerts:temperature", out var tempAlert) ||
+                    !data.TryGetValue("alerts:humidity", out var humidityAlert) ||
+                    !data.TryGetValue("alerts:pressure", out var pressureAlert))
+                {
+                    _logger.Warning("One or more alert values not found");
+                    return;
+                }
+
+                conditionMet = tempAlert > 0 || humidityAlert > 0 || pressureAlert > 0;
+                _logger.Debug(
+                    "Alert status - Temperature: {TempAlert}, Humidity: {HumidityAlert}, Pressure: {PressureAlert}",
+                    tempAlert,
+                    humidityAlert,
+                    pressureAlert
+                );
             }
             catch (Exception ex)
             {
@@ -206,6 +218,18 @@ namespace Pulsar.CompiledRules
                     {
                         Key = "system:status",
                         Value = "alert"
+                    }
+                });
+            }
+            else
+            {
+                _logger.Information("No alerts active, setting normal status");
+                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction
+                {
+                    SetValue = new Pulsar.Models.Actions.SetValueAction
+                    {
+                        Key = "system:status",
+                        Value = "normal"
                     }
                 });
             }

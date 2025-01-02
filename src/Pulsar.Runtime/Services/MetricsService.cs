@@ -205,7 +205,6 @@ public class MetricsService : IMetricsService
     public void UpdateSensorValue(string sensorName, double value)
     {
         _sensorValue.WithLabels(sensorName).Set(value);
-        _sensorUpdatesTotal.WithLabels(sensorName).Inc();
         _logger.Debug("Updated sensor value for {SensorName}: {Value}", sensorName, value);
     }
 

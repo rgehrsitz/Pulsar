@@ -118,11 +118,9 @@ public class TimeSeriesBuffer
         {
             _start = (_start + 1) % Capacity;
             _oldestTimestamp = _buffer[_start].Timestamp;
-            _metrics?.RecordTimeSeriesOverflow(_dataSource);
         }
 
         _newestTimestamp = timestamp;
-        _metrics?.RecordTimeSeriesBufferSize(_dataSource, _count);
     }
 
     /// <summary>
