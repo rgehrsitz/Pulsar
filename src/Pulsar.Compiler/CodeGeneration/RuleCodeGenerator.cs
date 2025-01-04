@@ -2,8 +2,8 @@ using System.Text;
 using Pulsar.Models;
 using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
-using Serilog;
 using Pulsar.Runtime.Engine;
+using Serilog;
 
 namespace Pulsar.Compiler.CodeGeneration;
 
@@ -74,8 +74,8 @@ public class RuleCodeGenerator
         // Generate code for each layer
         for (int layer = 0; layer < ruleSet.LayerCount; layer++)
         {
-            var layerRules = ruleSet.Rules
-                .Where(r => r.Layer == layer)
+            var layerRules = ruleSet
+                .Rules.Where(r => r.Layer == layer)
                 .OrderBy(r => r.Rule.Name) // Ensure deterministic ordering within layer
                 .ToList();
 
@@ -86,7 +86,9 @@ public class RuleCodeGenerator
 
                 foreach (var rule in layerRules)
                 {
-                    sb.AppendLine($"            _logger.Debug(\"Evaluating {rule.Rule.Name} in layer {layer}\");");
+                    sb.AppendLine(
+                        $"            _logger.Debug(\"Evaluating {rule.Rule.Name} in layer {layer}\");"
+                    );
                     sb.AppendLine($"            await Evaluate{rule.Rule.Name}Async(data);");
                 }
                 sb.AppendLine();
@@ -111,7 +113,9 @@ public class RuleCodeGenerator
 
     private void GenerateRuleMethod(StringBuilder sb, CompiledRule rule)
     {
-        sb.AppendLine($"        private async Task Evaluate{rule.Rule.Name}Async(IDictionary<string, double> data)");
+        sb.AppendLine(
+            $"        private async Task Evaluate{rule.Rule.Name}Async(IDictionary<string, double> data)"
+        );
         sb.AppendLine("        {");
         sb.AppendLine($"            _logger.Debug(\"Evaluating rule {rule.Rule.Name}\");");
         sb.AppendLine();
@@ -124,7 +128,9 @@ public class RuleCodeGenerator
         sb.AppendLine("            }");
         sb.AppendLine("            catch (Exception ex)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                _logger.Error(ex, \"Error evaluating rule {rule.Rule.Name}\");");
+        sb.AppendLine(
+            $"                _logger.Error(ex, \"Error evaluating rule {rule.Rule.Name}\");"
+        );
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -132,7 +138,9 @@ public class RuleCodeGenerator
         // Generate action execution
         sb.AppendLine("            if (conditionMet)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                _logger.Information(\"Rule {rule.Rule.Name} conditions met, executing actions\");");
+        sb.AppendLine(
+            $"                _logger.Information(\"Rule {rule.Rule.Name} conditions met, executing actions\");"
+        );
         foreach (var action in rule.Rule.Actions)
         {
             GenerateActionCode(sb, action);
@@ -167,13 +175,17 @@ public class RuleCodeGenerator
                     {
                         var key = parts[0];
                         var expectedValue = parts[1];
-                        sb.AppendLine($"            if (!data.TryGetValue(\"{key}\", out var value_{key.Replace(":", "_")}) || value_{key.Replace(":", "_")} != {expectedValue})");
+                        sb.AppendLine(
+                            $"            if (!data.TryGetValue(\"{key}\", out var value_{key.Replace(":", "_")}) || value_{key.Replace(":", "_")} != {expectedValue})"
+                        );
                         sb.AppendLine("            {");
                         sb.AppendLine($"                subConditionMet{orIndex} = false;");
                         sb.AppendLine("            }");
                     }
                 }
-                sb.AppendLine($"            conditionMet = conditionMet || subConditionMet{orIndex};");
+                sb.AppendLine(
+                    $"            conditionMet = conditionMet || subConditionMet{orIndex};"
+                );
                 orIndex++;
             }
             sb.AppendLine("            if (!conditionMet) return;");
@@ -186,46 +198,73 @@ public class RuleCodeGenerator
         {
             case ComparisonCondition comp:
                 var varName = $"value_{comp.DataSource.Replace(":", "_")}";
-                sb.AppendLine($"            if (!data.TryGetValue(\"{comp.DataSource}\", out var {varName}))");
+                sb.AppendLine(
+                    $"            if (!data.TryGetValue(\"{comp.DataSource}\", out var {varName}))"
+                );
                 sb.AppendLine("            {");
-                sb.AppendLine($"                _logger.Warning(\"Data source {comp.DataSource} not found\");");
+                sb.AppendLine(
+                    $"                _logger.Warning(\"Data source {comp.DataSource} not found\");"
+                );
                 sb.AppendLine("                conditionMet = false;");
                 sb.AppendLine("                return;");
                 sb.AppendLine("            }");
-                sb.AppendLine($"            conditionMet = {varName} {comp.Operator} {comp.Value};");
+                sb.AppendLine(
+                    $"            conditionMet = {varName} {comp.Operator} {comp.Value};"
+                );
                 break;
 
             case ThresholdOverTimeCondition threshold:
-                sb.AppendLine($"            var thresholdResult = await _dataStore.CheckThresholdOverTimeAsync(");
+                sb.AppendLine(
+                    $"            var thresholdResult = await _dataStore.CheckThresholdOverTimeAsync("
+                );
                 sb.AppendLine($"                \"{threshold.DataSource}\",");
                 sb.AppendLine($"                {threshold.Threshold},");
-                sb.AppendLine($"                TimeSpan.FromMilliseconds({threshold.DurationMs}));");
+                sb.AppendLine(
+                    $"                TimeSpan.FromMilliseconds({threshold.DurationMs}));"
+                );
                 sb.AppendLine("            conditionMet = thresholdResult;");
                 break;
 
             case ExpressionCondition expr:
                 // For now, just evaluate the expression directly
                 var expression = expr.Expression;
-                if (expression.StartsWith("(") && expression.Contains("-") && expression.Contains("*"))
+                if (
+                    expression.StartsWith("(")
+                    && expression.Contains("-")
+                    && expression.Contains("*") // Fix: Changed 'contains' to 'Contains'
+                )
                 {
                     // Handle temperature conversion expression
-                    var dataSource = expression.Substring(1, expression.IndexOf(")") - 1).Split('-')[0].Trim();
-                    sb.AppendLine($"            if (!data.TryGetValue(\"{dataSource}\", out var value_temp))");
+                    var dataSource = expression
+                        .Substring(1, expression.IndexOf(")") - 1)
+                        .Split('-')[0]
+                        .Trim();
+                    sb.AppendLine(
+                        $"            if (!data.TryGetValue(\"{dataSource}\", out var value_temp))"
+                    );
                     sb.AppendLine("            {");
-                    sb.AppendLine($"                _logger.Warning(\"Data source {dataSource} not found\");");
+                    sb.AppendLine(
+                        $"                _logger.Warning(\"Data source {dataSource} not found\");"
+                    );
                     sb.AppendLine("                conditionMet = false;");
                     sb.AppendLine("                return;");
                     sb.AppendLine("            }");
                     // Always set the converted value
-                    sb.AppendLine($"            await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction");
+                    sb.AppendLine(
+                        $"            await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction"
+                    );
                     sb.AppendLine("            {");
-                    sb.AppendLine("                SetValue = new Pulsar.Models.Actions.SetValueAction");
+                    sb.AppendLine(
+                        "                SetValue = new Pulsar.Models.Actions.SetValueAction"
+                    );
                     sb.AppendLine("                {");
                     sb.AppendLine($"                    Key = \"converted_temp\",");
                     sb.AppendLine($"                    Value = (value_temp - 32.0) * (5.0 / 9.0)");
                     sb.AppendLine("                }");
                     sb.AppendLine("            });");
-                    sb.AppendLine($"            conditionMet = (value_temp - 32.0) * (5.0 / 9.0) > 25.0;");
+                    sb.AppendLine(
+                        $"            conditionMet = (value_temp - 32.0) * (5.0 / 9.0) > 25.0;"
+                    );
                 }
                 else if (expression.Contains("==") || expression.Contains("||"))
                 {
@@ -244,22 +283,30 @@ public class RuleCodeGenerator
                             {
                                 var key = parts[0];
                                 var expectedValue = parts[1];
-                                sb.AppendLine($"            if (!data.TryGetValue(\"{key}\", out var value_{key.Replace(":", "_")}) || value_{key.Replace(":", "_")} != {expectedValue})");
+                                sb.AppendLine(
+                                    $"            if (!data.TryGetValue(\"{key}\", out var value_{key.Replace(":", "_")}) || value_{key.Replace(":", "_")} != {expectedValue})"
+                                );
                                 sb.AppendLine("            {");
                                 sb.AppendLine($"                subConditionMet{orIndex} = false;");
                                 sb.AppendLine("            }");
                             }
                         }
-                        sb.AppendLine($"            conditionMet = conditionMet || subConditionMet{orIndex};");
+                        sb.AppendLine(
+                            $"            conditionMet = conditionMet || subConditionMet{orIndex};"
+                        );
                         orIndex++;
                     }
                     sb.AppendLine("            if (!conditionMet) return;");
                 }
                 else
                 {
-                    sb.AppendLine($"            if (!data.TryGetValue(\"{expression}\", out var value_{expression.Replace(":", "_")}))");
+                    sb.AppendLine(
+                        $"            if (!data.TryGetValue(\"{expression}\", out var value_{expression.Replace(":", "_")}))"
+                    );
                     sb.AppendLine("            {");
-                    sb.AppendLine($"                _logger.Warning(\"Data source {expression} not found\");");
+                    sb.AppendLine(
+                        $"                _logger.Warning(\"Data source {expression} not found\");"
+                    );
                     sb.AppendLine("                conditionMet = false;");
                     sb.AppendLine("                return;");
                     sb.AppendLine("            }");
@@ -271,11 +318,21 @@ public class RuleCodeGenerator
 
     private void GenerateActionCode(StringBuilder sb, RuleAction action)
     {
-        sb.AppendLine($"                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction");
+        if (action == null)
+        {
+            _logger.Warning("Skipping null action");
+            return;
+        }
+
+        sb.AppendLine(
+            $"                await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction"
+        );
         sb.AppendLine("                {");
         if (action.SetValue != null)
         {
-            sb.AppendLine("                    SetValue = new Pulsar.Models.Actions.SetValueAction");
+            sb.AppendLine(
+                "                    SetValue = new Pulsar.Models.Actions.SetValueAction"
+            );
             sb.AppendLine("                    {");
             sb.AppendLine($"                        Key = \"{action.SetValue.Key}\",");
             if (!string.IsNullOrEmpty(action.SetValue.ValueExpression))
@@ -285,14 +342,16 @@ public class RuleCodeGenerator
                 if (expr.StartsWith("(") && expr.Contains("-") && expr.Contains("*"))
                 {
                     var dataSource = expr.Substring(1, expr.IndexOf(")") - 1).Split('-')[0].Trim();
-                    sb.AppendLine($"                        Value = (data[\"{dataSource}\"] - 32.0) * (5.0 / 9.0)");
+                    sb.AppendLine(
+                        $"                        Value = (data[\"{dataSource}\"] - 32.0) * (5.0 / 9.0)"
+                    );
                 }
                 else
                 {
                     sb.AppendLine($"                        Value = data[\"{expr}\"]");
                 }
             }
-            else
+            else if (action.SetValue.Value != null) // Add null check here
             {
                 var value = action.SetValue.Value.ToString();
                 if (value == "healthy")
@@ -308,11 +367,18 @@ public class RuleCodeGenerator
                     sb.AppendLine($"                        Value = {value}");
                 }
             }
+            else
+            {
+                _logger.Warning("SetValue action has neither Value nor ValueExpression");
+                sb.AppendLine("                        Value = 0");
+            }
             sb.AppendLine("                    }");
         }
         else if (action.SendMessage != null)
         {
-            sb.AppendLine("                    SendMessage = new Pulsar.Models.Actions.SendMessageAction");
+            sb.AppendLine(
+                "                    SendMessage = new Pulsar.Models.Actions.SendMessageAction"
+            );
             sb.AppendLine("                    {");
             sb.AppendLine($"                        Channel = \"{action.SendMessage.Channel}\",");
             sb.AppendLine($"                        Message = \"{action.SendMessage.Message}\"");
