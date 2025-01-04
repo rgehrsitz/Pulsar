@@ -82,6 +82,11 @@ public class TimeSeriesBuffer
 
         return hasValidData;
     }
+            idx = (idx - 1 + _capacity) % _capacity;
+        }
+
+        return hasValidData;
+    }
 
     public (DateTime Timestamp, double Value)[] GetTimeWindow(TimeSpan duration)
     {

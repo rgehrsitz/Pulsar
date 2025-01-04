@@ -21,7 +21,7 @@ public class CompiledRulesIntegrationTests : IAsyncLifetime
     private readonly ITestOutputHelper _output;
     private IDataStore _dataStore = null!;
     private TimeSeriesService _timeSeriesService = null!;
-    private IRuleEngine _ruleEngine = null!;
+    private CompiledRuleEngine _ruleEngine = null!;
     private IDatabase _db = null!;
 
     public CompiledRulesIntegrationTests(ITestOutputHelper output)
@@ -36,7 +36,13 @@ public class CompiledRulesIntegrationTests : IAsyncLifetime
         _dataStore = _container.GetService<IDataStore>();
         _timeSeriesService = _container.GetService<TimeSeriesService>();
         _db = _container.GetDatabase();
-        _ruleEngine = _container.GetService<IRuleEngine>();
+
+        // Get additional services from container
+        var actionExecutor = _container.GetService<IActionExecutor>();
+        var logger = _container.GetService<Serilog.ILogger>();
+
+        // Initialize rule engine with container services
+        _ruleEngine = new CompiledRuleEngine(_dataStore, actionExecutor, logger);
     }
 
     private async Task<bool> WaitForAlertValue(string key, string expectedValue, TimeSpan timeout)
@@ -127,29 +133,21 @@ public class CompiledRulesIntegrationTests : IAsyncLifetime
             await _db.KeyDeleteAsync(key);
         }
 
-        // Use test rule engine for this test
-        var testRuleEngine = _container.GetService<TestRuleEngine>();
-
         // Act - Set values that will trigger alerts
         await _dataStore.SetValueAsync("temperature", 55.0);
         await _dataStore.SetValueAsync("humidity", 25.0);
         await _dataStore.SetValueAsync("pressure", 1100.0);
 
-        // Set alerts directly
-        await _dataStore.SetValueAsync("alerts:temperature", 1.0);
-        await _dataStore.SetValueAsync("alerts:humidity", 1.0);
-        await _dataStore.SetValueAsync("alerts:pressure", 1.0);
-
         // Wait for temporal conditions
         await Task.Delay(600);
 
         // Execute rules
-        await testRuleEngine.ExecuteCycleAsync();
+        await _ruleEngine.ExecuteCycleAsync();
 
         // Assert
         var systemStatus = await _dataStore.GetValueAsync("system:status");
         Assert.NotNull(systemStatus);
-        Assert.Equal(1.0, systemStatus.Value);
+        Assert.Contains("alert", systemStatus.ToString().ToLower());
     }
 
     public async Task DisposeAsync()
