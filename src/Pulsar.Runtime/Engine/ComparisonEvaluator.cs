@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Serilog;
 
 namespace Pulsar.Runtime.Engine;

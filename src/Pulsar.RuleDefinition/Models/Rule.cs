@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Pulsar.RuleDefinition.Models.Actions;
 
 namespace Pulsar.RuleDefinition.Models;
 

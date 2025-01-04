@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.RuleDefinition.Models.Actions;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.RuleDefinition.Validation;
 using Xunit;
 
@@ -35,19 +36,22 @@ public class CircularDependencyTests
                     Name = "Rule1",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                DataSource = "temperature",
-                                Operator = ">",
-                                Value = 30
+                                Condition = new ComparisonCondition
+                                {
+                                    DataSource = "temperature",
+                                    Operator = ">",
+                                    Value = 30
+                                }
                             }
                         }
                     },
                     Actions = new List<RuleAction>
                     {
-                        new RuleAction { SetValue = new SetValueAction { Key = "humidity", Value = 50 } }
+                        new() { SetValue = new SetValueAction { Key = "humidity", Value = 50 } }
                     }
                 },
                 new()
@@ -55,19 +59,22 @@ public class CircularDependencyTests
                     Name = "Rule2",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                DataSource = "humidity",
-                                Operator = ">",
-                                Value = 40
+                                Condition = new ComparisonCondition
+                                {
+                                    DataSource = "humidity",
+                                    Operator = ">",
+                                    Value = 40
+                                }
                             }
                         }
                     },
                     Actions = new List<RuleAction>
                     {
-                        new RuleAction { SetValue = new SetValueAction { Key = "pressure", Value = 1000 } }
+                        new() { SetValue = new SetValueAction { Key = "pressure", Value = 1000 } }
                     }
                 },
                 new()
@@ -75,19 +82,22 @@ public class CircularDependencyTests
                     Name = "Rule3",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                DataSource = "pressure",
-                                Operator = ">",
-                                Value = 900
+                                Condition = new ComparisonCondition
+                                {
+                                    DataSource = "pressure",
+                                    Operator = ">",
+                                    Value = 900
+                                }
                             }
                         }
                     },
                     Actions = new List<RuleAction>
                     {
-                        new RuleAction { SetValue = new SetValueAction { Key = "temperature", Value = 25 } }
+                        new() { SetValue = new SetValueAction { Key = "temperature", Value = 25 } }
                     }
                 }
             }
@@ -116,19 +126,22 @@ public class CircularDependencyTests
                     Name = "Rule1",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                DataSource = "temperature",
-                                Operator = ">",
-                                Value = 30
+                                Condition = new ComparisonCondition
+                                {
+                                    DataSource = "temperature",
+                                    Operator = ">",
+                                    Value = 30
+                                }
                             }
                         }
                     },
                     Actions = new List<RuleAction>
                     {
-                        new RuleAction { SetValue = new SetValueAction { Key = "humidity", Value = 50 } }
+                        new() { SetValue = new SetValueAction { Key = "humidity", Value = 50 } }
                     }
                 },
                 new()
@@ -136,19 +149,22 @@ public class CircularDependencyTests
                     Name = "Rule2",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                DataSource = "humidity",
-                                Operator = ">",
-                                Value = 40
+                                Condition = new ComparisonCondition
+                                {
+                                    DataSource = "humidity",
+                                    Operator = ">",
+                                    Value = 40
+                                }
                             }
                         }
                     },
                     Actions = new List<RuleAction>
                     {
-                        new RuleAction { SetValue = new SetValueAction { Key = "pressure", Value = 1000 } }
+                        new() { SetValue = new SetValueAction { Key = "pressure", Value = 1000 } }
                     }
                 }
             }

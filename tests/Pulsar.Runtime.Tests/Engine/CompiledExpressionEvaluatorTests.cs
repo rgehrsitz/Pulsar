@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.Runtime.Engine;
 using Xunit;
 using Xunit.Abstractions;

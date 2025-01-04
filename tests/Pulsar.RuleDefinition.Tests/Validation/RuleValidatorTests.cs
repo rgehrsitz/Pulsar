@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.RuleDefinition.Models.Actions;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.RuleDefinition.Validation;
 using Xunit;
 
@@ -44,14 +45,17 @@ public class RuleValidatorTests
                     Description = "Test rule",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                Type = "comparison",
-                                DataSource = "temperature",
-                                Operator = ">",
-                                Value = 50
+                                Condition = new ComparisonCondition
+                                {
+                                    Type = "comparison",
+                                    DataSource = "temperature",
+                                    Operator = ">",
+                                    Value = 50
+                                }
                             }
                         }
                     },
@@ -139,14 +143,17 @@ public class RuleValidatorTests
                     Name = "TestRule",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                Type = "comparison",
-                                DataSource = "invalid_sensor",
-                                Operator = ">",
-                                Value = 50
+                                Condition = new ComparisonCondition
+                                {
+                                    Type = "comparison",
+                                    DataSource = "invalid_sensor",
+                                    Operator = ">",
+                                    Value = 50
+                                }
                             }
                         }
                     },
@@ -179,14 +186,17 @@ public class RuleValidatorTests
                     Name = "TestRule",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                Type = "comparison",
-                                DataSource = "temperature",
-                                Operator = "invalid",
-                                Value = 50
+                                Condition = new ComparisonCondition
+                                {
+                                    Type = "comparison",
+                                    DataSource = "temperature",
+                                    Operator = "invalid",
+                                    Value = 50
+                                }
                             }
                         }
                     },
@@ -247,14 +257,17 @@ public class RuleValidatorTests
                     Name = "TestRule",
                     Conditions = new ConditionGroup
                     {
-                        All = new List<Condition>
+                        All = new List<ConditionWrapper>
                         {
-                            new ComparisonCondition
+                            new ConditionWrapper
                             {
-                                Type = "comparison",
-                                DataSource = "temperature",
-                                Operator = ">",
-                                Value = 50
+                                Condition = new ComparisonCondition
+                                {
+                                    Type = "comparison",
+                                    DataSource = "temperature",
+                                    Operator = ">",
+                                    Value = 50
+                                }
                             }
                         }
                     },
@@ -277,14 +290,17 @@ public class RuleValidatorTests
             Name = name,
             Conditions = new ConditionGroup
             {
-                All = new List<Condition>
+                All = new List<ConditionWrapper>
                 {
-                    new ComparisonCondition
+                    new ConditionWrapper
                     {
-                        Type = "comparison",
-                        DataSource = "temperature",
-                        Operator = ">",
-                        Value = 50
+                        Condition = new ComparisonCondition
+                        {
+                            Type = "comparison",
+                            DataSource = "temperature",
+                            Operator = ">",
+                            Value = 50
+                        }
                     }
                 }
             },

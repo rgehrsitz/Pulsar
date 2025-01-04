@@ -1,6 +1,6 @@
 using System;
 
-namespace Pulsar.RuleDefinition.Models;
+namespace Pulsar.RuleDefinition.Models.Conditions;
 
 /// <summary>
 /// Represents a condition that checks if a sensor value stays above/below a threshold for a specified duration

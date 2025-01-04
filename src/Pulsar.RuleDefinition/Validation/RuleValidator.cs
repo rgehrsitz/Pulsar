@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Pulsar.RuleDefinition.Analysis;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Serilog;
 
 namespace Pulsar.RuleDefinition.Validation;
@@ -212,34 +213,38 @@ public class RuleValidator
         return errors;
     }
 
-    private List<ValidationError> ValidateCondition(Condition condition, string ruleName)
+    private List<ValidationError> ValidateCondition(ConditionWrapper wrapper, string ruleName)
     {
         var errors = new List<ValidationError>();
+        var condition = wrapper.Condition;
 
-        if (condition is ComparisonCondition comp)
+        switch (condition)
         {
-            if (comp.DataSource != null && !_config.ValidSensors.Contains(comp.DataSource))
-            {
-                _logger.Warning("Invalid data source: {DataSource}", comp.DataSource);
-                errors.Add(new ValidationError($"Invalid data source: {comp.DataSource}"));
-            }
+            case ComparisonCondition comp:
+                if (comp.DataSource != null && !_config.ValidSensors.Contains(comp.DataSource))
+                {
+                    _logger.Warning("Invalid data source: {DataSource}", comp.DataSource);
+                    errors.Add(new ValidationError($"Invalid data source: {comp.DataSource}"));
+                }
 
-            if (!ValidOperators.Contains(comp.Operator))
-            {
-                _logger.Warning("Invalid operator: {Operator}", comp.Operator);
-                errors.Add(new ValidationError($"Invalid operator: {comp.Operator}"));
-            }
-        }
-        else if (condition is ThresholdOverTimeCondition threshold)
-        {
-            if (
-                threshold.DataSource != null
-                && !_config.ValidSensors.Contains(threshold.DataSource)
-            )
-            {
-                _logger.Warning("Invalid data source: {DataSource}", threshold.DataSource);
-                errors.Add(new ValidationError($"Invalid data source: {threshold.DataSource}"));
-            }
+                if (!ValidOperators.Contains(comp.Operator))
+                {
+                    _logger.Warning("Invalid operator: {Operator}", comp.Operator);
+                    errors.Add(new ValidationError($"Invalid operator: {comp.Operator}"));
+                }
+                break;
+
+            case ThresholdOverTimeCondition threshold:
+                if (threshold.DataSource != null && !_config.ValidSensors.Contains(threshold.DataSource))
+                {
+                    _logger.Warning("Invalid data source: {DataSource}", threshold.DataSource);
+                    errors.Add(new ValidationError($"Invalid data source: {threshold.DataSource}"));
+                }
+                break;
+
+            case ExpressionCondition expression:
+                // Add any validation for expression conditions here
+                break;
         }
 
         return errors;

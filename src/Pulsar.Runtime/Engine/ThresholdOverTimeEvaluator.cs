@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Pulsar.Core;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.RuleDefinition.Validation;
 using Pulsar.Runtime.Services;
 using Serilog;

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
+using Pulsar.RuleDefinition.Models.Actions;
 using Serilog;
 
 namespace Pulsar.RuleDefinition.Analysis;
@@ -164,40 +166,40 @@ public class DependencyAnalyzer
         {
             if (rule.Conditions.All != null)
             {
-                foreach (var condition in rule.Conditions.All)
+                foreach (var wrapper in rule.Conditions.All)
                 {
-                    if (condition is ComparisonCondition comparison)
+                    switch (wrapper.Condition)
                     {
-                        sources.Add(comparison.DataSource);
-                    }
-                    else if (condition is ThresholdOverTimeCondition threshold)
-                    {
-                        sources.Add(threshold.DataSource);
-                    }
-                    else if (condition is ExpressionCondition expression)
-                    {
-                        var parts = expression.Expression.Split(' ');
-                        sources.Add(parts[0]); // The first part is always the data source
+                        case ComparisonCondition comparison:
+                            sources.Add(comparison.DataSource);
+                            break;
+                        case ThresholdOverTimeCondition threshold:
+                            sources.Add(threshold.DataSource);
+                            break;
+                        case ExpressionCondition expression:
+                            var parts = expression.Expression.Split(' ');
+                            sources.Add(parts[0]); // The first part is always the data source
+                            break;
                     }
                 }
             }
 
             if (rule.Conditions.Any != null)
             {
-                foreach (var condition in rule.Conditions.Any)
+                foreach (var wrapper in rule.Conditions.Any)
                 {
-                    if (condition is ComparisonCondition comparison)
+                    switch (wrapper.Condition)
                     {
-                        sources.Add(comparison.DataSource);
-                    }
-                    else if (condition is ThresholdOverTimeCondition threshold)
-                    {
-                        sources.Add(threshold.DataSource);
-                    }
-                    else if (condition is ExpressionCondition expression)
-                    {
-                        var parts = expression.Expression.Split(' ');
-                        sources.Add(parts[0]); // The first part is always the data source
+                        case ComparisonCondition comparison:
+                            sources.Add(comparison.DataSource);
+                            break;
+                        case ThresholdOverTimeCondition threshold:
+                            sources.Add(threshold.DataSource);
+                            break;
+                        case ExpressionCondition expression:
+                            var parts = expression.Expression.Split(' ');
+                            sources.Add(parts[0]); // The first part is always the data source
+                            break;
                     }
                 }
             }

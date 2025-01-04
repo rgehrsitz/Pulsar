@@ -1,6 +1,6 @@
 using System;
 using System.Text.RegularExpressions;
-using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;

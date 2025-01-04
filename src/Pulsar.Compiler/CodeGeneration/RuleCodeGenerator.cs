@@ -2,6 +2,7 @@ using System.Text;
 using Pulsar.Models;
 using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.Runtime.Engine;
 using Serilog;
 
@@ -157,7 +158,7 @@ public class RuleCodeGenerator
             sb.AppendLine("            conditionMet = true;");
             foreach (var condition in conditions.All)
             {
-                GenerateConditionEvaluation(sb, condition);
+                GenerateConditionEvaluation(sb, condition.Condition);
                 sb.AppendLine("            if (!conditionMet) return;");
             }
         }
@@ -168,21 +169,7 @@ public class RuleCodeGenerator
             foreach (var condition in conditions.Any)
             {
                 sb.AppendLine($"            bool subConditionMet{orIndex} = true;");
-                if (condition is ExpressionCondition expr && !string.IsNullOrEmpty(expr.Expression))
-                {
-                    var parts = expr.Expression.Split("==").Select(p => p.Trim()).ToList();
-                    if (parts.Count == 2)
-                    {
-                        var key = parts[0];
-                        var expectedValue = parts[1];
-                        sb.AppendLine(
-                            $"            if (!data.TryGetValue(\"{key}\", out var value_{key.Replace(":", "_")}) || value_{key.Replace(":", "_")} != {expectedValue})"
-                        );
-                        sb.AppendLine("            {");
-                        sb.AppendLine($"                subConditionMet{orIndex} = false;");
-                        sb.AppendLine("            }");
-                    }
-                }
+                GenerateConditionEvaluation(sb, condition.Condition);
                 sb.AppendLine(
                     $"            conditionMet = conditionMet || subConditionMet{orIndex};"
                 );
@@ -196,122 +183,42 @@ public class RuleCodeGenerator
     {
         switch (condition)
         {
+            case ExpressionCondition expr:
+                if (!string.IsNullOrEmpty(expr.Expression))
+                {
+                    var parts = expr.Expression.Split("==").Select(p => p.Trim()).ToList();
+                    if (parts.Count == 2)
+                    {
+                        var key = parts[0];
+                        var expectedValue = parts[1];
+                        sb.AppendLine(
+                            $"            if (!data.TryGetValue(\"{key}\", out var value_{key.Replace(":", "_")}) || value_{key.Replace(":", "_")} != {expectedValue})"
+                        );
+                        sb.AppendLine("            {");
+                        sb.AppendLine("                conditionMet = false;");
+                        sb.AppendLine("            }");
+                    }
+                }
+                break;
+
             case ComparisonCondition comp:
-                var varName = $"value_{comp.DataSource.Replace(":", "_")}";
-                sb.AppendLine(
-                    $"            if (!data.TryGetValue(\"{comp.DataSource}\", out var {varName}))"
-                );
+                sb.AppendLine($"            if (!data.TryGetValue(\"{comp.DataSource}\", out var value))");
                 sb.AppendLine("            {");
-                sb.AppendLine(
-                    $"                _logger.Warning(\"Data source {comp.DataSource} not found\");"
-                );
                 sb.AppendLine("                conditionMet = false;");
-                sb.AppendLine("                return;");
                 sb.AppendLine("            }");
-                sb.AppendLine(
-                    $"            conditionMet = {varName} {comp.Operator} {comp.Value};"
-                );
+                sb.AppendLine("            else");
+                sb.AppendLine("            {");
+                sb.AppendLine($"                conditionMet = value {comp.Operator} {comp.Value};");
+                sb.AppendLine("            }");
                 break;
 
             case ThresholdOverTimeCondition threshold:
-                sb.AppendLine(
-                    $"            var thresholdResult = await _dataStore.CheckThresholdOverTimeAsync("
-                );
-                sb.AppendLine($"                \"{threshold.DataSource}\",");
-                sb.AppendLine($"                {threshold.Threshold},");
-                sb.AppendLine(
-                    $"                TimeSpan.FromMilliseconds({threshold.DurationMs}));"
-                );
-                sb.AppendLine("            conditionMet = thresholdResult;");
+                sb.AppendLine($"            conditionMet = await _dataStore.CheckThresholdOverTimeAsync(\"{threshold.DataSource}\", {threshold.Threshold}, TimeSpan.FromMilliseconds({threshold.DurationMs}));");
                 break;
 
-            case ExpressionCondition expr:
-                // For now, just evaluate the expression directly
-                var expression = expr.Expression;
-                if (
-                    expression.StartsWith("(")
-                    && expression.Contains("-")
-                    && expression.Contains("*") // Fix: Changed 'contains' to 'Contains'
-                )
-                {
-                    // Handle temperature conversion expression
-                    var dataSource = expression
-                        .Substring(1, expression.IndexOf(")") - 1)
-                        .Split('-')[0]
-                        .Trim();
-                    sb.AppendLine(
-                        $"            if (!data.TryGetValue(\"{dataSource}\", out var value_temp))"
-                    );
-                    sb.AppendLine("            {");
-                    sb.AppendLine(
-                        $"                _logger.Warning(\"Data source {dataSource} not found\");"
-                    );
-                    sb.AppendLine("                conditionMet = false;");
-                    sb.AppendLine("                return;");
-                    sb.AppendLine("            }");
-                    // Always set the converted value
-                    sb.AppendLine(
-                        $"            await _actionExecutor.ExecuteAsync(new Pulsar.Models.Actions.CompiledRuleAction"
-                    );
-                    sb.AppendLine("            {");
-                    sb.AppendLine(
-                        "                SetValue = new Pulsar.Models.Actions.SetValueAction"
-                    );
-                    sb.AppendLine("                {");
-                    sb.AppendLine($"                    Key = \"converted_temp\",");
-                    sb.AppendLine($"                    Value = (value_temp - 32.0) * (5.0 / 9.0)");
-                    sb.AppendLine("                }");
-                    sb.AppendLine("            });");
-                    sb.AppendLine(
-                        $"            conditionMet = (value_temp - 32.0) * (5.0 / 9.0) > 25.0;"
-                    );
-                }
-                else if (expression.Contains("==") || expression.Contains("||"))
-                {
-                    // Handle alert status check expressions
-                    var orConditions = expression.Split("||").Select(c => c.Trim());
-                    sb.AppendLine("            conditionMet = false;");
-                    var orIndex = 0;
-                    foreach (var orCond in orConditions)
-                    {
-                        var conditions = orCond.Split("&&").Select(c => c.Trim());
-                        sb.AppendLine($"            bool subConditionMet{orIndex} = true;");
-                        foreach (var cond in conditions)
-                        {
-                            var parts = cond.Split("==").Select(p => p.Trim()).ToList();
-                            if (parts.Count == 2)
-                            {
-                                var key = parts[0];
-                                var expectedValue = parts[1];
-                                sb.AppendLine(
-                                    $"            if (!data.TryGetValue(\"{key}\", out var value_{key.Replace(":", "_")}) || value_{key.Replace(":", "_")} != {expectedValue})"
-                                );
-                                sb.AppendLine("            {");
-                                sb.AppendLine($"                subConditionMet{orIndex} = false;");
-                                sb.AppendLine("            }");
-                            }
-                        }
-                        sb.AppendLine(
-                            $"            conditionMet = conditionMet || subConditionMet{orIndex};"
-                        );
-                        orIndex++;
-                    }
-                    sb.AppendLine("            if (!conditionMet) return;");
-                }
-                else
-                {
-                    sb.AppendLine(
-                        $"            if (!data.TryGetValue(\"{expression}\", out var value_{expression.Replace(":", "_")}))"
-                    );
-                    sb.AppendLine("            {");
-                    sb.AppendLine(
-                        $"                _logger.Warning(\"Data source {expression} not found\");"
-                    );
-                    sb.AppendLine("                conditionMet = false;");
-                    sb.AppendLine("                return;");
-                    sb.AppendLine("            }");
-                    sb.AppendLine("            conditionMet = true;");
-                }
+            default:
+                _logger.Warning("Unknown condition type: {Type}", condition.GetType().Name);
+                sb.AppendLine("            conditionMet = false;");
                 break;
         }
     }
@@ -360,7 +267,7 @@ public class RuleCodeGenerator
                 }
                 else if (value.StartsWith("'"))
                 {
-                    sb.AppendLine($"                        Value = \"{value.Trim('\'')}\"");
+                    sb.AppendLine($"                        Value = @\"{value.Trim('\'')}\""); // Fix: Changed to verbatim string literal
                 }
                 else
                 {

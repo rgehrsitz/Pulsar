@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using Pulsar.RuleDefinition.Models.Conditions;
 
 namespace Pulsar.RuleDefinition.Validation;
 
@@ -25,7 +26,7 @@ public class TemporalValidator
     /// <summary>
     /// Validates that temporal conditions are properly configured
     /// </summary>
-    public List<string> ValidateTemporalCondition(Models.ThresholdOverTimeCondition condition)
+    public List<string> ValidateTemporalCondition(ThresholdOverTimeCondition condition)
     {
         var errors = new List<string>();
 

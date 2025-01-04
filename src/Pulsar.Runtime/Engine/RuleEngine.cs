@@ -7,10 +7,11 @@ using Microsoft.Extensions.Hosting;
 using Pulsar.Models;
 using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.Runtime.Services;
-using Pulsar.Runtime.Storage;  // Add this
+using Pulsar.Runtime.Storage;
 using Serilog;
-using Pulsar.Core.Services;  
+using Pulsar.Core.Services;
 
 namespace Pulsar.Runtime.Engine;
 
@@ -128,11 +129,11 @@ public class RuleEngine : IHostedService
         return true;
     }
 
-    private async Task<bool> EvaluateConditionAsync(Condition condition, IDictionary<string, double> data)
+    private async Task<bool> EvaluateConditionAsync(ConditionWrapper condition, IDictionary<string, double> data)
     {
         try
         {
-            switch (condition)
+            switch (condition.Condition)
             {
                 case ComparisonCondition comp:
                     if (!data.TryGetValue(comp.DataSource, out var value))
@@ -151,7 +152,7 @@ public class RuleEngine : IHostedService
                     );
 
                 default:
-                    _logger.Warning("Unknown condition type: {Type}", condition.GetType().Name);
+                    _logger.Warning("Unknown condition type: {Type}", condition.Condition.GetType().Name);
                     return false;
             }
         }

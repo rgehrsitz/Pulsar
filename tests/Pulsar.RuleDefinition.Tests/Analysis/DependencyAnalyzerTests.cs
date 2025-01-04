@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Pulsar.RuleDefinition.Analysis;
 using Pulsar.RuleDefinition.Models;
 using Pulsar.RuleDefinition.Models.Actions;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Xunit;
 
 namespace Pulsar.RuleDefinition.Tests.Analysis;
@@ -108,22 +109,31 @@ public class DependencyAnalyzerTests
         Assert.Equal(new[] { "Rule1", "Rule2", "Rule3" }, orderedRules.Select(r => r.Name));
     }
 
-    private static Rule CreateRule(string name, string condition, string outputKey)
+    private Rule CreateRule(string name, string condition, string output)
     {
+        var parts = condition.Split(' ');
         return new Rule
         {
             Name = name,
             Conditions = new ConditionGroup
             {
-                All = new List<Condition>
+                All = new List<ConditionWrapper>
                 {
-                    new ExpressionCondition { Type = "expression", Expression = condition },
-                },
+                    new ConditionWrapper
+                    {
+                        Condition = new ComparisonCondition
+                        {
+                            DataSource = parts[0],
+                            Operator = parts[1],
+                            Value = double.Parse(parts[2])
+                        }
+                    }
+                }
             },
             Actions = new List<RuleAction>
             {
-                new RuleAction { SetValue = new SetValueAction { Key = outputKey, Value = "1" } }
-            },
+                new() { SetValue = new SetValueAction { Key = output, Value = 1 } }
+            }
         };
     }
 }

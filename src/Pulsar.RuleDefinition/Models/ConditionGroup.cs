@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Pulsar.RuleDefinition.Models.Conditions;
 
 namespace Pulsar.RuleDefinition.Models;
 
@@ -10,5 +11,5 @@ public class ConditionGroup
 
 public class ConditionWrapper
 {
-    public Condition Condition { get; set; } = null!;
+    public Conditions.Condition Condition { get; set; } = null!;
 }

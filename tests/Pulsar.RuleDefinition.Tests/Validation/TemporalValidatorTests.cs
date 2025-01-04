@@ -1,6 +1,7 @@
 using System;
 using Pulsar.RuleDefinition.Validation;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Xunit;
 
 namespace Pulsar.RuleDefinition.Tests.Validation;

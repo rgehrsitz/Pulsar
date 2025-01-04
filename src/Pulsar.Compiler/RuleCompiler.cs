@@ -4,6 +4,7 @@ using System.Linq;
 using Pulsar.Models;
 using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
+using Pulsar.RuleDefinition.Models.Conditions;
 using Serilog;
 using Pulsar.Compiler.CodeGeneration;
 
@@ -167,7 +168,7 @@ public class RuleCompiler
         {
             foreach (var condition in rule.Conditions.All)
             {
-                foreach (var sensor in ExtractSensorNames(condition))
+                foreach (var sensor in ExtractSensorNames(condition.Condition))
                 {
                     sensors.Add(sensor);
                 }
@@ -177,7 +178,7 @@ public class RuleCompiler
         {
             foreach (var condition in rule.Conditions.Any)
             {
-                foreach (var sensor in ExtractSensorNames(condition))
+                foreach (var sensor in ExtractSensorNames(condition.Condition))
                 {
                     sensors.Add(sensor);
                 }
