@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using Pulsar.RuleDefinition.Models;
@@ -239,10 +240,19 @@ public class RuleParser
             );
         }
 
-        if (condition.Duration.TotalMilliseconds <= 0)
+        if (double.TryParse(condition.Duration, out var durationMs))
+        {
+            if (durationMs <= 0)
+            {
+                throw new System.ArgumentException(
+                    $"Rule '{ruleName}' has threshold condition with invalid duration: {condition.Duration}ms"
+                );
+            }
+        }
+        else
         {
             throw new System.ArgumentException(
-                $"Rule '{ruleName}' has threshold condition with invalid duration: {condition.Duration.TotalMilliseconds}ms"
+                $"Rule '{ruleName}' has threshold condition with invalid duration: {condition.Duration}"
             );
         }
     }
@@ -270,5 +280,62 @@ public class RuleParser
             ">" or ">=" or "<" or "<=" or "==" or "!=" => true,
             _ => false
         };
+    }
+
+    private static double ParseDuration(string duration)
+    {
+        if (string.IsNullOrWhiteSpace(duration))
+        {
+            throw new ArgumentException("Duration cannot be null or empty", nameof(duration));
+        }
+
+        // Try to parse as a TimeSpan first
+        if (TimeSpan.TryParse(duration, out var timeSpan))
+        {
+            return timeSpan.TotalMilliseconds;
+        }
+
+        // Try to parse as a number with unit
+        var match = Regex.Match(duration, @"^(\d+\.?\d*)\s*(ms|s|m|h|d)$");
+        if (!match.Success)
+        {
+            throw new ArgumentException($"Invalid duration format: {duration}");
+        }
+
+        var value = double.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        var unit = match.Groups[2].Value;
+
+        return unit switch
+        {
+            "ms" => value,
+            "s" => value * 1000,
+            "m" => value * 60 * 1000,
+            "h" => value * 60 * 60 * 1000,
+            "d" => value * 24 * 60 * 60 * 1000,
+            _ => throw new ArgumentException($"Invalid duration unit: {unit}")
+        };
+    }
+
+    private static ThresholdOverTimeConditionDefinition ParseThresholdOverTimeCondition(
+        Dictionary<string, object> conditionData
+    )
+    {
+        var condition = new ThresholdOverTimeConditionDefinition
+        {
+            Type = "threshold_over_time",
+            DataSource = conditionData.GetValueOrDefault("data_source")?.ToString(),
+            Operator = conditionData.GetValueOrDefault("operator")?.ToString() ?? ">",
+            Threshold = conditionData.GetValueOrDefault("threshold")?.ToString(),
+            Duration = conditionData.GetValueOrDefault("duration")?.ToString()
+        };
+
+        // Convert duration to milliseconds if it's not already
+        if (!string.IsNullOrWhiteSpace(condition.Duration))
+        {
+            var durationMs = ParseDuration(condition.Duration);
+            condition.Duration = durationMs.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return condition;
     }
 }

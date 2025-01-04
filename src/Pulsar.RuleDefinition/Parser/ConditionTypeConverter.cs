@@ -4,6 +4,8 @@ using Pulsar.RuleDefinition.Models.Conditions;
 using YamlDotNet.Core;
 using YamlDotNet.Core.Events;
 using YamlDotNet.Serialization;
+using Newtonsoft.Json.Linq;
+using System.Globalization;
 
 namespace Pulsar.RuleDefinition.Parser;
 
@@ -75,7 +77,7 @@ public class ConditionTypeConverter : IYamlTypeConverter
                 case "value":
                     if (double.TryParse(value, out var doubleValue))
                     {
-                        condition.Value = doubleValue;
+                        condition.Value = doubleValue.ToString(CultureInfo.InvariantCulture);
                     }
                     else
                     {
@@ -107,7 +109,7 @@ public class ConditionTypeConverter : IYamlTypeConverter
                 case "threshold":
                     if (double.TryParse(value, out var doubleValue))
                     {
-                        condition.Threshold = doubleValue;
+                        condition.Threshold = doubleValue.ToString(CultureInfo.InvariantCulture);
                     }
                     else
                     {
@@ -117,7 +119,7 @@ public class ConditionTypeConverter : IYamlTypeConverter
                 case "duration":
                     if (TryParseTimeSpan(value, out var duration))
                     {
-                        condition.Duration = duration;
+                        condition.Duration = duration.TotalMilliseconds.ToString(CultureInfo.InvariantCulture);
                     }
                     else
                     {
@@ -176,5 +178,41 @@ public class ConditionTypeConverter : IYamlTypeConverter
         };
 
         return true;
+    }
+
+    private static ComparisonConditionDefinition ConvertToComparisonCondition(
+        JObject jObject,
+        string dataSource
+    )
+    {
+        var value = jObject["value"]?.Value<double>() ?? 0.0;
+        var op = jObject["operator"]?.Value<string>() ?? ">";
+
+        return new ComparisonConditionDefinition
+        {
+            Type = "comparison",
+            DataSource = dataSource,
+            Operator = op,
+            Value = value.ToString(CultureInfo.InvariantCulture)
+        };
+    }
+
+    private static ThresholdOverTimeConditionDefinition ConvertToThresholdOverTimeCondition(
+        JObject jObject,
+        string dataSource
+    )
+    {
+        var threshold = jObject["threshold"]?.Value<double>() ?? 0.0;
+        var duration = TimeSpan.FromMilliseconds(jObject["duration"]?.Value<double>() ?? 0.0);
+        var op = jObject["operator"]?.Value<string>() ?? ">";
+
+        return new ThresholdOverTimeConditionDefinition
+        {
+            Type = "threshold_over_time",
+            DataSource = dataSource,
+            Operator = op,
+            Threshold = threshold.ToString(CultureInfo.InvariantCulture),
+            Duration = duration.TotalMilliseconds.ToString(CultureInfo.InvariantCulture)
+        };
     }
 }

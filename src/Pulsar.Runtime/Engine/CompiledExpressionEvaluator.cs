@@ -1,27 +1,18 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Data;
-using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.Extensions.Logging;
-using Pulsar.RuleDefinition.Models;
 using Pulsar.RuleDefinition.Models.Conditions;
 
 namespace Pulsar.Runtime.Engine;
 
 /// <summary>
-/// Evaluates expression-based conditions using compiled C# code
+/// Evaluates conditions using compiled expressions
 /// </summary>
 public class CompiledExpressionEvaluator : IConditionEvaluator
 {
     private readonly ConcurrentDictionary<
         string,
-        Func<IDictionary<string, double>, bool>
+        Func<IDictionary<string, object>, bool>
     > _compiledExpressions = new();
     private readonly ILogger _logger;
 
@@ -32,7 +23,7 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
 
     public async Task<bool> EvaluateAsync(
         ConditionWrapperDefinition condition,
-        IDictionary<string, double> data
+        IDictionary<string, object> data
     )
     {
         if (condition.Expression is not ExpressionConditionDefinition expressionCondition)
@@ -74,5 +65,12 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
             );
             throw;
         }
+    }
+
+    private Func<IDictionary<string, object>, bool> CompileExpression(string expression)
+    {
+        // Implement CompileExpression method to handle string values
+        // This method should return a Func that takes a dictionary of string-object pairs and returns a boolean
+        // The implementation of this method is not provided in the given code edit
     }
 }

@@ -23,54 +23,56 @@ public class ComparisonEvaluator : IConditionEvaluator
         IDictionary<string, double> sensorData
     )
     {
-        if (condition is not ComparisonConditionDefinition comparisonCondition)
+        if (condition?.Condition is not ComparisonConditionDefinition comparison)
         {
             _logger.Error(
                 "Invalid condition type. Expected {ExpectedType} but got {ActualType}",
                 typeof(ComparisonConditionDefinition).Name,
-                condition.GetType().Name
+                condition?.GetType().Name ?? "null"
             );
-            throw new ArgumentException(
-                $"Expected ComparisonConditionDefinition but got {condition.GetType().Name}"
-            );
+            return Task.FromResult(false);
         }
 
-        _logger.Debug(
-            "Evaluating comparison condition for {DataSource} {Operator} {Value}",
-            comparisonCondition.DataSource,
-            comparisonCondition.Operator,
-            comparisonCondition.Value
-        );
-
-        if (!sensorData.TryGetValue(comparisonCondition.DataSource, out double currentValue))
+        if (string.IsNullOrWhiteSpace(comparison.DataSource))
         {
-            _logger.Warning(
-                "Data source {DataSource} not found in sensor data. Available sources: {@Sources}",
-                comparisonCondition.DataSource,
-                sensorData.Keys
-            );
-            throw new KeyNotFoundException(
-                $"Data source '{comparisonCondition.DataSource}' not found in sensor data"
-            );
+            _logger.Error("Data source is required");
+            return Task.FromResult(false);
         }
 
-        var result = comparisonCondition.Operator switch
+        if (!sensorData.TryGetValue(comparison.DataSource, out var sensorValue))
         {
-            ThresholdOperator.GreaterThan => currentValue > comparisonCondition.Value,
-            ThresholdOperator.GreaterThanOrEqual => currentValue >= comparisonCondition.Value,
-            ThresholdOperator.LessThan => currentValue < comparisonCondition.Value,
-            ThresholdOperator.LessThanOrEqual => currentValue <= comparisonCondition.Value,
-            ThresholdOperator.Equal => Math.Abs(currentValue - comparisonCondition.Value) < double.Epsilon,
-            ThresholdOperator.NotEqual => Math.Abs(currentValue - comparisonCondition.Value) >= double.Epsilon,
-            _ => throw new ArgumentException($"Unknown operator: {comparisonCondition.Operator}")
+            _logger.Error("Data source not found: {DataSource}", comparison.DataSource);
+            return Task.FromResult(false);
+        }
+
+        if (string.IsNullOrWhiteSpace(comparison.Value))
+        {
+            _logger.Error("Value is required");
+            return Task.FromResult(false);
+        }
+
+        if (!double.TryParse(comparison.Value, out var value))
+        {
+            _logger.Error("Invalid value: {Value}", comparison.Value);
+            return Task.FromResult(false);
+        }
+
+        var result = comparison.Operator switch
+        {
+            ">" => sensorValue > value,
+            "<" => sensorValue < value,
+            ">=" => sensorValue >= value,
+            "<=" => sensorValue <= value,
+            "==" => Math.Abs(sensorValue - value) < 0.0001, // Use epsilon for floating-point comparison
+            "!=" => Math.Abs(sensorValue - value) >= 0.0001,
+            _ => false
         };
 
         _logger.Debug(
-            "Comparison result for {DataSource}: {CurrentValue} {Operator} {CompareValue} = {Result}",
-            comparisonCondition.DataSource,
-            currentValue,
-            comparisonCondition.Operator,
-            comparisonCondition.Value,
+            "Evaluated condition: {DataSource} {Operator} {Value} = {Result}",
+            comparison.DataSource,
+            comparison.Operator,
+            comparison.Value,
             result
         );
 

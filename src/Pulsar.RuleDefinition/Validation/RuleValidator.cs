@@ -32,265 +32,229 @@ public class RuleValidator
 
     public ValidationResult ValidateRuleSet(RuleSetDefinition ruleSet)
     {
-        _logger.Information("Starting validation of ruleset version {Version}", ruleSet?.Version);
-        var errors = new List<ValidationError>();
+        var result = new ValidationResult();
 
         if (ruleSet == null)
         {
-            _logger.Error("RuleSet is null");
-            throw new ArgumentNullException(nameof(ruleSet));
-        }
-
-        if (ruleSet.Version <= 0)
-        {
-            _logger.Warning("Invalid version {Version} in ruleset", ruleSet.Version);
-            errors.Add(new ValidationError("Version must be greater than 0"));
+            result.AddError("RuleSet cannot be null");
+            return result;
         }
 
         if (ruleSet.Rules == null || !ruleSet.Rules.Any())
         {
-            _logger.Warning("Empty rules list in ruleset");
-            errors.Add(new ValidationError("Rules list cannot be empty"));
-            return new ValidationResult(errors.Select(e => e.Message).ToList());
+            result.AddError("RuleSet must contain at least one rule");
+            return result;
         }
 
-        _logger.Debug(
-            "Checking for duplicate rule names in {RuleCount} rules",
-            ruleSet.Rules.Count
-        );
-        // Check for duplicate rule names
-        var duplicateRules = ruleSet
-            .Rules.GroupBy(r => r.Name)
-            .Where(g => g.Count() > 1)
-            .Select(g => g.Key)
-            .ToList();
-
-        if (duplicateRules.Any())
-        {
-            foreach (var ruleName in duplicateRules)
-            {
-                _logger.Warning("Duplicate rule name found: {RuleName}", ruleName);
-                errors.Add(new ValidationError($"Duplicate rule name: {ruleName}"));
-            }
-        }
-
-        _logger.Debug("Validating individual rules");
         // Validate each rule
         foreach (var rule in ruleSet.Rules)
         {
-            _logger.Debug("Validating rule {RuleName}", rule.Name);
-            var ruleErrors = ValidateRule(rule);
-            if (ruleErrors.Any())
-            {
-                _logger.Warning(
-                    "Found {ErrorCount} validation errors in rule {RuleName}: {@Errors}",
-                    ruleErrors.Count,
-                    rule.Name,
-                    ruleErrors
-                );
-                errors.AddRange(ruleErrors);
-            }
+            var ruleValidation = ValidateRule(rule);
+            result.Merge(ruleValidation);
         }
 
-        // Check for cyclic dependencies
-        _logger.Debug("Checking for cyclic dependencies");
-        var (_, cyclicDependencies) = _dependencyAnalyzer.AnalyzeAndOrder(ruleSet);
+        // Check for circular dependencies
+        var analyzer = new DependencyAnalyzer();
+        var (orderedRules, cyclicDependencies) = analyzer.AnalyzeAndOrder(ruleSet);
+        
+        // If there are circular dependencies, add them as errors
         if (cyclicDependencies.Any())
         {
-            foreach (var cycle in cyclicDependencies)
-            {
-                _logger.Error("Found cyclic dependency: {CyclePath}", cycle);
-                errors.Add(new ValidationError($"Cyclic dependency detected: {cycle}"));
-            }
+            result.AddError($"Circular dependencies detected: {string.Join(" -> ", cyclicDependencies)}");
         }
 
-        if (errors.Any())
-        {
-            _logger.Warning("Validation completed with {ErrorCount} errors", errors.Count);
-        }
-        else
-        {
-            _logger.Information("Validation completed successfully");
-        }
-
-        return new ValidationResult(errors.Select(e => e.Message).ToList());
+        return result;
     }
 
-    private List<ValidationError> ValidateRule(RuleDefinitionModel rule)
+    private ValidationResult ValidateRule(RuleDefinitionModel rule)
     {
-        var errors = new List<ValidationError>();
+        var result = new ValidationResult();
 
         if (string.IsNullOrWhiteSpace(rule.Name))
         {
-            _logger.Warning("Rule has no name");
-            errors.Add(new ValidationError("Rule name is required"));
+            result.AddError("Rule name is required");
         }
 
         if (rule.Conditions == null)
         {
-            _logger.Warning("Rule '{RuleName}' has no conditions", rule.Name);
-            errors.Add(new ValidationError($"Rule '{rule.Name}' has no conditions"));
+            result.AddError("Rule must have conditions");
+            return result;
         }
-        else
+
+        var conditionValidation = ValidateConditionGroup(rule.Conditions);
+        foreach (var error in conditionValidation)
         {
-            // Validate All conditions
-            if (rule.Conditions.All != null)
-            {
-                foreach (var condition in rule.Conditions.All)
-                {
-                    var conditionErrors = ValidateCondition(condition.Condition, rule.Name);
-                    if (conditionErrors.Any())
-                    {
-                        _logger.Warning(
-                            "Found {ErrorCount} errors in condition of rule {RuleName}: {@Errors}",
-                            conditionErrors.Count,
-                            rule.Name,
-                            conditionErrors
-                        );
-                        errors.AddRange(conditionErrors);
-                    }
-                }
-            }
-
-            // Validate Any conditions
-            if (rule.Conditions.Any != null)
-            {
-                foreach (var condition in rule.Conditions.Any)
-                {
-                    var conditionErrors = ValidateCondition(condition.Condition, rule.Name);
-                    if (conditionErrors.Any())
-                    {
-                        _logger.Warning(
-                            "Found {ErrorCount} errors in condition of rule {RuleName}: {@Errors}",
-                            conditionErrors.Count,
-                            rule.Name,
-                            conditionErrors
-                        );
-                        errors.AddRange(conditionErrors);
-                    }
-                }
-            }
-
-            // At least one of All or Any must be present and non-empty
-            if (
-                (rule.Conditions.All == null || !rule.Conditions.All.Any())
-                && (rule.Conditions.Any == null || !rule.Conditions.Any.Any())
-            )
-            {
-                _logger.Warning("Rule '{RuleName}' has no conditions", rule.Name);
-                errors.Add(new ValidationError($"Rule '{rule.Name}' has no conditions"));
-            }
+            result.AddError(error);
         }
 
-        // Validate actions
         if (rule.Actions == null || !rule.Actions.Any())
         {
-            _logger.Warning("Rule '{RuleName}' has no actions", rule.Name);
-            errors.Add(new ValidationError($"Rule '{rule.Name}' has no actions"));
-        }
-        else
-        {
-            foreach (var action in rule.Actions)
-            {
-                var actionErrors = ValidateRuleAction(action, rule.Name);
-                if (actionErrors.Any())
-                {
-                    _logger.Warning(
-                        "Found {ErrorCount} errors in action of rule {RuleName}: {@Errors}",
-                        actionErrors.Count,
-                        rule.Name,
-                        actionErrors
-                    );
-                    errors.AddRange(actionErrors);
-                }
-            }
+            result.AddError("Rule must have at least one action");
+            return result;
         }
 
-        return errors;
+        foreach (var action in rule.Actions)
+        {
+            var actionValidation = ValidateAction(action);
+            result.Merge(actionValidation);
+        }
+
+        return result;
     }
 
-    private List<ValidationError> ValidateCondition(Condition condition, string ruleName)
+    private ValidationResult ValidateAction(RuleAction action)
     {
-        var errors = new List<ValidationError>();
-        switch (condition)
+        var result = new ValidationResult();
+
+        if (action.SetValue == null)
         {
-            case ComparisonConditionDefinition comparison:
-                if (comparison.DataSource != null && !_config.ValidSensors.Contains(comparison.DataSource))
-                {
-                    _logger.Warning("Invalid data source: {DataSource}", comparison.DataSource);
-                    errors.Add(new ValidationError($"Invalid data source: {comparison.DataSource}"));
-                }
-
-                if (!ValidOperators.Contains(comparison.Operator))
-                {
-                    _logger.Warning("Invalid operator: {Operator}", comparison.Operator);
-                    errors.Add(new ValidationError($"Invalid operator: {comparison.Operator}"));
-                }
-                break;
-
-            case ThresholdOverTimeConditionDefinition threshold:
-                if (threshold.DataSource != null && !_config.ValidSensors.Contains(threshold.DataSource))
-                {
-                    _logger.Warning("Invalid data source: {DataSource}", threshold.DataSource);
-                    errors.Add(new ValidationError($"Invalid data source: {threshold.DataSource}"));
-                }
-                break;
-
-            case ExpressionConditionDefinition expression:
-                // Add any validation for expression conditions here
-                break;
+            result.AddError("Action must have a SetValue property");
+            return result;
         }
 
-        return errors;
+        if (string.IsNullOrWhiteSpace(action.SetValue.Key))
+        {
+            result.AddError("SetValue action must have a key");
+        }
+
+        if (action.SetValue.Value == null)
+        {
+            result.AddError("SetValue action must have a value");
+        }
+
+        return result;
     }
 
-    private List<ValidationError> ValidateRuleAction(RuleAction action, string ruleName)
+    private List<string> ValidateConditionGroup(ConditionGroupDefinition group)
     {
-        var errors = new List<ValidationError>();
+        var errors = new List<string>();
 
-        // Each action must have exactly one of SetValue or SendMessage
-        if ((action.SetValue == null && action.SendMessage == null) ||
-            (action.SetValue != null && action.SendMessage != null))
+        if ((group.All == null || !group.All.Any()) && (group.Any == null || !group.Any.Any()))
         {
-            _logger.Warning("Rule '{RuleName}' has an invalid action: must have exactly one of set_value or send_message", ruleName);
-            errors.Add(
-                new ValidationError($"Rule '{ruleName}' has an invalid action: must have exactly one of set_value or send_message")
-            );
+            errors.Add("Must have at least one condition");
             return errors;
         }
 
-        // Validate SetValue action if present
-        if (action.SetValue != null)
+        if (group.All != null)
         {
-            if (string.IsNullOrEmpty(action.SetValue.Key))
+            foreach (var condition in group.All)
             {
-                _logger.Warning("Rule '{RuleName}' has an invalid action: missing key", ruleName);
-                errors.Add(
-                    new ValidationError($"Rule '{ruleName}' has an invalid action: missing key")
-                );
-            }
-            else if (!_config.ValidSensors.Contains(action.SetValue.Key))
-            {
-                _logger.Warning("Invalid data source: {DataSource}", action.SetValue.Key);
-                errors.Add(new ValidationError($"Invalid data source: {action.SetValue.Key}"));
+                var conditionErrors = ValidateCondition(condition);
+                errors.AddRange(conditionErrors);
             }
         }
-        // Validate SendMessage action if present
-        else if (action.SendMessage != null)
+
+        if (group.Any != null)
         {
-            if (string.IsNullOrEmpty(action.SendMessage.Channel))
+            foreach (var condition in group.Any)
             {
-                _logger.Warning("Rule '{RuleName}' has an invalid action: missing channel", ruleName);
-                errors.Add(
-                    new ValidationError($"Rule '{ruleName}' has an invalid action: missing channel")
-                );
+                var conditionErrors = ValidateCondition(condition);
+                errors.AddRange(conditionErrors);
             }
-            if (string.IsNullOrEmpty(action.SendMessage.Message))
+        }
+
+        return errors;
+    }
+
+    private List<string> ValidateCondition(ConditionDefinition wrapper)
+    {
+        var errors = new List<string>();
+
+        if (wrapper.Condition == null)
+        {
+            errors.Add("Condition is required");
+            return errors;
+        }
+
+        switch (wrapper.Condition)
+        {
+            case ComparisonConditionDefinition comparison:
+                errors.AddRange(ValidateComparisonCondition(comparison));
+                break;
+            case ThresholdOverTimeConditionDefinition temporal:
+                errors.AddRange(ValidateTemporalCondition(temporal));
+                break;
+            default:
+                errors.Add($"Unknown condition type: {wrapper.Condition.GetType().Name}");
+                break;
+        }
+
+        return errors;
+    }
+
+    private List<string> ValidateComparisonCondition(ComparisonConditionDefinition condition)
+    {
+        var errors = new List<string>();
+
+        // Validate data source
+        if (string.IsNullOrWhiteSpace(condition.DataSource))
+        {
+            errors.Add("Data source is required");
+        }
+        else if (!_config.ValidSensors.Contains(condition.DataSource))
+        {
+            errors.Add($"Invalid data source: {condition.DataSource}");
+        }
+
+        // Validate operator
+        if (string.IsNullOrWhiteSpace(condition.Operator))
+        {
+            errors.Add("Operator is required");
+        }
+        else if (!ValidOperators.Contains(condition.Operator))
+        {
+            errors.Add($"Invalid operator: {condition.Operator}");
+        }
+
+        // Validate value
+        if (string.IsNullOrWhiteSpace(condition.Value))
+        {
+            errors.Add("Value is required");
+        }
+        else if (!double.TryParse(condition.Value, out var value) || double.IsNaN(value))
+        {
+            errors.Add("Invalid numeric value");
+        }
+
+        return errors;
+    }
+
+    private List<string> ValidateTemporalCondition(ThresholdOverTimeConditionDefinition condition)
+    {
+        var errors = new List<string>();
+
+        // Validate data source
+        if (string.IsNullOrWhiteSpace(condition.DataSource))
+        {
+            errors.Add("Data source is required");
+        }
+        else if (!_config.ValidSensors.Contains(condition.DataSource))
+        {
+            errors.Add($"Invalid data source: {condition.DataSource}");
+        }
+
+        // Validate threshold
+        if (string.IsNullOrWhiteSpace(condition.Threshold))
+        {
+            errors.Add("Threshold is required");
+        }
+        else if (!double.TryParse(condition.Threshold, out var threshold) || double.IsNaN(threshold))
+        {
+            errors.Add("Invalid threshold value");
+        }
+
+        // Validate duration
+        if (string.IsNullOrWhiteSpace(condition.Duration))
+        {
+            errors.Add("Duration is required");
+        }
+        else
+        {
+            var temporalValidator = new TemporalValidator();
+            var (isValid, _, error) = temporalValidator.ValidateDuration(condition.Duration);
+            if (!isValid)
             {
-                _logger.Warning("Rule '{RuleName}' has an invalid action: missing message", ruleName);
-                errors.Add(
-                    new ValidationError($"Rule '{ruleName}' has an invalid action: missing message")
-                );
+                errors.Add(error);
             }
         }
 

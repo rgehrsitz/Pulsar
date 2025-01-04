@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Pulsar.Models;
 using Pulsar.Models.Actions;
 using Pulsar.RuleDefinition.Models;
-using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Storage;
 using Serilog;
@@ -18,29 +18,35 @@ namespace Pulsar.Runtime.Engine;
 public class RuleEngine : IHostedService
 {
     private readonly TimeSpan _cycleDuration;
-    private readonly ILogger _logger;
+    private readonly ILogger<RuleEngine> _logger;
     private readonly Core.Services.IMetricsService _metrics;  
     private readonly IDataStore _dataStore;
     private readonly IActionExecutor _actionExecutor;
     private readonly CompiledRuleSet _ruleSet;
+    private readonly IConditionEvaluator _comparisonEvaluator;
+    private readonly IConditionEvaluator _thresholdEvaluator;
 
     public RuleEngine(
-        ILogger logger,
+        ILogger<RuleEngine> logger,
         Core.Services.IMetricsService metrics,  
         IDataStore dataStore,
         IActionExecutor actionExecutor,
         CompiledRuleSet ruleSet,
-        TimeSpan? cycleDuration = null
+        TimeSpan? cycleDuration = null,
+        IConditionEvaluator comparisonEvaluator = null,
+        IConditionEvaluator thresholdEvaluator = null
     )
     {
-        _logger = logger.ForContext<RuleEngine>();
+        _logger = logger;
         _metrics = metrics;
         _dataStore = dataStore;
         _actionExecutor = actionExecutor;
         _ruleSet = ruleSet;
         _cycleDuration = cycleDuration ?? TimeSpan.FromMilliseconds(100);
+        _comparisonEvaluator = comparisonEvaluator;
+        _thresholdEvaluator = thresholdEvaluator;
 
-        _logger.Information(
+        _logger.LogInformation(
             "Rule engine initialized with {RuleCount} rules in {LayerCount} layers",
             _ruleSet.Rules.Count,
             _ruleSet.LayerCount
@@ -49,7 +55,7 @@ public class RuleEngine : IHostedService
 
     public virtual Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Information(
+        _logger.LogInformation(
             "Starting rule engine execution cycle with {Duration}ms interval",
             _cycleDuration.TotalMilliseconds
         );
@@ -58,7 +64,7 @@ public class RuleEngine : IHostedService
 
     public virtual Task StopAsync(CancellationToken cancellationToken)
     {
-        _logger.Information("Stopping rule engine execution cycle");
+        _logger.LogInformation("Stopping rule engine execution cycle");
         return Task.CompletedTask;
     }
 
@@ -74,7 +80,7 @@ public class RuleEngine : IHostedService
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Error during rule execution cycle");
+            _logger.LogError(ex, "Error during rule execution cycle");
         }
     }
 
@@ -82,43 +88,41 @@ public class RuleEngine : IHostedService
     {
         try
         {
-            var conditionsMet = await EvaluateConditionsAsync(rule.RuleDefinition.Conditions, data);
+            var conditionsMet = await EvaluateConditionGroupAsync(rule.RuleDefinition.Conditions, data);
             if (conditionsMet)
             {
-                _logger.Debug("Rule {RuleName} conditions met, executing actions", rule.RuleDefinition.Name);
-                foreach (var action in rule.RuleDefinition.Actions)
-                {
-                    await ExecuteActionAsync(action);
-                }
+                _logger.LogDebug("Rule {RuleName} conditions met, executing actions", rule.RuleDefinition.Name);
+                await ExecuteActionsAsync(rule.RuleDefinition, data);
             }
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Error executing rule {RuleName}", rule.RuleDefinition.Name);
+            _logger.LogError(ex, "Error executing rule {RuleName}", rule.RuleDefinition.Name);
         }
     }
 
-    private async Task<bool> EvaluateConditionsAsync(
-        ConditionGroupDefinition conditions,
-        IDictionary<string, double> data
+    private async Task<bool> EvaluateConditionGroupAsync(
+        ConditionGroupDefinition group,
+        IDictionary<string, double> sensorData
     )
     {
-        if (conditions.All != null && conditions.All.Any())
+        if (group.All != null && group.All.Any())
         {
-            foreach (var condition in conditions.All)
+            foreach (var condition in group.All)
             {
-                if (!await EvaluateConditionAsync(condition, data))
+                if (!await EvaluateConditionAsync(condition, sensorData))
                 {
                     return false;
                 }
             }
             return true;
         }
-        else if (conditions.Any != null && conditions.Any.Any())
+
+        if (group.Any != null && group.Any.Any())
         {
-            foreach (var condition in conditions.Any)
+            foreach (var condition in group.Any)
             {
-                if (await EvaluateConditionAsync(condition, data))
+                if (await EvaluateConditionAsync(condition, sensorData))
                 {
                     return true;
                 }
@@ -126,86 +130,64 @@ public class RuleEngine : IHostedService
             return false;
         }
 
-        return true;
+        _logger.LogWarning("Condition group has no conditions");
+        return false;
     }
 
-    private async Task<bool> EvaluateConditionAsync(ConditionWrapperDefinition condition, IDictionary<string, double> data)
+    private async Task<bool> EvaluateConditionAsync(
+        ConditionDefinition condition,
+        IDictionary<string, double> sensorData
+    )
     {
-        try
+        if (condition.Condition == null)
         {
-            switch (condition.Condition)
-            {
-                case ComparisonConditionDefinition comp:
-                    if (!data.TryGetValue(comp.DataSource, out var value))
-                    {
-                        _logger.Warning("Data source {DataSource} not found", comp.DataSource);
-                        return false;
-                    }
-                    return EvaluateComparison(value, comp.Operator, comp.Value);
-
-                case ThresholdOverTimeConditionDefinition threshold:
-                    var duration = TimeSpan.FromMilliseconds(threshold.DurationMs);
-                    return await _dataStore.CheckThresholdOverTimeAsync(
-                        threshold.DataSource,
-                        threshold.Threshold,
-                        duration
-                    );
-
-                default:
-                    _logger.Warning("Unknown condition type: {Type}", condition.Condition.GetType().Name);
-                    return false;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Error evaluating condition");
+            _logger.LogWarning("Condition is null");
             return false;
         }
+
+        var evaluator = GetEvaluator(condition.Condition);
+        if (evaluator == null)
+        {
+            _logger.LogWarning(
+                "No evaluator found for condition type {ConditionType}",
+                condition.Condition.GetType().Name
+            );
+            return false;
+        }
+
+        return await evaluator.EvaluateAsync(condition, sensorData);
     }
 
-    private bool EvaluateComparison(double value, string op, double threshold)
+    private IConditionEvaluator GetEvaluator(IConditionDefinition condition)
     {
-        return op switch
+        return condition switch
         {
-            ">" => value > threshold,
-            ">=" => value >= threshold,
-            "<" => value < threshold,
-            "<=" => value <= threshold,
-            "==" => Math.Abs(value - threshold) < double.Epsilon,
-            "!=" => Math.Abs(value - threshold) > double.Epsilon,
-            _ => false
+            ComparisonConditionDefinition => _comparisonEvaluator,
+            ThresholdOverTimeConditionDefinition => _thresholdEvaluator,
+            _ => null
         };
     }
 
-    private async Task ExecuteActionAsync(RuleActionDefinition action)
+    private async Task ExecuteActionsAsync(
+        RuleDefinitionModel rule,
+        IDictionary<string, double> sensorData
+    )
     {
-        try
+        foreach (var action in rule.Actions)
         {
-            var compiledAction = new CompiledRuleAction();
-
-            if (action.SetValue != null)
+            try
             {
-                compiledAction.SetValue = new Models.Actions.SetValueAction
-                {
-                    Key = action.SetValue.Key,
-                    Value = action.SetValue.Value,
-                    ValueExpression = action.SetValue.ValueExpression
-                };
+                await _actionExecutor.ExecuteAsync(action, sensorData);
             }
-            else if (action.SendMessage != null)
+            catch (Exception ex)
             {
-                compiledAction.SendMessage = new Models.Actions.SendMessageAction
-                {
-                    Channel = action.SendMessage.Channel,
-                    Message = action.SendMessage.Message
-                };
+                _logger.LogError(
+                    ex,
+                    "Failed to execute action {ActionType} for rule {RuleName}",
+                    action.GetType().Name,
+                    rule.Name
+                );
             }
-
-            await _actionExecutor.ExecuteAsync(compiledAction);
-        }
-        catch (Exception ex)
-        {
-            _logger.Error(ex, "Error executing action");
         }
     }
 }

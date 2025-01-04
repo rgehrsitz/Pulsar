@@ -15,10 +15,15 @@ public class ThresholdOverTimeConditionDefinition : Condition
     /// <summary>
     /// The threshold value to compare against
     /// </summary>
-    public double Threshold { get; set; }
+    public string Threshold { get; set; } = string.Empty;
 
     /// <summary>
-    /// Duration in milliseconds that the condition must be met
+    /// Duration that the condition must be met (e.g. "500ms", "1s", "5m")
     /// </summary>
-    public TimeSpan Duration { get; set; }
+    public string Duration { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The comparison operator (">", "<", ">=", "<=", "==", "!=")
+    /// </summary>
+    public string Operator { get; set; } = ">";
 }

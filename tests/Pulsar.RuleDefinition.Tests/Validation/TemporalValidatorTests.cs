@@ -43,11 +43,12 @@ public class TemporalValidatorTests
     [Fact]
     public void ValidateTemporalCondition_ValidCondition_NoErrors()
     {
-        var condition = new ThresholdOverTimeCondition
+        var condition = new ThresholdOverTimeConditionDefinition
         {
+            Type = "threshold_over_time",
             DataSource = "temperature",
-            Threshold = 50,
-            DurationMs = 500
+            Threshold = "50",
+            Duration = "500ms"
         };
 
         var errors = _validator.ValidateTemporalCondition(condition);
@@ -57,11 +58,12 @@ public class TemporalValidatorTests
     [Fact]
     public void ValidateTemporalCondition_InvalidThreshold_ReturnsError()
     {
-        var condition = new ThresholdOverTimeCondition
+        var condition = new ThresholdOverTimeConditionDefinition
         {
+            Type = "threshold_over_time",
             DataSource = "temperature",
-            Threshold = double.NaN,
-            DurationMs = 500
+            Threshold = "NaN",
+            Duration = "500ms"
         };
 
         var errors = _validator.ValidateTemporalCondition(condition);
@@ -72,11 +74,12 @@ public class TemporalValidatorTests
     [Fact]
     public void ValidateTemporalCondition_InvalidDuration_ReturnsError()
     {
-        var condition = new ThresholdOverTimeCondition
+        var condition = new ThresholdOverTimeConditionDefinition
         {
+            Type = "threshold_over_time",
             DataSource = "temperature",
-            Threshold = 50,
-            DurationMs = -1
+            Threshold = "50",
+            Duration = "-1ms"
         };
 
         var errors = _validator.ValidateTemporalCondition(condition);
@@ -87,11 +90,12 @@ public class TemporalValidatorTests
     [Fact]
     public void ValidateTemporalCondition_EmptyDataSource_ReturnsError()
     {
-        var condition = new ThresholdOverTimeCondition
+        var condition = new ThresholdOverTimeConditionDefinition
         {
+            Type = "threshold_over_time",
             DataSource = "",
-            Threshold = 50,
-            DurationMs = 500
+            Threshold = "50",
+            Duration = "500ms"
         };
 
         var errors = _validator.ValidateTemporalCondition(condition);

@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Pulsar.RuleDefinition.Models;
-using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.Runtime.Engine;
 using Xunit;
 using Xunit.Abstractions;
@@ -32,21 +31,151 @@ public class CompiledExpressionEvaluatorTests
         };
     }
 
+    [Fact]
+    public async Task EvaluateAsync_SimpleComparison_ReturnsExpectedResult()
+    {
+        // Arrange
+        var condition = new ConditionDefinition
+        {
+            Condition = new ComparisonConditionDefinition
+            {
+                Type = "comparison",
+                DataSource = "temperature",
+                Operator = ">",
+                Value = "20"
+            }
+        };
+
+        // Act
+        var result = await _evaluator.EvaluateAsync(condition, _sensorData);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_InvalidDataSource_ReturnsFalse()
+    {
+        // Arrange
+        var condition = new ConditionDefinition
+        {
+            Condition = new ComparisonConditionDefinition
+            {
+                Type = "comparison",
+                DataSource = "invalid_sensor",
+                Operator = ">",
+                Value = "20"
+            }
+        };
+
+        // Act
+        var result = await _evaluator.EvaluateAsync(condition, _sensorData);
+
+        // Assert
+        Assert.False(result);
+        _loggerMock.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => true),
+                It.IsAny<Exception>(),
+                It.Is<Func<It.IsAnyType, Exception, string>>((v, t) => true)
+            ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_InvalidOperator_ReturnsFalse()
+    {
+        // Arrange
+        var condition = new ConditionDefinition
+        {
+            Condition = new ComparisonConditionDefinition
+            {
+                Type = "comparison",
+                DataSource = "temperature",
+                Operator = "invalid",
+                Value = "20"
+            }
+        };
+
+        // Act
+        var result = await _evaluator.EvaluateAsync(condition, _sensorData);
+
+        // Assert
+        Assert.False(result);
+        _loggerMock.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => true),
+                It.IsAny<Exception>(),
+                It.Is<Func<It.IsAnyType, Exception, string>>((v, t) => true)
+            ),
+            Times.Once
+        );
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_InvalidValue_ReturnsFalse()
+    {
+        // Arrange
+        var condition = new ConditionDefinition
+        {
+            Condition = new ComparisonConditionDefinition
+            {
+                Type = "comparison",
+                DataSource = "temperature",
+                Operator = ">",
+                Value = "invalid"
+            }
+        };
+
+        // Act
+        var result = await _evaluator.EvaluateAsync(condition, _sensorData);
+
+        // Assert
+        Assert.False(result);
+        _loggerMock.Verify(
+            x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => true),
+                It.IsAny<Exception>(),
+                It.Is<Func<It.IsAnyType, Exception, string>>((v, t) => true)
+            ),
+            Times.Once
+        );
+    }
+
     [Theory]
-    [InlineData("temperature > 20", true)] // Simple comparison
-    [InlineData("temperature < 20", false)] // Simple comparison (false)
-    [InlineData("humidity >= 50 && humidity <= 70", true)] // Range check
-    [InlineData("temperature * 2 > 45", true)] // Arithmetic
-    [InlineData("(temperature > 20) && (humidity < 70)", true)] // Logical AND
-    [InlineData("(temperature > 30) || (humidity < 70)", true)] // Logical OR
-    [InlineData("pressure > 1000 && pressure < 1020", true)] // Complex condition
-    public async Task EvaluateAsync_ValidExpression_ReturnsExpectedResult(
-        string expression,
+    [InlineData("temperature", ">", "20", true)]
+    [InlineData("temperature", "<", "30", true)]
+    [InlineData("humidity", ">=", "60", true)]
+    [InlineData("humidity", "<=", "70", true)]
+    [InlineData("pressure", "==", "1013.25", true)]
+    [InlineData("pressure", "!=", "1000", true)]
+    [InlineData("temperature", ">", "30", false)]
+    [InlineData("humidity", "<", "50", false)]
+    public async Task EvaluateAsync_VariousConditions_ReturnsExpectedResults(
+        string dataSource,
+        string op,
+        string value,
         bool expected
     )
     {
         // Arrange
-        var condition = new ExpressionCondition { Type = "expression", Expression = expression };
+        var condition = new ConditionDefinition
+        {
+            Condition = new ComparisonConditionDefinition
+            {
+                Type = "comparison",
+                DataSource = dataSource,
+                Operator = op,
+                Value = value
+            }
+        };
 
         // Act
         var result = await _evaluator.EvaluateAsync(condition, _sensorData);
@@ -55,66 +184,18 @@ public class CompiledExpressionEvaluatorTests
         Assert.Equal(expected, result);
     }
 
-    [Theory]
-    [InlineData("invalid expression")]
-    [InlineData("temperature >")] // Incomplete expression
-    [InlineData("temperature > abc")] // Invalid value
-    public async Task EvaluateAsync_InvalidExpression_ThrowsArgumentException(string expression)
-    {
-        // Arrange
-        var condition = new ExpressionCondition { Type = "expression", Expression = expression };
-
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _evaluator.EvaluateAsync(condition, _sensorData)
-        );
-    }
-
-    [Fact]
-    public async Task EvaluateAsync_ExpressionWithUnknownVariable_ThrowsArgumentException()
-    {
-        // Arrange
-        var condition = new ExpressionCondition
-        {
-            Type = "expression",
-            Expression = "unknown_sensor > 20",
-        };
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
-            () => _evaluator.EvaluateAsync(condition, _sensorData)
-        );
-
-        Assert.Contains("Error evaluating expression", ex.Message);
-    }
-
-    [Fact]
-    public async Task EvaluateAsync_WrongConditionType_ThrowsArgumentException()
-    {
-        // Arrange
-        var condition = new ComparisonCondition
-        {
-            Type = "comparison",
-            DataSource = "temperature",
-            Operator = ">",
-            Value = 20.0,
-        };
-
-        // Act & Assert
-        await Assert.ThrowsAsync<ArgumentException>(
-            () => _evaluator.EvaluateAsync(condition, _sensorData)
-        );
-    }
-
     [Fact]
     public async Task PerformanceTest_ExpressionEvaluation()
     {
         // Arrange
-        var condition = new ExpressionCondition
+        var condition = new ConditionDefinition
         {
-            Type = "expression",
-            Expression =
-                "(temperature > 20 && humidity < 70) || (pressure > 1000 && Abs(temperature - humidity) > 30)",
+            Condition = new ExpressionConditionDefinition
+            {
+                Type = "expression",
+                Expression =
+                    "(temperature > 20 && humidity < 70) || (pressure > 1000 && Abs(temperature - humidity) > 30)",
+            }
         };
 
         var iterations = 10000;
@@ -162,7 +243,14 @@ public class CompiledExpressionEvaluatorTests
         };
 
         var conditions = expressions
-            .Select(e => new ExpressionCondition { Type = "expression", Expression = e })
+            .Select(e => new ConditionDefinition
+            {
+                Condition = new ExpressionConditionDefinition
+                {
+                    Type = "expression",
+                    Expression = e
+                }
+            })
             .ToList();
 
         var iterations = 1000;

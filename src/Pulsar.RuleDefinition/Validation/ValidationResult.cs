@@ -12,9 +12,20 @@ public class ValidationResult
     public List<string> Errors { get; }
     public RuleDefinitionModel? Rule { get; }
 
-    public ValidationResult(List<string> errors, RuleDefinitionModel? rule = null)
+    public ValidationResult(List<string>? errors = null, RuleDefinitionModel? rule = null)
     {
-        Errors = errors;
+        Errors = errors ?? new List<string>();
         Rule = rule;
+    }
+
+    public void AddError(string error)
+    {
+        Errors.Add(error);
+    }
+
+    public void Merge(ValidationResult other)
+    {
+        if (other == null) return;
+        Errors.AddRange(other.Errors);
     }
 }

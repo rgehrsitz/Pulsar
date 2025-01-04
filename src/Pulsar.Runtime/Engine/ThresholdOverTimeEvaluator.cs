@@ -43,88 +43,98 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
         IDictionary<string, double> sensorData
     )
     {
-        await Task.Yield(); // Ensure the method runs asynchronously
-        if (condition is not ThresholdOverTimeConditionDefinition thresholdCondition)
+        if (condition?.Condition is not ThresholdOverTimeConditionDefinition temporal)
         {
-            _logger.Warning("Invalid condition type {ConditionType}", condition.GetType().Name);
+            _logger.Error(
+                "Invalid condition type. Expected {ExpectedType} but got {ActualType}",
+                typeof(ThresholdOverTimeConditionDefinition).Name,
+                condition?.GetType().Name ?? "null"
+            );
             return false;
         }
 
-        var errors = _validator.ValidateTemporalCondition(thresholdCondition);
-        if (errors.Any())
+        if (string.IsNullOrWhiteSpace(temporal.DataSource))
         {
-            _logger.Warning("Invalid condition: {ValidationErrors}", string.Join(", ", errors));
+            _logger.Error("Data source is required");
             return false;
         }
 
-        var dataSource = thresholdCondition.DataSource;
-        if (!sensorData.TryGetValue(dataSource, out var currentValue))
+        if (string.IsNullOrWhiteSpace(temporal.Threshold))
         {
-            _logger.Warning("No data found for source {DataSource}", dataSource);
+            _logger.Error("Threshold is required");
             return false;
         }
 
-        var now = DateTime.UtcNow;
-        var lastTimestamp = _timeSeriesService
-            .GetTimeWindow(dataSource, TimeSpan.FromMilliseconds(1))
-            .LastOrDefault()
-            .Timestamp;
+        if (!double.TryParse(temporal.Threshold, out var threshold))
+        {
+            _logger.Error("Invalid threshold value: {Value}", temporal.Threshold);
+            return false;
+        }
 
-        _logger.Debug(
-            "Current value for {DataSource}: {Value} at {Timestamp}",
-            dataSource,
-            currentValue,
-            now
+        if (string.IsNullOrWhiteSpace(temporal.Duration))
+        {
+            _logger.Error("Duration is required");
+            return false;
+        }
+
+        var (isValid, durationMs, error) = _validator.ValidateDuration(temporal.Duration);
+        if (!isValid)
+        {
+            _logger.Error("Invalid duration: {Error}", error);
+            return false;
+        }
+
+        var duration = TimeSpan.FromMilliseconds(durationMs);
+        var (isValidPoints, requiredPoints, pointsError) = _validator.CalculateRequiredDataPoints(
+            temporal.Duration,
+            _samplingRate
         );
 
-        // Only add the value if enough time has passed since the last update
-        if (lastTimestamp == default || now - lastTimestamp >= _samplingRate)
+        if (!isValidPoints)
         {
-            _logger.Debug(
-                "Updating time series for {DataSource}. Last update was {LastUpdate}",
-                dataSource,
-                lastTimestamp == default ? "never" : lastTimestamp.ToString()
-            );
-            _timeSeriesService.Update(dataSource, currentValue);
-        }
-        else
-        {
-            _logger.Debug(
-                "Skipping update for {DataSource} - Not enough time elapsed since last update ({LastUpdate})",
-                dataSource,
-                lastTimestamp
-            );
+            _logger.Error("Invalid data points: {Error}", pointsError);
+            return false;
         }
 
-        // Get historical data within the duration window
-        var historicalData = await _timeSeriesService.GetHistoricalDataAsync(
-            dataSource,
-            TimeSpan.FromMilliseconds(thresholdCondition.DurationMs)
+        var endTime = DateTime.UtcNow;
+        var startTime = endTime - duration;
+
+        _logger.Debug(
+            "Fetching historical data for {DataSource} from {StartTime} to {EndTime}",
+            temporal.DataSource,
+            startTime,
+            endTime
+        );
+
+        var historicalData = await _timeSeriesService.GetDataPointsAsync(
+            temporal.DataSource,
+            startTime,
+            endTime,
+            _samplingRate
         );
 
         if (!historicalData.Any())
         {
             _logger.Warning(
-                "No historical data found for source {DataSource} within {Duration}ms",
-                dataSource,
-                thresholdCondition.DurationMs
+                "No historical data found for {DataSource} between {StartTime} and {EndTime}",
+                temporal.DataSource,
+                startTime,
+                endTime
             );
             return false;
         }
 
-        // Add current value to historical data
-        var allValues = historicalData.Append(currentValue);
+        var result = historicalData.All(point => point.Value > threshold);
 
-        // Check if all values meet the threshold condition
-        var allMeetThreshold = allValues.All(v => v >= thresholdCondition.Threshold);
-
-        _metricsService.RecordThresholdEvaluation(
-            dataSource,
-            allMeetThreshold,
-            thresholdCondition.DurationMs
+        _logger.Debug(
+            "Evaluated threshold over time condition: {DataSource} > {Threshold} for {Duration} = {Result}",
+            temporal.DataSource,
+            temporal.Threshold,
+            temporal.Duration,
+            result
         );
 
-        return allMeetThreshold;
+        return result;
     }
 
     private static TimeSpan ParseDuration(string duration)

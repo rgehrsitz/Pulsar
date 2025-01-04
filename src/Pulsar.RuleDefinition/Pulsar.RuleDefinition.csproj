@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <ProjectReference Include="..\Pulsar.Core\Pulsar.Core.csproj" />
     <PackageReference Include="YamlDotNet" Version="13.7.1" />
   </ItemGroup>
