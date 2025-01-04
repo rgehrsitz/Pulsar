@@ -39,12 +39,12 @@ public class ThresholdOverTimeEvaluator : IConditionEvaluator
     }
 
     public async Task<bool> EvaluateAsync(
-        Condition condition,
+        ConditionDefinition condition,
         IDictionary<string, double> sensorData
     )
     {
         await Task.Yield(); // Ensure the method runs asynchronously
-        if (condition is not ThresholdOverTimeCondition thresholdCondition)
+        if (condition is not ThresholdOverTimeConditionDefinition thresholdCondition)
         {
             _logger.Warning("Invalid condition type {ConditionType}", condition.GetType().Name);
             return false;

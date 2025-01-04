@@ -17,7 +17,7 @@ public class DependencyAnalyzer
         _logger = Log.ForContext<DependencyAnalyzer>();
     }
 
-    public (List<Rule> OrderedRules, List<string> CyclicDependencies) AnalyzeAndOrder(
+    public (List<RuleDefinitionModel> OrderedRules, List<string> CyclicDependencies) AnalyzeAndOrder(
         RuleSetDefinition ruleSet
     )
     {
@@ -37,10 +37,10 @@ public class DependencyAnalyzer
         if (duplicateRules.Any())
         {
             _logger.Error("Found duplicate rule names: {@DuplicateRules}", duplicateRules);
-            return (new List<Rule>(), new List<string> { "Duplicate rule names found" });
+            return (new List<RuleDefinitionModel>(), new List<string> { "Duplicate rule names found" });
         }
 
-        var rules = ruleSet.Rules.ToDictionary(r => r.Name, r => r);
+        var rules = ruleSet.Rules.ToDictionary(r => r.Name, r => (RuleDefinitionModel)r);
         var graph = BuildDependencyGraph(rules);
 
         _logger.Debug("Built dependency graph with {NodeCount} nodes", graph.Count);
@@ -51,7 +51,7 @@ public class DependencyAnalyzer
 
         var visited = new HashSet<string>();
         var recursionStack = new HashSet<string>();
-        var orderedRules = new List<Rule>();
+        var orderedRules = new List<RuleDefinitionModel>();
         var cyclicDependencies = new List<string>();
 
         foreach (var rule in rules.Keys)
@@ -78,7 +78,7 @@ public class DependencyAnalyzer
             if (!graph.Any(kv => kv.Value.Any()))
             {
                 _logger.Information("No dependencies found, maintaining original order");
-                orderedRules = ruleSet.Rules.ToList();
+                orderedRules = ruleSet.Rules.Select(r => (RuleDefinitionModel)r).ToList();
             }
             else
             {
@@ -112,7 +112,7 @@ public class DependencyAnalyzer
         return (orderedRules, cyclicDependencies);
     }
 
-    private Dictionary<string, HashSet<string>> BuildDependencyGraph(Dictionary<string, Rule> rules)
+    private Dictionary<string, HashSet<string>> BuildDependencyGraph(Dictionary<string, RuleDefinitionModel> rules)
     {
         _logger.Debug("Building dependency graph for {RuleCount} rules", rules.Count);
         var graph = new Dictionary<string, HashSet<string>>();
@@ -134,7 +134,7 @@ public class DependencyAnalyzer
                 outputs
             );
 
-            foreach (var otherRule in rules.Values.Where(r => r.Name != ruleName))
+            foreach (var otherRule in rules.Values)
             {
                 var otherOutputs = GetOutputs(otherRule);
                 if (dataSources.Intersect(otherOutputs).Any())
@@ -158,7 +158,7 @@ public class DependencyAnalyzer
         return graph;
     }
 
-    private HashSet<string> GetDataSources(Rule rule)
+    private HashSet<string> GetDataSources(RuleDefinitionModel rule)
     {
         var sources = new HashSet<string>();
 
@@ -170,13 +170,13 @@ public class DependencyAnalyzer
                 {
                     switch (wrapper.Condition)
                     {
-                        case ComparisonCondition comparison:
+                        case ComparisonConditionDefinition comparison:
                             sources.Add(comparison.DataSource);
                             break;
-                        case ThresholdOverTimeCondition threshold:
+                        case ThresholdOverTimeConditionDefinition threshold:
                             sources.Add(threshold.DataSource);
                             break;
-                        case ExpressionCondition expression:
+                        case ExpressionConditionDefinition expression:
                             var parts = expression.Expression.Split(' ');
                             sources.Add(parts[0]); // The first part is always the data source
                             break;
@@ -190,13 +190,13 @@ public class DependencyAnalyzer
                 {
                     switch (wrapper.Condition)
                     {
-                        case ComparisonCondition comparison:
+                        case ComparisonConditionDefinition comparison:
                             sources.Add(comparison.DataSource);
                             break;
-                        case ThresholdOverTimeCondition threshold:
+                        case ThresholdOverTimeConditionDefinition threshold:
                             sources.Add(threshold.DataSource);
                             break;
-                        case ExpressionCondition expression:
+                        case ExpressionConditionDefinition expression:
                             var parts = expression.Expression.Split(' ');
                             sources.Add(parts[0]); // The first part is always the data source
                             break;
@@ -208,7 +208,7 @@ public class DependencyAnalyzer
         return sources;
     }
 
-    private HashSet<string> GetOutputs(Rule rule)
+    private HashSet<string> GetOutputs(RuleDefinitionModel rule)
     {
         var outputs = new HashSet<string>();
 
@@ -281,8 +281,8 @@ public class DependencyAnalyzer
         string rule,
         Dictionary<string, HashSet<string>> graph,
         HashSet<string> visited,
-        Dictionary<string, Rule> rules,
-        List<Rule> orderedRules
+        Dictionary<string, RuleDefinitionModel> rules,
+        List<RuleDefinitionModel> orderedRules
     )
     {
         visited.Add(rule);

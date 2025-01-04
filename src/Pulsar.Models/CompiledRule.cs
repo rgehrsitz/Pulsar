@@ -11,7 +11,7 @@ public class CompiledRule
     /// <summary>
     /// The original rule definition
     /// </summary>
-    public Rule Rule { get; }
+    public RuleDefinitionModel RuleDefinition { get; }
 
     /// <summary>
     /// The layer this rule belongs to in the execution order
@@ -19,9 +19,9 @@ public class CompiledRule
     public int Layer { get; }
 
     /// <summary>
-    /// Names of rules this rule depends on
+    /// The rules that this rule depends on
     /// </summary>
-    public ISet<string> Dependencies { get; }
+    public IReadOnlyCollection<string> Dependencies { get; }
 
     /// <summary>
     /// Input sensors this rule reads from
@@ -33,18 +33,16 @@ public class CompiledRule
     /// </summary>
     public ISet<string> OutputSensors { get; }
 
-    public CompiledRule(
-        Rule rule,
-        int layer,
-        ISet<string> dependencies,
-        ISet<string> inputSensors,
-        ISet<string> outputSensors
-    )
+    /// <summary>
+    /// Creates a new CompiledRule
+    /// </summary>
+    /// <param name="ruleDefinition">The original rule definition</param>
+    /// <param name="layer">The layer this rule belongs to</param>
+    /// <param name="dependencies">The rules that this rule depends on</param>
+    public CompiledRule(RuleDefinitionModel ruleDefinition, int layer, IReadOnlyCollection<string> dependencies)
     {
-        Rule = rule;
+        RuleDefinition = ruleDefinition;
         Layer = layer;
         Dependencies = dependencies;
-        InputSensors = inputSensors;
-        OutputSensors = outputSensors;
     }
 }

@@ -16,5 +16,8 @@ public interface IConditionEvaluator
     /// <param name="condition">The condition to evaluate</param>
     /// <param name="sensorData">Current sensor data</param>
     /// <returns>True if the condition is met, false otherwise</returns>
-    Task<bool> EvaluateAsync(Condition condition, IDictionary<string, double> sensorData);
+    Task<bool> EvaluateAsync(
+        ConditionWrapperDefinition condition,
+        IDictionary<string, double> sensorData
+    );
 }

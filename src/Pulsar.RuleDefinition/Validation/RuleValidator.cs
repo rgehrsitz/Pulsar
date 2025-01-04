@@ -51,7 +51,7 @@ public class RuleValidator
         {
             _logger.Warning("Empty rules list in ruleset");
             errors.Add(new ValidationError("Rules list cannot be empty"));
-            return new ValidationResult(errors);
+            return new ValidationResult(errors.Select(e => e.Message).ToList());
         }
 
         _logger.Debug(
@@ -113,84 +113,80 @@ public class RuleValidator
             _logger.Information("Validation completed successfully");
         }
 
-        return new ValidationResult(errors);
+        return new ValidationResult(errors.Select(e => e.Message).ToList());
     }
 
-    private List<ValidationError> ValidateRule(Rule rule)
+    private List<ValidationError> ValidateRule(RuleDefinitionModel rule)
     {
         var errors = new List<ValidationError>();
 
-        if (string.IsNullOrEmpty(rule.Name))
+        if (string.IsNullOrWhiteSpace(rule.Name))
         {
-            _logger.Warning("Rule name is empty or null");
-            errors.Add(new ValidationError("Rule name cannot be empty"));
+            _logger.Warning("Rule has no name");
+            errors.Add(new ValidationError("Rule name is required"));
         }
 
         if (rule.Conditions == null)
         {
-            _logger.Warning("Rule {RuleName} has no conditions", rule.Name);
-            errors.Add(new ValidationError($"Rule {rule.Name}: Conditions cannot be null"));
-            return errors;
+            _logger.Warning("Rule '{RuleName}' has no conditions", rule.Name);
+            errors.Add(new ValidationError($"Rule '{rule.Name}' has no conditions"));
         }
-
-        // Validate conditions
-        if (
-            (rule.Conditions.All == null || !rule.Conditions.All.Any())
-            && (rule.Conditions.Any == null || !rule.Conditions.Any.Any())
-        )
+        else
         {
-            _logger.Warning(
-                "Rule {RuleName} has no conditions in either 'all' or 'any' groups",
-                rule.Name
-            );
-            errors.Add(
-                new ValidationError(
-                    $"Rule {rule.Name}: Must have at least one condition in 'all' or 'any' group"
-                )
-            );
-        }
-
-        if (rule.Conditions.All != null)
-        {
-            foreach (var condition in rule.Conditions.All)
+            // Validate All conditions
+            if (rule.Conditions.All != null)
             {
-                var conditionErrors = ValidateCondition(condition, rule.Name);
-                if (conditionErrors.Any())
+                foreach (var condition in rule.Conditions.All)
                 {
-                    _logger.Warning(
-                        "Found {ErrorCount} errors in 'all' condition of rule {RuleName}: {@Errors}",
-                        conditionErrors.Count,
-                        rule.Name,
-                        conditionErrors
-                    );
-                    errors.AddRange(conditionErrors);
+                    var conditionErrors = ValidateCondition(condition.Condition, rule.Name);
+                    if (conditionErrors.Any())
+                    {
+                        _logger.Warning(
+                            "Found {ErrorCount} errors in condition of rule {RuleName}: {@Errors}",
+                            conditionErrors.Count,
+                            rule.Name,
+                            conditionErrors
+                        );
+                        errors.AddRange(conditionErrors);
+                    }
                 }
             }
-        }
 
-        if (rule.Conditions.Any != null)
-        {
-            foreach (var condition in rule.Conditions.Any)
+            // Validate Any conditions
+            if (rule.Conditions.Any != null)
             {
-                var conditionErrors = ValidateCondition(condition, rule.Name);
-                if (conditionErrors.Any())
+                foreach (var condition in rule.Conditions.Any)
                 {
-                    _logger.Warning(
-                        "Found {ErrorCount} errors in 'any' condition of rule {RuleName}: {@Errors}",
-                        conditionErrors.Count,
-                        rule.Name,
-                        conditionErrors
-                    );
-                    errors.AddRange(conditionErrors);
+                    var conditionErrors = ValidateCondition(condition.Condition, rule.Name);
+                    if (conditionErrors.Any())
+                    {
+                        _logger.Warning(
+                            "Found {ErrorCount} errors in condition of rule {RuleName}: {@Errors}",
+                            conditionErrors.Count,
+                            rule.Name,
+                            conditionErrors
+                        );
+                        errors.AddRange(conditionErrors);
+                    }
                 }
+            }
+
+            // At least one of All or Any must be present and non-empty
+            if (
+                (rule.Conditions.All == null || !rule.Conditions.All.Any())
+                && (rule.Conditions.Any == null || !rule.Conditions.Any.Any())
+            )
+            {
+                _logger.Warning("Rule '{RuleName}' has no conditions", rule.Name);
+                errors.Add(new ValidationError($"Rule '{rule.Name}' has no conditions"));
             }
         }
 
         // Validate actions
         if (rule.Actions == null || !rule.Actions.Any())
         {
-            _logger.Warning("Rule {RuleName} has no actions", rule.Name);
-            errors.Add(new ValidationError($"Rule {rule.Name}: Must have at least one action"));
+            _logger.Warning("Rule '{RuleName}' has no actions", rule.Name);
+            errors.Add(new ValidationError($"Rule '{rule.Name}' has no actions"));
         }
         else
         {
@@ -213,28 +209,26 @@ public class RuleValidator
         return errors;
     }
 
-    private List<ValidationError> ValidateCondition(ConditionWrapper wrapper, string ruleName)
+    private List<ValidationError> ValidateCondition(Condition condition, string ruleName)
     {
         var errors = new List<ValidationError>();
-        var condition = wrapper.Condition;
-
         switch (condition)
         {
-            case ComparisonCondition comp:
-                if (comp.DataSource != null && !_config.ValidSensors.Contains(comp.DataSource))
+            case ComparisonConditionDefinition comparison:
+                if (comparison.DataSource != null && !_config.ValidSensors.Contains(comparison.DataSource))
                 {
-                    _logger.Warning("Invalid data source: {DataSource}", comp.DataSource);
-                    errors.Add(new ValidationError($"Invalid data source: {comp.DataSource}"));
+                    _logger.Warning("Invalid data source: {DataSource}", comparison.DataSource);
+                    errors.Add(new ValidationError($"Invalid data source: {comparison.DataSource}"));
                 }
 
-                if (!ValidOperators.Contains(comp.Operator))
+                if (!ValidOperators.Contains(comparison.Operator))
                 {
-                    _logger.Warning("Invalid operator: {Operator}", comp.Operator);
-                    errors.Add(new ValidationError($"Invalid operator: {comp.Operator}"));
+                    _logger.Warning("Invalid operator: {Operator}", comparison.Operator);
+                    errors.Add(new ValidationError($"Invalid operator: {comparison.Operator}"));
                 }
                 break;
 
-            case ThresholdOverTimeCondition threshold:
+            case ThresholdOverTimeConditionDefinition threshold:
                 if (threshold.DataSource != null && !_config.ValidSensors.Contains(threshold.DataSource))
                 {
                     _logger.Warning("Invalid data source: {DataSource}", threshold.DataSource);
@@ -242,7 +236,7 @@ public class RuleValidator
                 }
                 break;
 
-            case ExpressionCondition expression:
+            case ExpressionConditionDefinition expression:
                 // Add any validation for expression conditions here
                 break;
         }

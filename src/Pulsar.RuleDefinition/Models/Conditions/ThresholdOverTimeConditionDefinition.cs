@@ -5,7 +5,7 @@ namespace Pulsar.RuleDefinition.Models.Conditions;
 /// <summary>
 /// Represents a condition that checks if a sensor value stays above/below a threshold for a specified duration
 /// </summary>
-public class ThresholdOverTimeCondition : Condition
+public class ThresholdOverTimeConditionDefinition : Condition
 {
     /// <summary>
     /// The sensor to monitor
@@ -20,5 +20,5 @@ public class ThresholdOverTimeCondition : Condition
     /// <summary>
     /// Duration in milliseconds that the condition must be met
     /// </summary>
-    public int DurationMs { get; set; }
+    public TimeSpan Duration { get; set; }
 }

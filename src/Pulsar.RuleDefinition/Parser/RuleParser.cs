@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using Pulsar.RuleDefinition.Models;
-using Pulsar.RuleDefinition.Models.Conditions;
 using Pulsar.RuleDefinition.Models.Actions;
+using Pulsar.RuleDefinition.Models.Conditions;
+using Serilog;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -16,12 +17,14 @@ namespace Pulsar.RuleDefinition.Parser;
 /// </summary>
 public class RuleParser
 {
+    private readonly ILogger _logger;
     private readonly YamlDotNet.Serialization.IDeserializer _deserializer;
     private readonly Pulsar.RuleDefinition.Models.SystemConfig _config;
 
     public RuleParser(Pulsar.RuleDefinition.Models.SystemConfig config)
     {
         _config = config;
+        _logger = Log.ForContext<RuleParser>();
         _deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
             .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.UnderscoredNamingConvention.Instance)
             .WithTypeConverter(new Pulsar.RuleDefinition.Parser.ConditionTypeConverter())
@@ -61,13 +64,15 @@ public class RuleParser
             // Validate each rule
             foreach (var rule in result.Rules)
             {
-                ValidateRule(rule);
+                ValidateRuleDefinition(rule);
             }
 
+            _logger.Debug("Successfully parsed {RuleCount} rules", result.Rules.Count);
             return result;
         }
         catch (YamlDotNet.Core.YamlException ex)
         {
+            _logger.Error(ex, "Failed to parse rules YAML");
             throw new System.ArgumentException($"Invalid YAML format: {ex.Message}", ex);
         }
     }
@@ -84,38 +89,22 @@ public class RuleParser
             throw new System.IO.FileNotFoundException($"Rule file not found: {filePath}");
         }
 
+        _logger.Debug("Reading rules from file: {FilePath}", filePath);
         var yamlContent = System.IO.File.ReadAllText(filePath);
         return ParseRules(yamlContent);
     }
 
-    private void ValidateRule(Pulsar.RuleDefinition.Models.Rule rule)
+    private void ValidateRuleDefinition(Pulsar.RuleDefinition.Models.RuleDefinitionModel rule)
     {
         if (string.IsNullOrWhiteSpace(rule.Name))
         {
             throw new System.ArgumentException("Rule name is required");
         }
 
-        if (rule.Conditions == null)
-        {
-            throw new System.ArgumentException($"Rule '{rule.Name}' is missing conditions");
-        }
-
-        if (rule.Actions == null || !rule.Actions.Any())
-        {
-            throw new System.ArgumentException($"Rule '{rule.Name}' is missing actions");
-        }
-
-        // Validate conditions
         ValidateConditionGroup(rule.Conditions, rule.Name);
-
-        // Validate actions
-        foreach (var action in rule.Actions)
-        {
-            ValidateAction(action, rule.Name);
-        }
     }
 
-    private void ValidateConditionGroup(Pulsar.RuleDefinition.Models.ConditionGroup? group, string ruleName)
+    private void ValidateConditionGroup(Pulsar.RuleDefinition.Models.ConditionGroupDefinition? group, string ruleName)
     {
         if (group == null)
         {
@@ -134,27 +123,73 @@ public class RuleParser
         }
     }
 
-    private void ValidateCondition(Pulsar.RuleDefinition.Models.Conditions.Condition condition, string ruleName)
+    private void ValidateCondition(Condition condition, string ruleName)
     {
         switch (condition)
         {
-            case Pulsar.RuleDefinition.Models.Conditions.ComparisonCondition comp:
-                ValidateComparisonCondition(comp, ruleName);
+            case ComparisonConditionDefinition comparison:
+                ValidateComparisonCondition(comparison, ruleName);
                 break;
-            case Pulsar.RuleDefinition.Models.Conditions.ThresholdOverTimeCondition threshold:
+            case ThresholdOverTimeConditionDefinition threshold:
                 ValidateThresholdOverTimeCondition(threshold, ruleName);
                 break;
-            case Pulsar.RuleDefinition.Models.Conditions.ExpressionCondition expr:
-                ValidateExpressionCondition(expr, ruleName);
+            case ExpressionConditionDefinition expression:
+                ValidateExpressionCondition(expression, ruleName);
                 break;
             default:
-                throw new System.ArgumentException(
-                    $"Rule '{ruleName}' has unknown condition type: {condition.GetType().Name}"
-                );
+                throw new ArgumentException($"Unknown condition type: {condition.GetType().Name}");
         }
     }
 
-    private void ValidateComparisonCondition(Pulsar.RuleDefinition.Models.Conditions.ComparisonCondition condition, string ruleName)
+    private void ValidateAction(RuleAction action, string ruleName)
+    {
+        if (action.SetValue != null)
+        {
+            ValidateSetValueAction(action.SetValue, ruleName);
+        }
+        else if (action.SendMessage != null)
+        {
+            ValidateSendMessageAction(action.SendMessage, ruleName);
+        }
+        else
+        {
+            throw new ArgumentException($"Rule '{ruleName}' has an action with no type specified");
+        }
+    }
+
+    private void ValidateSetValueAction(SetValueAction action, string ruleName)
+    {
+        if (string.IsNullOrWhiteSpace(action.Key))
+        {
+            throw new ArgumentException($"Rule '{ruleName}' has a set_value action with no key specified");
+        }
+
+        if (action.Value == null && string.IsNullOrWhiteSpace(action.ValueExpression))
+        {
+            throw new ArgumentException(
+                $"Rule '{ruleName}' has a set_value action with neither value nor value_expression specified"
+            );
+        }
+    }
+
+    private void ValidateSendMessageAction(SendMessageAction action, string ruleName)
+    {
+        if (string.IsNullOrWhiteSpace(action.Channel))
+        {
+            throw new ArgumentException(
+                $"Rule '{ruleName}' has a send_message action with no channel specified"
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(action.Message))
+        {
+            throw new ArgumentException(
+                $"Rule '{ruleName}' has a send_message action with no message specified"
+            );
+        }
+    }
+
+    private void ValidateComparisonCondition(ComparisonConditionDefinition condition, string ruleName)
     {
         if (string.IsNullOrWhiteSpace(condition.DataSource))
         {
@@ -186,7 +221,7 @@ public class RuleParser
     }
 
     private void ValidateThresholdOverTimeCondition(
-        Pulsar.RuleDefinition.Models.Conditions.ThresholdOverTimeCondition condition,
+        ThresholdOverTimeConditionDefinition condition,
         string ruleName
     )
     {
@@ -204,15 +239,15 @@ public class RuleParser
             );
         }
 
-        if (condition.DurationMs <= 0)
+        if (condition.Duration.TotalMilliseconds <= 0)
         {
             throw new System.ArgumentException(
-                $"Rule '{ruleName}' has threshold condition with invalid duration: {condition.DurationMs}ms"
+                $"Rule '{ruleName}' has threshold condition with invalid duration: {condition.Duration.TotalMilliseconds}ms"
             );
         }
     }
 
-    private void ValidateExpressionCondition(Pulsar.RuleDefinition.Models.Conditions.ExpressionCondition condition, string ruleName)
+    private void ValidateExpressionCondition(ExpressionConditionDefinition condition, string ruleName)
     {
         if (string.IsNullOrWhiteSpace(condition.Expression))
         {
@@ -226,73 +261,6 @@ public class RuleParser
         // 1. Expression syntax
         // 2. Referenced sensors exist in _config.ValidSensors
         // 3. Operators and functions are valid
-    }
-
-    private void ValidateAction(Pulsar.RuleDefinition.Models.RuleAction action, string ruleName)
-    {
-        // Each action must have exactly one of SetValue or SendMessage
-        if ((action.SetValue == null && action.SendMessage == null) ||
-            (action.SetValue != null && action.SendMessage != null))
-        {
-            throw new System.ArgumentException($"Rule '{ruleName}' has an invalid action: must have exactly one of set_value or send_message");
-        }
-
-        if (action.SetValue != null)
-        {
-            ValidateSetValueAction(action.SetValue, ruleName);
-        }
-        else // action.SendMessage must be non-null here
-        {
-            ValidateSendMessageAction(action.SendMessage!, ruleName);
-        }
-    }
-
-    private void ValidateSetValueAction(Pulsar.RuleDefinition.Models.Actions.SetValueAction action, string ruleName)
-    {
-        if (string.IsNullOrWhiteSpace(action.Key))
-        {
-            throw new System.ArgumentException($"Rule '{ruleName}' has set_value action with missing key");
-        }
-
-        if (!_config.ValidSensors.Contains(action.Key))
-        {
-            throw new System.ArgumentException(
-                $"Rule '{ruleName}' tries to set invalid sensor: {action.Key}"
-            );
-        }
-
-        if (action.Value == null && string.IsNullOrWhiteSpace(action.ValueExpression))
-        {
-            throw new System.ArgumentException(
-                $"Rule '{ruleName}' has set_value action with neither value nor value_expression"
-            );
-        }
-
-        if (action.Value != null && !string.IsNullOrWhiteSpace(action.ValueExpression))
-        {
-            throw new System.ArgumentException(
-                $"Rule '{ruleName}' has set_value action with both value and value_expression"
-            );
-        }
-
-        // TODO: Add expression validation for value_expression
-    }
-
-    private void ValidateSendMessageAction(Pulsar.RuleDefinition.Models.Actions.SendMessageAction action, string ruleName)
-    {
-        if (string.IsNullOrWhiteSpace(action.Channel))
-        {
-            throw new System.ArgumentException(
-                $"Rule '{ruleName}' has send_message action with missing channel"
-            );
-        }
-
-        if (string.IsNullOrWhiteSpace(action.Message))
-        {
-            throw new System.ArgumentException(
-                $"Rule '{ruleName}' has send_message action with missing message"
-            );
-        }
     }
 
     private bool IsValidOperator(string op)

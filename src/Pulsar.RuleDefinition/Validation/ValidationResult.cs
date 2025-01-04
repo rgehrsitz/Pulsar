@@ -8,17 +8,13 @@ namespace Pulsar.RuleDefinition.Validation;
 /// </summary>
 public class ValidationResult
 {
-    public List<ValidationError> Errors { get; set; } = new();
-    public List<Rule>? OrderedRules { get; set; }
-    public bool IsValid => !Errors.Any();
+    public bool IsValid => Errors.Count == 0;
+    public List<string> Errors { get; }
+    public RuleDefinitionModel? Rule { get; }
 
-    public ValidationResult()
+    public ValidationResult(List<string> errors, RuleDefinitionModel? rule = null)
     {
-        Errors = new List<ValidationError>();
-    }
-
-    public ValidationResult(IEnumerable<ValidationError> errors)
-    {
-        Errors = new List<ValidationError>(errors);
+        Errors = errors;
+        Rule = rule;
     }
 }

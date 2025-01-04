@@ -283,30 +283,37 @@ public class RuleValidatorTests
         Assert.Contains(result.Errors, e => e.Message.Contains("Must have at least one action"));
     }
 
-    private Rule CreateValidRule(string name)
+    private RuleDefinitionModel CreateValidRule(string name)
     {
-        return new Rule
+        return new RuleDefinitionModel
         {
             Name = name,
-            Conditions = new ConditionGroup
+            Conditions = new ConditionGroupDefinition
             {
-                All = new List<ConditionWrapper>
+                All = new List<ConditionDefinition>
                 {
-                    new ConditionWrapper
+                    new ConditionDefinition
                     {
-                        Condition = new ComparisonCondition
+                        Condition = new ComparisonConditionDefinition
                         {
                             Type = "comparison",
                             DataSource = "temperature",
                             Operator = ">",
-                            Value = 50
+                            Value = "50"
                         }
                     }
                 }
             },
             Actions = new List<RuleAction>
             {
-                new RuleAction { SetValue = new SetValueAction { Key = "alerts:temperature", Value = "1" } }
+                new RuleAction
+                {
+                    SetValue = new SetValueAction
+                    {
+                        Key = "output",
+                        Value = "1"
+                    }
+                }
             }
         };
     }

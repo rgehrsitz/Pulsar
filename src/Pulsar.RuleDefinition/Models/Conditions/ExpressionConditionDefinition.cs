@@ -3,7 +3,7 @@ namespace Pulsar.RuleDefinition.Models.Conditions;
 /// <summary>
 /// Represents an expression-based condition
 /// </summary>
-public class ExpressionCondition : Condition
+public class ExpressionConditionDefinition : Condition
 {
     public string Expression { get; set; } = string.Empty;
 }

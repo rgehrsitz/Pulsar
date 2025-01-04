@@ -26,16 +26,16 @@ public class TemporalValidator
     /// <summary>
     /// Validates that temporal conditions are properly configured
     /// </summary>
-    public List<string> ValidateTemporalCondition(ThresholdOverTimeCondition condition)
+    public List<string> ValidateTemporalCondition(ThresholdOverTimeConditionDefinition condition)
     {
         var errors = new List<string>();
 
         // Validate duration value
-        if (condition.DurationMs < MinDurationMs)
+        if (condition.Duration.TotalMilliseconds < MinDurationMs)
         {
             errors.Add($"Duration must be at least {MinDurationMs}ms");
         }
-        else if (condition.DurationMs > MaxDurationMs)
+        else if (condition.Duration.TotalMilliseconds > MaxDurationMs)
         {
             errors.Add($"Duration cannot exceed 24 hours ({MaxDurationMs}ms)");
         }
@@ -49,7 +49,7 @@ public class TemporalValidator
         // Validate data source
         if (string.IsNullOrWhiteSpace(condition.DataSource))
         {
-            errors.Add("Data source must be specified");
+            errors.Add("Data source is required");
         }
 
         return errors;

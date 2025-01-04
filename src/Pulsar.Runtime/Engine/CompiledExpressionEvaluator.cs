@@ -31,43 +31,48 @@ public class CompiledExpressionEvaluator : IConditionEvaluator
     }
 
     public async Task<bool> EvaluateAsync(
-        Condition condition,
-        IDictionary<string, double> sensorData
+        ConditionWrapperDefinition condition,
+        IDictionary<string, double> data
     )
     {
-        if (condition is not ExpressionCondition expressionCondition)
+        if (condition.Expression is not ExpressionConditionDefinition expressionCondition)
         {
             throw new ArgumentException(
-                $"Expected ExpressionCondition but got {condition.GetType().Name}"
+                $"Expected ExpressionConditionDefinition but got {condition.Expression?.GetType().Name ?? "null"}"
             );
         }
 
-        var compiledExpression = _compiledExpressions.GetOrAdd(
-            expressionCondition.Expression,
-            expr =>
-                (data) =>
+        var expression = expressionCondition.Expression;
+        var evaluator =
+            _compiledExpressions.GetOrAdd(
+                expression,
+                expr =>
                 {
-                    var context = new SimpleContext();
-                    foreach (var kv in data)
-                        context.SetValue(kv.Key, kv.Value);
-
-                    var e = new Expression(expr);
-                    return e.Evaluate(context);
+                    try
+                    {
+                        return CompileExpression(expr);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to compile expression: {Expression}", expr);
+                        throw;
+                    }
                 }
-        );
+            );
 
         try
         {
-            return await Task.Run(() => compiledExpression(sensorData));
+            return evaluator(data);
         }
         catch (Exception ex)
         {
             _logger.LogError(
-                "Error evaluating expression {Expression}: {Message}",
-                expressionCondition.Expression,
-                ex.Message
+                ex,
+                "Failed to evaluate expression: {Expression} with data: {Data}",
+                expression,
+                string.Join(", ", data.Select(kvp => $"{kvp.Key}={kvp.Value}"))
             );
-            throw new ArgumentException($"Error evaluating expression: {ex.Message}", ex);
+            throw;
         }
     }
 }

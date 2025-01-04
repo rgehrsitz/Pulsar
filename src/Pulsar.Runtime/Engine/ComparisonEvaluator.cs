@@ -11,34 +11,27 @@ namespace Pulsar.Runtime.Engine;
 /// </summary>
 public class ComparisonEvaluator : IConditionEvaluator
 {
-    private static readonly Dictionary<string, Func<double, double, bool>> Operators = new()
-    {
-        [">"] = (a, b) => a > b,
-        ["<"] = (a, b) => a < b,
-        [">="] = (a, b) => a >= b,
-        ["<="] = (a, b) => a <= b,
-        ["=="] = (a, b) => Math.Abs(a - b) < double.Epsilon,
-        ["!="] = (a, b) => Math.Abs(a - b) >= double.Epsilon,
-    };
-
     private readonly ILogger _logger;
 
-    public ComparisonEvaluator(ILogger? logger = null)
+    public ComparisonEvaluator(ILogger logger)
     {
-        _logger = (logger ?? Log.Logger).ForContext<ComparisonEvaluator>();
+        _logger = logger.ForContext<ComparisonEvaluator>();
     }
 
-    public Task<bool> EvaluateAsync(Condition condition, IDictionary<string, double> sensorData)
+    public Task<bool> EvaluateAsync(
+        ConditionDefinition condition,
+        IDictionary<string, double> sensorData
+    )
     {
-        if (condition is not ComparisonCondition comparisonCondition)
+        if (condition is not ComparisonConditionDefinition comparisonCondition)
         {
             _logger.Error(
                 "Invalid condition type. Expected {ExpectedType} but got {ActualType}",
-                typeof(ComparisonCondition).Name,
+                typeof(ComparisonConditionDefinition).Name,
                 condition.GetType().Name
             );
             throw new ArgumentException(
-                $"Expected ComparisonCondition but got {condition.GetType().Name}"
+                $"Expected ComparisonConditionDefinition but got {condition.GetType().Name}"
             );
         }
 
@@ -61,17 +54,17 @@ public class ComparisonEvaluator : IConditionEvaluator
             );
         }
 
-        if (!Operators.TryGetValue(comparisonCondition.Operator, out var operation))
+        var result = comparisonCondition.Operator switch
         {
-            _logger.Error(
-                "Invalid operator {Operator}. Valid operators: {@ValidOperators}",
-                comparisonCondition.Operator,
-                Operators.Keys
-            );
-            throw new ArgumentException($"Invalid operator: {comparisonCondition.Operator}");
-        }
+            ThresholdOperator.GreaterThan => currentValue > comparisonCondition.Value,
+            ThresholdOperator.GreaterThanOrEqual => currentValue >= comparisonCondition.Value,
+            ThresholdOperator.LessThan => currentValue < comparisonCondition.Value,
+            ThresholdOperator.LessThanOrEqual => currentValue <= comparisonCondition.Value,
+            ThresholdOperator.Equal => Math.Abs(currentValue - comparisonCondition.Value) < double.Epsilon,
+            ThresholdOperator.NotEqual => Math.Abs(currentValue - comparisonCondition.Value) >= double.Epsilon,
+            _ => throw new ArgumentException($"Unknown operator: {comparisonCondition.Operator}")
+        };
 
-        var result = operation(currentValue, comparisonCondition.Value);
         _logger.Debug(
             "Comparison result for {DataSource}: {CurrentValue} {Operator} {CompareValue} = {Result}",
             comparisonCondition.DataSource,

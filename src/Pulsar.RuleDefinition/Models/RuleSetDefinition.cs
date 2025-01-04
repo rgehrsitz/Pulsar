@@ -8,5 +8,8 @@ namespace Pulsar.RuleDefinition.Models;
 public class RuleSetDefinition
 {
     public int Version { get; set; }
-    public List<Rule> Rules { get; set; } = new();
+    /// <summary>
+    /// The list of rules in this set
+    /// </summary>
+    public List<RuleDefinitionModel> Rules { get; set; } = new();
 }

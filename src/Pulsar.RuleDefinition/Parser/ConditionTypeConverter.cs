@@ -55,9 +55,9 @@ public class ConditionTypeConverter : IYamlTypeConverter
         throw new NotImplementedException("Writing YAML is not supported");
     }
 
-    private ComparisonCondition ParseComparisonCondition(IParser parser)
+    private ComparisonConditionDefinition ParseComparisonCondition(IParser parser)
     {
-        var condition = new ComparisonCondition();
+        var condition = new ComparisonConditionDefinition();
 
         while (parser.Current is Scalar scalar)
         {
@@ -90,9 +90,9 @@ public class ConditionTypeConverter : IYamlTypeConverter
         return condition;
     }
 
-    private ThresholdOverTimeCondition ParseThresholdOverTimeCondition(IParser parser)
+    private ThresholdOverTimeConditionDefinition ParseThresholdOverTimeCondition(IParser parser)
     {
-        var condition = new ThresholdOverTimeCondition();
+        var condition = new ThresholdOverTimeConditionDefinition();
 
         while (parser.Current is Scalar scalar)
         {
@@ -105,22 +105,24 @@ public class ConditionTypeConverter : IYamlTypeConverter
                     condition.DataSource = value;
                     break;
                 case "threshold":
-                    if (double.TryParse(value, out var threshold))
+                    if (double.TryParse(value, out var doubleValue))
                     {
-                        condition.Threshold = threshold;
+                        condition.Threshold = doubleValue;
                     }
                     else
                     {
-                        throw new YamlException($"Invalid threshold value: {value}");
+                        throw new YamlException($"Invalid numeric value: {value}");
                     }
                     break;
                 case "duration":
-                    var (isValid, durationMs, error) = TryParseTimeSpan(value);
-                    if (!isValid)
+                    if (TryParseTimeSpan(value, out var duration))
                     {
-                        throw new YamlException($"Invalid duration: {error}");
+                        condition.Duration = duration;
                     }
-                    condition.DurationMs = durationMs;
+                    else
+                    {
+                        throw new YamlException($"Invalid duration: {value}");
+                    }
                     break;
                 default:
                     throw new YamlException($"Unknown field: {scalar.Value}");
@@ -130,9 +132,9 @@ public class ConditionTypeConverter : IYamlTypeConverter
         return condition;
     }
 
-    private ExpressionCondition ParseExpressionCondition(IParser parser)
+    private ExpressionConditionDefinition ParseExpressionCondition(IParser parser)
     {
-        var condition = new ExpressionCondition();
+        var condition = new ExpressionConditionDefinition();
 
         while (parser.Current is Scalar scalar)
         {
@@ -152,37 +154,27 @@ public class ConditionTypeConverter : IYamlTypeConverter
         return condition;
     }
 
-    private (bool isValid, int durationMs, string? error) TryParseTimeSpan(string value)
+    private bool TryParseTimeSpan(string value, out TimeSpan result)
     {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return (false, 0, "Duration cannot be empty");
-        }
-
-        // Parse duration with unit
-        var match = Regex.Match(value, @"^(\d+)(ms|s|m|h|d)$");
+        var match = Regex.Match(value, @"^(\d+)(ms|s|m|h)$");
         if (!match.Success)
         {
-            return (false, 0, "Duration must be specified with a valid unit (ms, s, m, h, d)");
+            result = TimeSpan.Zero;
+            return false;
         }
 
-        if (!int.TryParse(match.Groups[1].Value, out int numericValue))
-        {
-            return (false, 0, "Invalid duration value");
-        }
-
+        var amount = int.Parse(match.Groups[1].Value);
         var unit = match.Groups[2].Value;
-        var multiplier = unit switch
+
+        result = unit switch
         {
-            "ms" => 1,
-            "s" => 1000,
-            "m" => 60 * 1000,
-            "h" => 60 * 60 * 1000,
-            "d" => 24 * 60 * 60 * 1000,
-            _ => throw new ArgumentException($"Invalid duration unit: {unit}")
+            "ms" => TimeSpan.FromMilliseconds(amount),
+            "s" => TimeSpan.FromSeconds(amount),
+            "m" => TimeSpan.FromMinutes(amount),
+            "h" => TimeSpan.FromHours(amount),
+            _ => TimeSpan.Zero
         };
 
-        var totalMs = numericValue * multiplier;
-        return (true, totalMs, null);
+        return true;
     }
 }

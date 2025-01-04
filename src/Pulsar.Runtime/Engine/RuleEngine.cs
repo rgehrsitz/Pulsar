@@ -82,11 +82,11 @@ public class RuleEngine : IHostedService
     {
         try
         {
-            var conditionsMet = await EvaluateConditionsAsync(rule.Rule.Conditions, data);
+            var conditionsMet = await EvaluateConditionsAsync(rule.RuleDefinition.Conditions, data);
             if (conditionsMet)
             {
-                _logger.Debug("Rule {RuleName} conditions met, executing actions", rule.Rule.Name);
-                foreach (var action in rule.Rule.Actions)
+                _logger.Debug("Rule {RuleName} conditions met, executing actions", rule.RuleDefinition.Name);
+                foreach (var action in rule.RuleDefinition.Actions)
                 {
                     await ExecuteActionAsync(action);
                 }
@@ -94,12 +94,12 @@ public class RuleEngine : IHostedService
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Error executing rule {RuleName}", rule.Rule.Name);
+            _logger.Error(ex, "Error executing rule {RuleName}", rule.RuleDefinition.Name);
         }
     }
 
     private async Task<bool> EvaluateConditionsAsync(
-        ConditionGroup conditions,
+        ConditionGroupDefinition conditions,
         IDictionary<string, double> data
     )
     {
@@ -129,13 +129,13 @@ public class RuleEngine : IHostedService
         return true;
     }
 
-    private async Task<bool> EvaluateConditionAsync(ConditionWrapper condition, IDictionary<string, double> data)
+    private async Task<bool> EvaluateConditionAsync(ConditionWrapperDefinition condition, IDictionary<string, double> data)
     {
         try
         {
             switch (condition.Condition)
             {
-                case ComparisonCondition comp:
+                case ComparisonConditionDefinition comp:
                     if (!data.TryGetValue(comp.DataSource, out var value))
                     {
                         _logger.Warning("Data source {DataSource} not found", comp.DataSource);
@@ -143,7 +143,7 @@ public class RuleEngine : IHostedService
                     }
                     return EvaluateComparison(value, comp.Operator, comp.Value);
 
-                case ThresholdOverTimeCondition threshold:
+                case ThresholdOverTimeConditionDefinition threshold:
                     var duration = TimeSpan.FromMilliseconds(threshold.DurationMs);
                     return await _dataStore.CheckThresholdOverTimeAsync(
                         threshold.DataSource,
@@ -177,7 +177,7 @@ public class RuleEngine : IHostedService
         };
     }
 
-    private async Task ExecuteActionAsync(RuleAction action)
+    private async Task ExecuteActionAsync(RuleActionDefinition action)
     {
         try
         {

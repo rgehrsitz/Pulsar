@@ -23,7 +23,7 @@ public class DependencyAnalyzerTests
         var ruleSet = new RuleSetDefinition
         {
             Version = 1,
-            Rules = new List<Rule>
+            Rules = new List<RuleDefinitionModel>
             {
                 CreateRule("Rule1", "temperature > 50", "output1"),
                 CreateRule("Rule2", "humidity > 80", "output2"),
@@ -46,7 +46,7 @@ public class DependencyAnalyzerTests
         var ruleSet = new RuleSetDefinition
         {
             Version = 1,
-            Rules = new List<Rule>
+            Rules = new List<RuleDefinitionModel>
             {
                 CreateRule("Rule2", "derived_temp > 100", "output2"),
                 CreateRule("Rule1", "temperature > 50", "derived_temp"),
@@ -70,7 +70,7 @@ public class DependencyAnalyzerTests
         var ruleSet = new RuleSetDefinition
         {
             Version = 1,
-            Rules = new List<Rule>
+            Rules = new List<RuleDefinitionModel>
             {
                 CreateRule("Rule1", "output2 > 0", "output1"),
                 CreateRule("Rule2", "output1 > 0", "output2"),
@@ -92,7 +92,7 @@ public class DependencyAnalyzerTests
         var ruleSet = new RuleSetDefinition
         {
             Version = 1,
-            Rules = new List<Rule>
+            Rules = new List<RuleDefinitionModel>
             {
                 CreateRule("Rule3", "temp2 > 0", "result"),
                 CreateRule("Rule1", "input > 0", "temp1"),
@@ -109,30 +109,37 @@ public class DependencyAnalyzerTests
         Assert.Equal(new[] { "Rule1", "Rule2", "Rule3" }, orderedRules.Select(r => r.Name));
     }
 
-    private Rule CreateRule(string name, string condition, string output)
+    private RuleDefinitionModel CreateRule(string name, string condition, string output)
     {
         var parts = condition.Split(' ');
-        return new Rule
+        return new RuleDefinitionModel
         {
             Name = name,
-            Conditions = new ConditionGroup
+            Conditions = new ConditionGroupDefinition
             {
-                All = new List<ConditionWrapper>
+                All = new List<ConditionDefinition>
                 {
-                    new ConditionWrapper
+                    new ConditionDefinition
                     {
-                        Condition = new ComparisonCondition
+                        Condition = new ComparisonConditionDefinition
                         {
                             DataSource = parts[0],
                             Operator = parts[1],
-                            Value = double.Parse(parts[2])
+                            Value = parts[2]
                         }
                     }
                 }
             },
             Actions = new List<RuleAction>
             {
-                new() { SetValue = new SetValueAction { Key = output, Value = 1 } }
+                new RuleAction
+                {
+                    SetValue = new SetValueAction
+                    {
+                        Key = output,
+                        Value = "1"
+                    }
+                }
             }
         };
     }
