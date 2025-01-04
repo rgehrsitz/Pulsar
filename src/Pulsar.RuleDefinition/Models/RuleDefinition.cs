@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Pulsar.RuleDefinition.Models.Actions;
+using YamlDotNet.Serialization;
 
 namespace Pulsar.RuleDefinition.Models;
 
@@ -18,9 +18,9 @@ public class RuleSetDefinition
 public class Rule
 {
     public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
+    public string Description { get; set; } = string.Empty;
     public ConditionGroup Conditions { get; set; } = new();
-    public List<RuleAction> Actions { get; set; } = new();
+    public List<Actions.RuleAction> Actions { get; set; } = new();
 }
 
 /// <summary>
@@ -28,15 +28,25 @@ public class Rule
 /// </summary>
 public class ConditionGroup
 {
-    public List<Condition>? All { get; set; }
-    public List<Condition>? Any { get; set; }
+    public List<ConditionWrapper>? All { get; set; }
+    public List<ConditionWrapper>? Any { get; set; }
+}
+
+/// <summary>
+/// Wrapper class for conditions
+/// </summary>
+public class ConditionWrapper
+{
+    public Condition Condition { get; set; } = null!;
 }
 
 /// <summary>
 /// Base class for all condition types
 /// </summary>
+[YamlSerializable]
 public abstract class Condition
 {
+    [YamlMember(Alias = "type")]
     public string Type { get; set; } = string.Empty;
 }
 
@@ -66,10 +76,10 @@ public class RuleAction
     /// <summary>
     /// Action to set a sensor value
     /// </summary>
-    public SetValueAction? SetValue { get; set; }
+    public Actions.SetValueAction? SetValue { get; set; }
 
     /// <summary>
     /// Action to send a message
     /// </summary>
-    public SendMessageAction? SendMessage { get; set; }
+    public Actions.SendMessageAction? SendMessage { get; set; }
 }

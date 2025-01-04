@@ -104,7 +104,9 @@ public class ActionTypeConverter : IYamlTypeConverter
                     action.Message = value;
                     break;
                 default:
-                    throw new YamlException($"Unknown field in send_message action: {scalar.Value}");
+                    throw new YamlException(
+                        $"Unknown field in send_message action: {scalar.Value}"
+                    );
             }
         }
 
