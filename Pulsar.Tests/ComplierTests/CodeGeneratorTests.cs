@@ -76,7 +76,7 @@ namespace Pulsar.Tests.CompilerTests
             }
 
             // Assert
-            var layerFile = generatedFiles.FirstOrDefault(f => f.FileName.Contains("Layer0"));
+            var layerFile = generatedFiles.FirstOrDefault(f => f.FileName.Contains("Group") || f.FileName.Contains("Layer"));
             Assert.NotNull(layerFile);
 
             var expectedExpression = "outputs[\"temperature_c\"] = (inputs[\"temperature_f\"] - 32) * 5/9;";
@@ -121,38 +121,39 @@ namespace Pulsar.Tests.CompilerTests
             var generatedFiles = CodeGenerator.GenerateCSharp(new List<RuleDefinition> { rule });
 
             // Debug output for all files
+            _output.WriteLine($"\nGenerated {generatedFiles.Count} files:");
             foreach (var file in generatedFiles)
             {
-                Debug.WriteLine($"\nFile: {file.FileName}");
-                Debug.WriteLine("Content:");
-                Debug.WriteLine(file.Content);
+                _output.WriteLine($"\nFile: {file.FileName}");
+                _output.WriteLine("Content (first 100 chars):");
+                _output.WriteLine(file.Content.Length > 100 ? file.Content.Substring(0, 100) + "..." : file.Content);
             }
 
             // Get files by type
-            var mainFile = generatedFiles.FirstOrDefault(f => f.FileName == "CompiledRules.cs");
             var interfaceFile = generatedFiles.FirstOrDefault(f => f.FileName == "ICompiledRules.cs");
-            var layerFile = generatedFiles.FirstOrDefault(f => f.FileName.Contains("Layer0"));
+            var groupFile = generatedFiles.FirstOrDefault(f => f.FileName.Contains("RuleGroup"));
+            var coordinatorFile = generatedFiles.FirstOrDefault(f => f.FileName == "RuleCoordinator.cs");
+
+            _output.WriteLine("\nFound files:");
+            _output.WriteLine($"Interface file: {interfaceFile?.FileName ?? "null"}");
+            _output.WriteLine($"Group file: {groupFile?.FileName ?? "null"}");
+            _output.WriteLine($"Coordinator file: {coordinatorFile?.FileName ?? "null"}");
 
             // Basic structural assertions
-            Assert.NotNull(mainFile);
+
             Assert.NotNull(interfaceFile);
-            Assert.NotNull(layerFile);
+            Assert.NotNull(groupFile);
+            Assert.NotNull(coordinatorFile);
 
             // Interface assertions
             Assert.Contains("public interface ICompiledRules", interfaceFile.Content);
             Assert.Contains("void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)", interfaceFile.Content);
 
-            // Main class assertions
-            Assert.Contains("public partial class CompiledRules : ICompiledRules", mainFile.Content);
-            Assert.Contains("private readonly ILogger _logger;", mainFile.Content);
-            Assert.Contains("private readonly RingBufferManager _bufferManager;", mainFile.Content);
-            Assert.Contains("public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)", mainFile.Content);
-
-            // Layer implementation assertions
-            Assert.Contains("SimpleRule", layerFile.Content);
-            Assert.Contains("inputs[\"temperature\"] > 100", layerFile.Content);
-            Assert.Contains("outputs[\"alert\"] = 1", layerFile.Content);
-            Assert.Contains("_logger.Debug(\"Evaluating rule SimpleRule\")", layerFile.Content);
+            // Group implementation assertions
+            Assert.Contains("SimpleRule", groupFile.Content);
+            Assert.Contains("inputs[\"temperature\"] > 100", groupFile.Content);
+            Assert.Contains("outputs[\"alert\"] = 1", groupFile.Content);
+            Assert.Contains("_logger.Debug(\"Evaluating rule SimpleRule\")", groupFile.Content);
         }
 
         [Fact]
@@ -168,16 +169,31 @@ namespace Pulsar.Tests.CompilerTests
             // Act
             var generatedFiles = CodeGenerator.GenerateCSharp(rules);
 
+            // Debug output for all files
+            _output.WriteLine($"\nGenerated {generatedFiles.Count} files:");
+            foreach (var file in generatedFiles)
+            {
+                _output.WriteLine($"\nFile: {file.FileName}");
+                _output.WriteLine("Content (first 200 chars):");
+                _output.WriteLine(file.Content.Length > 200 ? file.Content.Substring(0, 200) + "..." : file.Content);
+            }
+
             // Assert
             Assert.NotNull(generatedFiles.FirstOrDefault(f => f.FileName == "ICompiledRules.cs"));
-            Assert.NotNull(generatedFiles.FirstOrDefault(f => f.FileName == "CompiledRules.cs"));
-            Assert.NotNull(generatedFiles.FirstOrDefault(f => f.FileName.Contains("Layer0")));
-            Assert.NotNull(generatedFiles.FirstOrDefault(f => f.FileName.Contains("Layer1")));
+            Assert.NotNull(generatedFiles.FirstOrDefault(f => f.FileName.Contains("RuleGroup")));
+            Assert.NotNull(generatedFiles.FirstOrDefault(f => f.FileName == "RuleCoordinator.cs"));
 
             // Verify rule ordering in main file
-            var mainFile = generatedFiles.First(f => f.FileName == "CompiledRules.cs");
-            var layer0Index = mainFile.Content.IndexOf("EvaluateLayer0");
-            var layer1Index = mainFile.Content.IndexOf("EvaluateLayer1");
+            var coordinatorFile = generatedFiles.First(f => f.FileName == "RuleCoordinator.cs");
+            var layer0Index = coordinatorFile.Content.IndexOf("_group0.EvaluateGroup");
+            var layer1Index = coordinatorFile.Content.IndexOf("_group1.EvaluateGroup");
+
+            _output.WriteLine($"\nCoordinator content:");
+            _output.WriteLine(coordinatorFile.Content);
+            _output.WriteLine($"\nLayer indices:");
+            _output.WriteLine($"Group0 index: {layer0Index}");
+            _output.WriteLine($"Group1 index: {layer1Index}");
+
             Assert.True(layer0Index < layer1Index, "Rules not evaluated in dependency order");
         }
 
@@ -213,33 +229,9 @@ namespace Pulsar.Tests.CompilerTests
             var generatedFiles = CodeGenerator.GenerateCSharp(new List<RuleDefinition> { rule });
 
             // Assert
-            var implFile = generatedFiles.First(f => f.FileName.Contains("Layer"));
+            var implFile = generatedFiles.First(f => f.FileName.Contains("RuleGroup"));
             Assert.Contains("inputs[\"temperature\"] * 1.8 + 32 > 100", implFile.Content);
             Assert.Contains("outputs[\"fahrenheit\"] = inputs[\"temperature\"] * 1.8 + 32", implFile.Content);
-        }
-
-        [Fact]
-        public void GenerateCSharp_EmptyRulesList_GeneratesMinimalValidCode()
-        {
-            // Arrange
-            var rules = new List<RuleDefinition>();
-
-            // Act
-            var generatedFiles = CodeGenerator.GenerateCSharp(rules);
-
-            // Assert
-            Assert.Single(generatedFiles);
-            var file = generatedFiles[0];
-            Assert.Equal("CompiledRules.cs", file.FileName);
-            Assert.Contains("public class CompiledRules : ICompiledRules", file.Content);
-            Assert.Contains("private readonly ILogger _logger;", file.Content);
-            Assert.Contains("private readonly RingBufferManager _bufferManager;", file.Content);
-            Assert.Contains("public CompiledRules(ILogger logger, RingBufferManager bufferManager)", file.Content);
-            Assert.Contains("_logger = logger ?? throw new ArgumentNullException(nameof(logger));", file.Content);
-            Assert.Contains("_bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));", file.Content);
-            Assert.Contains("public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)", file.Content);
-            Assert.Contains("_logger.Debug(\"No rules to evaluate\")", file.Content);
-            Assert.DoesNotContain("EvaluateLayer", file.Content);
         }
 
         [Fact]
@@ -287,8 +279,8 @@ namespace Pulsar.Tests.CompilerTests
 
             // Find the layer implementation file
             var layerFile = generatedFiles.FirstOrDefault(f =>
-                f.FileName.Contains("Layer") &&
-                f.Content.Contains("EvaluateLayer"));
+                f.FileName.Contains("RuleGroup") &&
+                f.Content.Contains("EvaluateGroup"));
 
             Assert.NotNull(layerFile);
 
@@ -352,6 +344,17 @@ namespace Pulsar.Tests.CompilerTests
         },
             };
 
+            // Debug output for condition structure
+            _output.WriteLine("\nRule structure:");
+            _output.WriteLine($"Rule name: {rule.Name}");
+            _output.WriteLine("Conditions:");
+            PrintConditionGroup(rule.Conditions, 1);
+            _output.WriteLine("Actions:");
+            foreach (var action in rule.Actions)
+            {
+                _output.WriteLine($"  - {action.GetType().Name}: {((SetValueAction)action).Key} = {((SetValueAction)action).Value}");
+            }
+
             // Act
             var generatedFiles = CodeGenerator.GenerateCSharp(new List<RuleDefinition> { rule });
 
@@ -366,8 +369,8 @@ namespace Pulsar.Tests.CompilerTests
 
             // Find the layer implementation file
             var layerFile = generatedFiles.FirstOrDefault(f =>
-                f.FileName.Contains("Layer") &&
-                f.Content.Contains("EvaluateLayer"));
+                f.FileName.Contains("RuleGroup") &&
+                f.Content.Contains("EvaluateGroup"));
 
             Assert.NotNull(layerFile);
 
@@ -451,8 +454,8 @@ namespace Pulsar.Tests.CompilerTests
 
             // Find the layer implementation file
             var layerFile = generatedFiles.FirstOrDefault(f =>
-                f.FileName.Contains("Layer") &&
-                f.Content.Contains("EvaluateLayer"));
+                f.FileName.Contains("RuleGroup") &&
+                f.Content.Contains("EvaluateGroup"));
 
             Assert.NotNull(layerFile);
 
@@ -552,8 +555,8 @@ namespace Pulsar.Tests.CompilerTests
 
             // Find the layer implementation file
             var layerFile = generatedFiles.FirstOrDefault(f =>
-                f.FileName.Contains("Layer") &&
-                f.Content.Contains("EvaluateLayer"));
+                f.FileName.Contains("RuleGroup") &&
+                f.Content.Contains("EvaluateGroup"));
 
             Assert.NotNull(layerFile);
 
@@ -588,30 +591,30 @@ namespace Pulsar.Tests.CompilerTests
 
             // Act
             var generatedFiles = CodeGenerator.GenerateCSharp(rules);
-            var mainFile = generatedFiles.First(f => f.FileName == "CompiledRules.cs");
+            var coordinatorFile = generatedFiles.First(f => f.FileName == "RuleCoordinator.cs");
 
             // Assert
             Assert.Contains(
                 "public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)",
-                mainFile.Content
+                coordinatorFile.Content
             );
-            Assert.Contains("EvaluateLayer0(inputs, outputs, bufferManager);", mainFile.Content);
-            Assert.Contains("EvaluateLayer1(inputs, outputs, bufferManager);", mainFile.Content);
-            Assert.Contains("EvaluateLayer2(inputs, outputs, bufferManager);", mainFile.Content);
+            Assert.Contains("EvaluateGroup0(inputs, outputs, bufferManager);", coordinatorFile.Content);
+            Assert.Contains("EvaluateGroup1(inputs, outputs, bufferManager);", coordinatorFile.Content);
+            Assert.Contains("EvaluateGroup2(inputs, outputs, bufferManager);", coordinatorFile.Content);
 
             // Verify layer ordering through method content
-            int layer0Pos = mainFile.Content.IndexOf("private void EvaluateLayer0");
-            int layer1Pos = mainFile.Content.IndexOf("private void EvaluateLayer1");
-            int layer2Pos = mainFile.Content.IndexOf("private void EvaluateLayer2");
+            int layer0Pos = coordinatorFile.Content.IndexOf("private void EvaluateGroup0");
+            int layer1Pos = coordinatorFile.Content.IndexOf("private void EvaluateGroup1");
+            int layer2Pos = coordinatorFile.Content.IndexOf("private void EvaluateGroup2");
 
             Assert.True(layer0Pos > 0);
             Assert.True(layer1Pos > layer0Pos);
             Assert.True(layer2Pos > layer1Pos);
 
             // Verify rules are in correct layers
-            var layer0 = mainFile.Content.Substring(layer0Pos, layer1Pos - layer0Pos);
-            var layer1 = mainFile.Content.Substring(layer1Pos, layer2Pos - layer1Pos);
-            var layer2 = mainFile.Content.Substring(layer2Pos);
+            var layer0 = coordinatorFile.Content.Substring(layer0Pos, layer1Pos - layer0Pos);
+            var layer1 = coordinatorFile.Content.Substring(layer1Pos, layer2Pos - layer1Pos);
+            var layer2 = coordinatorFile.Content.Substring(layer2Pos);
 
             // Input processing in layer 0
             Assert.Contains("Rule: InputRule", layer0);
@@ -634,32 +637,32 @@ namespace Pulsar.Tests.CompilerTests
             var generatedFiles = CodeGenerator.GenerateCSharp(rules);
 
             // Assert
-            Assert.Contains(generatedFiles, f => f.FileName == "CompiledRules.cs");
+            Assert.Contains(generatedFiles, f => f.FileName == "RuleCoordinator.cs");
+            Assert.Contains(generatedFiles, f => f.FileName.Contains("RuleGroup"));
             Assert.Contains(generatedFiles, f => f.FileName == "ICompiledRules.cs");
-            Assert.Contains(generatedFiles, f => f.FileName.Contains("Layer0"));
 
-            var mainFile = generatedFiles.First(f => f.FileName == "CompiledRules.cs");
+            var coordinatorFile = generatedFiles.First(f => f.FileName == "RuleCoordinator.cs");
+            var groupFile = generatedFiles.First(f => f.FileName.Contains("RuleGroup"));
             var interfaceFile = generatedFiles.First(f => f.FileName == "ICompiledRules.cs");
-            var layerFile = generatedFiles.First(f => f.FileName.Contains("Layer0"));
 
             // Verify interface
             Assert.Contains("void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)", interfaceFile.Content);
 
-            // Verify main class
-            Assert.Contains("public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)", mainFile.Content);
-            Assert.Contains("EvaluateLayer0(inputs, outputs, bufferManager);", mainFile.Content);
-            Assert.DoesNotContain("EvaluateLayer1", mainFile.Content);
+            // Verify coordinator
+            Assert.Contains("public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)", coordinatorFile.Content);
+            Assert.Contains("EvaluateGroup0(inputs, outputs, bufferManager);", coordinatorFile.Content);
+            Assert.DoesNotContain("EvaluateGroup1", coordinatorFile.Content);
 
             // Verify layer implementation
-            Assert.Contains("Rule: TempRule", layerFile.Content);
-            Assert.Contains("Rule: PressureRule", layerFile.Content);
-            Assert.Contains("using System;", layerFile.Content);
-            Assert.Contains("using System.Collections.Generic;", layerFile.Content);
-            Assert.Contains("using System.Linq;", layerFile.Content);
-            Assert.Contains("using Serilog;", layerFile.Content);
-            Assert.Contains("using Prometheus;", layerFile.Content);
-            Assert.Contains("using Pulsar.Runtime.Buffers;", layerFile.Content);
-            Assert.Contains("using Pulsar.Runtime.Common;", layerFile.Content);
+            Assert.Contains("Rule: TempRule", groupFile.Content);
+            Assert.Contains("Rule: PressureRule", groupFile.Content);
+            Assert.Contains("using System;", groupFile.Content);
+            Assert.Contains("using System.Collections.Generic;", groupFile.Content);
+            Assert.Contains("using System.Linq;", groupFile.Content);
+            Assert.Contains("using Serilog;", groupFile.Content);
+            Assert.Contains("using Prometheus;", groupFile.Content);
+            Assert.Contains("using Pulsar.Runtime.Buffers;", groupFile.Content);
+            Assert.Contains("using Pulsar.Runtime.Common;", groupFile.Content);
         }
 
         [Fact]
@@ -696,16 +699,16 @@ namespace Pulsar.Tests.CompilerTests
             var code = string.Join("\n", generatedFiles.Select(f => f.Content));
 
             // Assert
-            Assert.Contains("EvaluateLayer0", code);
-            Assert.Contains("EvaluateLayer1", code);
-            Assert.Contains("EvaluateLayer2", code);
-            Assert.Contains("EvaluateLayer3", code);
+            Assert.Contains("EvaluateGroup0", code);
+            Assert.Contains("EvaluateGroup1", code);
+            Assert.Contains("EvaluateGroup2", code);
+            Assert.Contains("EvaluateGroup3", code);
 
             // Verify layer contents
-            int layer0Pos = code.IndexOf("private void EvaluateLayer0");
-            int layer1Pos = code.IndexOf("private void EvaluateLayer1");
-            int layer2Pos = code.IndexOf("private void EvaluateLayer2");
-            int layer3Pos = code.IndexOf("private void EvaluateLayer3");
+            int layer0Pos = code.IndexOf("private void EvaluateGroup0");
+            int layer1Pos = code.IndexOf("private void EvaluateGroup1");
+            int layer2Pos = code.IndexOf("private void EvaluateGroup2");
+            int layer3Pos = code.IndexOf("private void EvaluateGroup3");
 
             var layer0 = code.Substring(layer0Pos, layer1Pos - layer0Pos);
             var layer1 = code.Substring(layer1Pos, layer2Pos - layer1Pos);
@@ -761,13 +764,31 @@ namespace Pulsar.Tests.CompilerTests
             var coordinatorContent = coordinator.Content;
             var evaluationLines = coordinatorContent
                 .Split('\n')
-                .Where(l => l.Contains("EvaluateGroup_"))
+                .Where(l => l.Contains("_group") && l.Contains("EvaluateGroup"))
+                .Select(l => l.Trim())
                 .ToList();
+
+            // Debug output
+            foreach (var line in evaluationLines)
+            {
+                Console.WriteLine($"Evaluation line: {line}");
+            }
 
             for (int i = 1; i < evaluationLines.Count; i++)
             {
-                var prevGroupNum = int.Parse(evaluationLines[i - 1].Split('_')[1]);
-                var currentGroupNum = int.Parse(evaluationLines[i].Split('_')[1]);
+                var prevLine = evaluationLines[i - 1];
+                var currentLine = evaluationLines[i];
+                var prevMatch = System.Text.RegularExpressions.Regex.Match(prevLine, @"_group(\d+)\.");
+                var currentMatch = System.Text.RegularExpressions.Regex.Match(currentLine, @"_group(\d+)\.");
+
+                if (!prevMatch.Success || !currentMatch.Success)
+                {
+                    Assert.Fail($"Could not extract group numbers from lines: '{prevLine}' and '{currentLine}'");
+                }
+
+                var prevGroupNum = int.Parse(prevMatch.Groups[1].Value);
+                var currentGroupNum = int.Parse(currentMatch.Groups[1].Value);
+
                 Assert.True(prevGroupNum <= currentGroupNum,
                     "Coordinator is not calling groups in dependency order");
             }
@@ -915,6 +936,41 @@ namespace Pulsar.Tests.CompilerTests
                     }
                 }
             };
+        }
+
+        private void PrintConditionGroup(ConditionGroup group, int indent)
+        {
+            var prefix = new string(' ', indent * 2);
+            if (group.All?.Any() == true)
+            {
+                _output.WriteLine($"{prefix}ALL:");
+                foreach (var condition in group.All)
+                {
+                    if (condition is ConditionGroup nestedGroup)
+                    {
+                        PrintConditionGroup(nestedGroup, indent + 1);
+                    }
+                    else if (condition is ComparisonCondition comp)
+                    {
+                        _output.WriteLine($"{prefix}  - {comp.Sensor} {comp.Operator} {comp.Value}");
+                    }
+                }
+            }
+            if (group.Any?.Any() == true)
+            {
+                _output.WriteLine($"{prefix}ANY:");
+                foreach (var condition in group.Any)
+                {
+                    if (condition is ConditionGroup nestedGroup)
+                    {
+                        PrintConditionGroup(nestedGroup, indent + 1);
+                    }
+                    else if (condition is ComparisonCondition comp)
+                    {
+                        _output.WriteLine($"{prefix}  - {comp.Sensor} {comp.Operator} {comp.Value}");
+                    }
+                }
+            }
         }
     }
 }

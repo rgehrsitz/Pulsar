@@ -94,6 +94,12 @@ namespace Pulsar.Compiler.Parsers
             var root = _deserializer.Deserialize<RuleRoot>(yamlContent);
             Debug.WriteLine($"\nParsed YAML root: Rules count = {root?.Rules?.Count ?? 0}");
 
+            // Validate that rules are not empty
+            if (root?.Rules == null || !root.Rules.Any())
+            {
+                throw new InvalidOperationException("The YAML file is invalid: no rules found.");
+            }
+
             if (root?.Rules?.Any() == true)
             {
                 var firstRule = root.Rules.First();
