@@ -591,38 +591,45 @@ namespace Pulsar.Tests.CompilerTests
 
             // Act
             var generatedFiles = CodeGenerator.GenerateCSharp(rules);
+
+            // Verify interface and coordinator are generated
             var coordinatorFile = generatedFiles.First(f => f.FileName == "RuleCoordinator.cs");
+            var interfaceFile = generatedFiles.First(f => f.FileName == "ICompiledRules.cs");
+        
+            // Verify rule groups are generated in correct order
+            var group0File = generatedFiles.First(f => f.FileName == "RuleGroup0.cs");
+            var group1File = generatedFiles.First(f => f.FileName == "RuleGroup1.cs");
+            var group2File = generatedFiles.First(f => f.FileName == "RuleGroup2.cs");
 
-            // Assert
-            Assert.Contains(
-                "public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)",
-                coordinatorFile.Content
-            );
-            Assert.Contains("EvaluateGroup0(inputs, outputs, bufferManager);", coordinatorFile.Content);
-            Assert.Contains("EvaluateGroup1(inputs, outputs, bufferManager);", coordinatorFile.Content);
-            Assert.Contains("EvaluateGroup2(inputs, outputs, bufferManager);", coordinatorFile.Content);
+            // Assert coordinator implements interface and evaluates groups in order
+            Assert.Contains("public class RuleCoordinator : IRuleCoordinator", coordinatorFile.Content);
+            Assert.Contains("public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)", coordinatorFile.Content);
+        
+            // Verify evaluation order in coordinator
+            var evalLines = coordinatorFile.Content
+                .Split('\n')
+                .Where(l => l.Contains(".EvaluateGroup("))
+                .ToList();
+        
+            Assert.Equal(3, evalLines.Count);
+            Assert.Contains("_group0.EvaluateGroup", evalLines[0]);
+            Assert.Contains("_group1.EvaluateGroup", evalLines[1]);
+            Assert.Contains("_group2.EvaluateGroup", evalLines[2]);
 
-            // Verify layer ordering through method content
-            int layer0Pos = coordinatorFile.Content.IndexOf("private void EvaluateGroup0");
-            int layer1Pos = coordinatorFile.Content.IndexOf("private void EvaluateGroup1");
-            int layer2Pos = coordinatorFile.Content.IndexOf("private void EvaluateGroup2");
+            // Verify rules are in correct groups
+            Assert.Contains("Rule: InputRule", group0File.Content);
+            Assert.Contains("Rule: ProcessingRule", group1File.Content);
+            Assert.Contains("Rule: AlertRule", group2File.Content);
 
-            Assert.True(layer0Pos > 0);
-            Assert.True(layer1Pos > layer0Pos);
-            Assert.True(layer2Pos > layer1Pos);
-
-            // Verify rules are in correct layers
-            var layer0 = coordinatorFile.Content.Substring(layer0Pos, layer1Pos - layer0Pos);
-            var layer1 = coordinatorFile.Content.Substring(layer1Pos, layer2Pos - layer1Pos);
-            var layer2 = coordinatorFile.Content.Substring(layer2Pos);
-
-            // Input processing in layer 0
-            Assert.Contains("Rule: InputRule", layer0);
-            Assert.Contains("_logger.Debug(\"Evaluating rule InputRule\")", layer0);
-            Assert.Contains("Rule: ProcessingRule", layer1);
-            Assert.Contains("_logger.Debug(\"Evaluating rule ProcessingRule\")", layer1);
-            Assert.Contains("Rule: AlertRule", layer2);
-            Assert.Contains("_logger.Debug(\"Evaluating rule AlertRule\")", layer2);
+            // Verify rule dependencies through inputs/outputs
+            Assert.Contains("inputs[\"raw_temp\"]", group0File.Content);
+            Assert.Contains("outputs[\"temp\"]", group0File.Content);
+        
+            Assert.Contains("inputs[\"temp\"]", group1File.Content);
+            Assert.Contains("outputs[\"processed_temp\"]", group1File.Content);
+        
+            Assert.Contains("inputs[\"processed_temp\"]", group2File.Content);
+            Assert.Contains("outputs[\"alert\"]", group2File.Content);
         }
 
         [Fact]
@@ -638,11 +645,11 @@ namespace Pulsar.Tests.CompilerTests
 
             // Assert
             Assert.Contains(generatedFiles, f => f.FileName == "RuleCoordinator.cs");
-            Assert.Contains(generatedFiles, f => f.FileName.Contains("RuleGroup"));
+            Assert.Contains(generatedFiles, f => f.FileName == "RuleGroup0.cs");
             Assert.Contains(generatedFiles, f => f.FileName == "ICompiledRules.cs");
 
             var coordinatorFile = generatedFiles.First(f => f.FileName == "RuleCoordinator.cs");
-            var groupFile = generatedFiles.First(f => f.FileName.Contains("RuleGroup"));
+            var group0File = generatedFiles.First(f => f.FileName == "RuleGroup0.cs");
             var interfaceFile = generatedFiles.First(f => f.FileName == "ICompiledRules.cs");
 
             // Verify interface
@@ -650,19 +657,22 @@ namespace Pulsar.Tests.CompilerTests
 
             // Verify coordinator
             Assert.Contains("public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)", coordinatorFile.Content);
-            Assert.Contains("EvaluateGroup0(inputs, outputs, bufferManager);", coordinatorFile.Content);
-            Assert.DoesNotContain("EvaluateGroup1", coordinatorFile.Content);
+            Assert.Contains("_group0.EvaluateGroup(inputs, outputs, bufferManager);", coordinatorFile.Content);
+            // Since rules are parallel, they should be in the same group (group0)
+            Assert.DoesNotContain("_group1", coordinatorFile.Content);
 
-            // Verify layer implementation
-            Assert.Contains("Rule: TempRule", groupFile.Content);
-            Assert.Contains("Rule: PressureRule", groupFile.Content);
-            Assert.Contains("using System;", groupFile.Content);
-            Assert.Contains("using System.Collections.Generic;", groupFile.Content);
-            Assert.Contains("using System.Linq;", groupFile.Content);
-            Assert.Contains("using Serilog;", groupFile.Content);
-            Assert.Contains("using Prometheus;", groupFile.Content);
-            Assert.Contains("using Pulsar.Runtime.Buffers;", groupFile.Content);
-            Assert.Contains("using Pulsar.Runtime.Common;", groupFile.Content);
+            // Verify both rules are in the same group
+            Assert.Contains("Rule: TempRule", group0File.Content);
+            Assert.Contains("Rule: PressureRule", group0File.Content);
+        
+            // Verify group has necessary imports
+            Assert.Contains("using System;", group0File.Content);
+            Assert.Contains("using System.Collections.Generic;", group0File.Content);
+            Assert.Contains("using System.Linq;", group0File.Content);
+            Assert.Contains("using Serilog;", group0File.Content);
+            Assert.Contains("using Prometheus;", group0File.Content);
+            Assert.Contains("using Pulsar.Runtime.Buffers;", group0File.Content);
+            Assert.Contains("using Pulsar.Runtime.Common;", group0File.Content);
         }
 
         [Fact]
@@ -696,38 +706,54 @@ namespace Pulsar.Tests.CompilerTests
 
             // Act
             var generatedFiles = CodeGenerator.GenerateCSharp(rules);
-            var code = string.Join("\n", generatedFiles.Select(f => f.Content));
 
-            // Assert
-            Assert.Contains("EvaluateGroup0", code);
-            Assert.Contains("EvaluateGroup1", code);
-            Assert.Contains("EvaluateGroup2", code);
-            Assert.Contains("EvaluateGroup3", code);
+            // Assert - verify all required files are generated
+            var coordinatorFile = generatedFiles.First(f => f.FileName == "RuleCoordinator.cs");
+            var group0File = generatedFiles.First(f => f.FileName == "RuleGroup0.cs");
+            var group1File = generatedFiles.First(f => f.FileName == "RuleGroup1.cs");
+            var group2File = generatedFiles.First(f => f.FileName == "RuleGroup2.cs");
+            var group3File = generatedFiles.First(f => f.FileName == "RuleGroup3.cs");
 
-            // Verify layer contents
-            int layer0Pos = code.IndexOf("private void EvaluateGroup0");
-            int layer1Pos = code.IndexOf("private void EvaluateGroup1");
-            int layer2Pos = code.IndexOf("private void EvaluateGroup2");
-            int layer3Pos = code.IndexOf("private void EvaluateGroup3");
+            // Verify coordinator evaluates groups in correct order
+            var evalLines = coordinatorFile.Content
+                .Split('\n')
+                .Where(l => l.Contains(".EvaluateGroup("))
+                .ToList();
+        
+            Assert.Equal(4, evalLines.Count);
+            Assert.Contains("_group0.EvaluateGroup", evalLines[0]);
+            Assert.Contains("_group1.EvaluateGroup", evalLines[1]);
+            Assert.Contains("_group2.EvaluateGroup", evalLines[2]);
+            Assert.Contains("_group3.EvaluateGroup", evalLines[3]);
 
-            var layer0 = code.Substring(layer0Pos, layer1Pos - layer0Pos);
-            var layer1 = code.Substring(layer1Pos, layer2Pos - layer1Pos);
-            var layer2 = code.Substring(layer2Pos, layer3Pos - layer2Pos);
-            var layer3 = code.Substring(layer3Pos);
+            // Verify rules are in correct groups based on dependencies
+        
+            // Group 0 - Input processing (parallel rules)
+            Assert.Contains("Rule: InputProcessing1", group0File.Content);
+            Assert.Contains("Rule: InputProcessing2", group0File.Content);
+            Assert.Contains("inputs[\"raw1\"]", group0File.Content);
+            Assert.Contains("inputs[\"raw2\"]", group0File.Content);
+            Assert.Contains("outputs[\"processed1\"]", group0File.Content);
+            Assert.Contains("outputs[\"processed2\"]", group0File.Content);
 
-            // Input processing in layer 0
-            Assert.Contains("Rule: InputProcessing1", layer0);
-            Assert.Contains("Rule: InputProcessing2", layer0);
+            // Group 1 - Aggregation (depends on processed1 and processed2)
+            Assert.Contains("Rule: Aggregation", group1File.Content);
+            Assert.Contains("inputs[\"processed1\"]", group1File.Content);
+            Assert.Contains("inputs[\"processed2\"]", group1File.Content);
+            Assert.Contains("outputs[\"aggregate\"]", group1File.Content);
 
-            // Aggregation in layer 1
-            Assert.Contains("Rule: Aggregation", layer1);
+            // Group 2 - Initial alerts (parallel rules depending on aggregate)
+            Assert.Contains("Rule: Alert1", group2File.Content);
+            Assert.Contains("Rule: Alert2", group2File.Content);
+            Assert.Contains("inputs[\"aggregate\"]", group2File.Content);
+            Assert.Contains("outputs[\"alert1\"]", group2File.Content);
+            Assert.Contains("outputs[\"alert2\"]", group2File.Content);
 
-            // Initial alerts in layer 2
-            Assert.Contains("Rule: Alert1", layer2);
-            Assert.Contains("Rule: Alert2", layer2);
-
-            // Final alert in layer 3
-            Assert.Contains("Rule: FinalAlert", layer3);
+            // Group 3 - Final alert (depends on both alert1 and alert2)
+            Assert.Contains("Rule: FinalAlert", group3File.Content);
+            Assert.Contains("inputs[\"alert1\"]", group3File.Content);
+            Assert.Contains("inputs[\"alert2\"]", group3File.Content);
+            Assert.Contains("outputs[\"final_alert\"]", group3File.Content);
         }
 
         [Fact]
@@ -799,12 +825,12 @@ namespace Pulsar.Tests.CompilerTests
         {
             // Arrange
             var rules = new List<RuleDefinition>
-    {
-        CreateRule("ParallelRule1", new[] { "input1" }, "output1"),
-        CreateRule("ParallelRule2", new[] { "input2" }, "output2"),
-        CreateRule("ParallelRule3", new[] { "input3" }, "output3"),
-        CreateRule("DependentRule", new[] { "output1", "output2" }, "finalOutput")
-    };
+            {
+                CreateRule("ParallelRule1", new[] { "input1" }, "output1"),
+                CreateRule("ParallelRule2", new[] { "input2" }, "output2"),
+                CreateRule("ParallelRule3", new[] { "input3" }, "output3"),
+                CreateRule("DependentRule", new[] { "output1", "output2" }, "finalOutput")
+            };
 
             var config = new RuleGroupingConfig
             {
@@ -815,8 +841,29 @@ namespace Pulsar.Tests.CompilerTests
             // Act
             var generatedFiles = CodeGenerator.GenerateCSharp(rules, config);
 
+            // Debug output
+            _output.WriteLine("\nGenerated files:");
+            foreach (var file in generatedFiles)
+            {
+                _output.WriteLine($"\n--- {file.FileName} ---");
+                _output.WriteLine(file.Content);
+            }
+
             // Assert
-            var ruleFiles = generatedFiles.Where(f => f.FileName != "RuleCoordinator.cs").ToList();
+            var ruleFiles = generatedFiles.Where(f => f.FileName != "RuleCoordinator.cs" && f.FileName != "ICompiledRules.cs" && f.FileName != "rules.manifest.json").ToList();
+            var manifestFile = generatedFiles.First(f => f.FileName == "rules.manifest.json");
+
+            // Debug output for rule groups
+            _output.WriteLine("\nRule groups:");
+            foreach (var file in ruleFiles)
+            {
+                var ruleNames = file.Content.Split("Rule:").Skip(1).Select(r => r.Split('\n')[0].Trim()).ToList();
+                _output.WriteLine($"{file.FileName}: {string.Join(", ", ruleNames)}");
+            }
+
+            // Debug manifest content
+            _output.WriteLine("\nManifest content:");
+            _output.WriteLine(manifestFile.Content);
 
             // Verify parallel rules are grouped together when possible
             var firstGroupContent = ruleFiles.First().Content;

@@ -52,7 +52,7 @@ namespace Pulsar.Compiler.Generation
             if (config.MaxRulesPerFile > 0)
             {
                 // Split rules into groups
-                var groups = SplitRulesIntoGroups(rules, layerMap, config.MaxRulesPerFile);
+                var groups = SplitRulesIntoGroups(rules, layerMap, config);
                 
                 // Generate group files
                 foreach (var (groupIndex, groupRules) in groups)
@@ -644,7 +644,7 @@ namespace Pulsar.Compiler.Generation
         private static Dictionary<int, List<RuleDefinition>> SplitRulesIntoGroups(
             List<RuleDefinition> rules,
             Dictionary<string, int> layerMap,
-            int maxRulesPerGroup)
+            RuleGroupingConfig config)
         {
             var groups = new Dictionary<int, List<RuleDefinition>>();
             var currentGroupIndex = 0;
@@ -652,32 +652,63 @@ namespace Pulsar.Compiler.Generation
             // Sort rules by layer to maintain dependency order
             var sortedRules = rules.OrderBy(r => layerMap[r.Name]).ToList();
 
-            // Group rules while maintaining layer boundaries
-            var currentRules = new List<RuleDefinition>();
-            var currentLayer = layerMap[sortedRules.First().Name];
+            // Group rules by layer first
+            var rulesByLayer = sortedRules.GroupBy(r => layerMap[r.Name])
+                .OrderBy(g => g.Key)
+                .ToList();
 
-            foreach (var rule in sortedRules)
+            if (config.GroupParallelRules)
             {
-                var ruleLayer = layerMap[rule.Name];
-
-                // Start a new group if:
-                // 1. Current group has reached max size, or
-                // 2. Current rule is in a different layer than previous rules and current group is not empty
-                if (currentRules.Count >= maxRulesPerGroup ||
-                    (ruleLayer != currentLayer && currentRules.Any()))
+                // When grouping parallel rules, try to keep rules from the same layer together
+                foreach (var layer in rulesByLayer)
                 {
-                    groups[currentGroupIndex] = currentRules;
-                    currentRules = new List<RuleDefinition>();
-                    currentGroupIndex++;
+                    var layerRules = layer.ToList();
+                    var remainingRules = layerRules.Count;
+                    var currentIndex = 0;
+
+                    while (remainingRules > 0)
+                    {
+                        var currentRules = new List<RuleDefinition>();
+                        var rulesInThisGroup = Math.Min(remainingRules, config.MaxRulesPerFile);
+
+                        // Add rules from this layer up to MaxRulesPerFile
+                        currentRules.AddRange(layerRules.Skip(currentIndex).Take(rulesInThisGroup));
+
+                        groups[currentGroupIndex++] = currentRules;
+                        currentIndex += rulesInThisGroup;
+                        remainingRules -= rulesInThisGroup;
+                    }
+                }
+            }
+            else
+            {
+                // Original logic for non-parallel grouping
+                var currentRules = new List<RuleDefinition>();
+                var currentLayer = layerMap[sortedRules.First().Name];
+
+                foreach (var rule in sortedRules)
+                {
+                    var ruleLayer = layerMap[rule.Name];
+
+                    // Start a new group if:
+                    // 1. Current group has reached max size, or
+                    // 2. Current rule is in a different layer than previous rules and current group is not empty
+                    if (currentRules.Count >= config.MaxRulesPerFile ||
+                        (ruleLayer != currentLayer && currentRules.Any()))
+                    {
+                        groups[currentGroupIndex] = currentRules;
+                        currentRules = new List<RuleDefinition>();
+                        currentGroupIndex++;
+                    }
+
+                    currentRules.Add(rule);
+                    currentLayer = ruleLayer;
                 }
 
-                currentRules.Add(rule);
-                currentLayer = ruleLayer;
-            }
-
-            if (currentRules.Any())
-            {
-                groups[currentGroupIndex] = currentRules;
+                if (currentRules.Any())
+                {
+                    groups[currentGroupIndex] = currentRules;
+                }
             }
 
             return groups;
@@ -791,7 +822,7 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("        }");
             builder.AppendLine();
 
-            builder.AppendLine("        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)");
+            builder.AppendLine("        public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
             builder.AppendLine("        {");
             builder.AppendLine("            try");
             builder.AppendLine("            {");
@@ -800,13 +831,14 @@ namespace Pulsar.Compiler.Generation
             // Call groups in order based on their layer ranges
             var orderedGroups = groups
                 .OrderBy(g => g.Value.Min(r => layerMap[r.Name]))
-                .ThenBy(g => g.Key);  // Ensure consistent ordering for groups in the same layer
-            foreach (var group in orderedGroups)
+                .Select(g => g.Key);
+
+            foreach (var groupIndex in orderedGroups)
             {
-                builder.AppendLine($"                _group{group.Key}.EvaluateGroup(inputs, outputs, _bufferManager);");
+                builder.AppendLine($"                _group{groupIndex}.EvaluateGroup(inputs, outputs, bufferManager);");
             }
 
-            builder.AppendLine("                _logger.Debug(\"Rule evaluation completed\");");
+            builder.AppendLine("                _logger.Debug(\"Completed rule evaluation\");");
             builder.AppendLine("            }");
             builder.AppendLine("            catch (Exception ex)");
             builder.AppendLine("            {");
