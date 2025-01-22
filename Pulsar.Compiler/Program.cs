@@ -8,6 +8,7 @@ using Serilog;
 using Pulsar.Compiler.Parsers;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Generation;
+using Pulsar.Compiler.Build;
 
 namespace Pulsar.Compiler;
 
@@ -100,46 +101,46 @@ public class Program
 
         var configPath = options.GetValueOrDefault("config", "system_config.yaml");
         var outputPath = options.GetValueOrDefault("output", "Generated");
+        var buildConfig = LoadBuildConfig(options);
 
         // Load system configuration
         var systemConfig = await LoadSystemConfig(configPath);
-        logger.Information("Loaded system configuration with {count} valid sensors",
-            systemConfig.ValidSensors.Count);
 
-        // Get all rule files
-        var ruleFiles = GetRuleFiles(rulesPath);
-        logger.Information("Found {count} rule files to process", ruleFiles.Count);
+        // New BuildTimeOrchestrator usage
+        var orchestrator = new BuildTimeOrchestrator(logger, systemConfig, buildConfig);
+        var result = await orchestrator.ProcessRulesDirectory(rulesPath, outputPath);
 
-        // Parse and validate all rules
-        var parser = new DslParser();
-        var allRules = new List<RuleDefinition>();
-
-        foreach (var file in ruleFiles)
+        // Log build results
+        foreach (var warning in result.Warnings)
         {
-            var yamlContent = await File.ReadAllTextAsync(file);
-            var rules = parser.ParseRules(
-                yamlContent,
-                systemConfig.ValidSensors,
-                Path.GetFileName(file));
-
-            allRules.AddRange(rules);
-            logger.Information("Parsed {count} rules from {file}",
-                rules.Count, Path.GetFileName(file));
+            logger.Warning(warning);
         }
 
-        // Generate C# source files
-        Directory.CreateDirectory(outputPath);
-        var generatedFiles = CodeGenerator.GenerateCSharp(allRules);
-
-        foreach (var file in generatedFiles)
+        // Fix deconstruction syntax by explicitly typing it
+        foreach (KeyValuePair<string, RuleMetrics> pair in result.RuleMetrics)
         {
-            var filePath = Path.Combine(outputPath, file.FileName);
-            await File.WriteAllTextAsync(filePath, file.Content);
-            logger.Information("Generated {file}", filePath);
+            if (pair.Value.EstimatedComplexity > buildConfig.ComplexityThreshold)
+            {
+                logger.Warning($"Rule {pair.Key} has high complexity: {pair.Value.EstimatedComplexity}");
+            }
         }
 
-        logger.Information("Successfully compiled {count} rules to C# source files",
-            allRules.Count);
+        logger.Information("Successfully compiled {count} rules to {files} files",
+            result.Manifest.Rules.Count,
+            result.GeneratedFiles.Count);
+    }
+
+    private static BuildConfig LoadBuildConfig(Dictionary<string, string> options)
+    {
+        return new BuildConfig
+        {
+            MaxRulesPerFile = int.Parse(options.GetValueOrDefault("max-rules", "100")),
+            MaxLinesPerFile = int.Parse(options.GetValueOrDefault("max-lines", "1000")),
+            GroupParallelRules = bool.Parse(options.GetValueOrDefault("group-parallel", "true")),
+            NamespaceName = options.GetValueOrDefault("namespace", "Pulsar.Generated"),
+            GenerateDebugInfo = bool.Parse(options.GetValueOrDefault("debug", "true")),
+            ComplexityThreshold = int.Parse(options.GetValueOrDefault("complexity", "100"))
+        };
     }
 
     private static List<string> GetRuleFiles(string rulesPath)

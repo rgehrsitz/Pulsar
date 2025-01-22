@@ -22,21 +22,19 @@ namespace Pulsar.Compiler.Generation
 
     public class CodeGenerator
     {
-        public static List<GeneratedFileInfo> GenerateCSharp(List<RuleDefinition> rules, RuleGroupingConfig? config = null)
+        public static List<GeneratedFileInfo> GenerateCSharp(
+            List<RuleDefinition> rules,
+            RuleGroupingConfig? config = null)
         {
+            // Use default configuration if not provided
             config ??= new RuleGroupingConfig();
-            if (rules == null)
-            {
-                throw new ArgumentNullException(nameof(rules));
-            }
 
-            // Handle empty rules case
-            if (!rules.Any())
+            if (rules == null || !rules.Any())
             {
                 return new List<GeneratedFileInfo>
-                {
-                    GenerateEmptyCompiledRules()
-                };
+            {
+                GenerateEmptyCompiledRules()
+            };
             }
 
             var files = new List<GeneratedFileInfo>();
@@ -48,49 +46,56 @@ namespace Pulsar.Compiler.Generation
             var layerMap = AssignLayers(rules);
             var rulesByLayer = GetRulesByLayer(rules, layerMap);
 
-            // If MaxRulesPerFile is set, split rules into groups
-            if (config.MaxRulesPerFile > 0)
-            {
-                // Split rules into groups
-                var groups = SplitRulesIntoGroups(rules, layerMap, config);
-                
-                // Generate group files
-                foreach (var (groupIndex, groupRules) in groups)
-                {
-                    files.Add(GenerateGroupImplementation(groupIndex, groupRules, layerMap));
-                }
+            // Split rules into groups based on configuration
+            var groups = SplitRulesIntoGroups(rules, layerMap, config);
 
-                // Generate coordinator to manage groups
-                files.Add(GenerateRuleCoordinator(groups, layerMap));
-            }
-            else
+            // Generate group implementation files
+            foreach (var (groupIndex, groupRules) in groups)
             {
-                // Generate the main class file
-                files.Add(GenerateCompiledRulesClass(rulesByLayer));
+                var groupFile = GenerateGroupImplementation(groupIndex, groupRules, layerMap);
 
-                // Generate the rule implementations
-                if (config.GroupParallelRules)
-                {
-                    // Generate one file per layer
-                    foreach (var layer in rulesByLayer)
-                    {
-                        files.Add(GenerateLayerImplementation(layer.Key, layer.Value));
-                    }
-                }
-                else
-                {
-                    // Generate individual files for each rule
-                    foreach (var rule in rules)
-                    {
-                        files.Add(GenerateRuleImplementation(rule, layerMap[rule.Name]));
-                    }
-                }
+                // Add source tracking comments for rules in this group
+                AddSourceTrackingComments(groupFile, groupRules);
+
+                files.Add(groupFile);
             }
 
-            // Generate debug/metadata file
+            // Generate coordinator to manage groups
+            files.Add(GenerateRuleCoordinator(groups, layerMap));
+
+            // Generate metadata file with source tracking
             files.Add(GenerateMetadataFile(rules, layerMap));
 
             return files;
+        }
+
+        /// <summary>
+        /// Adds source tracking comments to the generated file content
+        /// </summary>
+        private static void AddSourceTrackingComments(
+            GeneratedFileInfo fileInfo,
+            List<RuleDefinition> groupRules)
+        {
+            var sourceFiles = groupRules
+                .Select(r => r.SourceInfo?.FileName)
+                .Where(f => !string.IsNullOrEmpty(f))
+                .Distinct()
+                .ToList();
+
+            // If we have source files, add a comment block at the top
+            if (sourceFiles.Any())
+            {
+                var sourceComment = $"// Source Files: {string.Join(", ", sourceFiles)}\n";
+                sourceComment += "// Rules in this group:\n";
+                sourceComment += string.Join("\n",
+                    groupRules.Select(r => $"//   - {r.Name} (from {r.SourceInfo?.FileName ?? "unknown"})")
+                );
+
+                fileInfo.Content = fileInfo.Content.Insert(
+                    fileInfo.Content.IndexOf("namespace"),
+                    sourceComment + "\n"
+                );
+            }
         }
 
         private static string GenerateCommonUsings()
@@ -715,26 +720,32 @@ namespace Pulsar.Compiler.Generation
         }
 
         private static GeneratedFileInfo GenerateGroupImplementation(
-            int groupIndex,
-            List<RuleDefinition> rules,
-            Dictionary<string, int> layerMap)
+           int groupIndex,
+           List<RuleDefinition> rules,
+           Dictionary<string, int> layerMap)
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
             builder.AppendLine(GenerateCommonUsings());
             builder.AppendLine("namespace Pulsar.Runtime.Rules");
             builder.AppendLine("{");
-            builder.AppendLine($"    public class RuleGroup{groupIndex}");
+
+            // Change from partial class to concrete implementation
+            builder.AppendLine($"    public class RuleGroup{groupIndex} : IRuleGroup");
             builder.AppendLine("    {");
             builder.AppendLine("        private readonly ILogger _logger;");
             builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
             builder.AppendLine();
+
+            // Constructor
             builder.AppendLine($"        public RuleGroup{groupIndex}(ILogger logger, RingBufferManager bufferManager)");
             builder.AppendLine("        {");
             builder.AppendLine("            _logger = logger ?? throw new ArgumentNullException(nameof(logger));");
             builder.AppendLine("            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));");
             builder.AppendLine("        }");
             builder.AppendLine();
+
+            // Interface implementation
             builder.AppendLine("        public void EvaluateGroup(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
             builder.AppendLine("        {");
             builder.AppendLine("            try");
@@ -744,15 +755,21 @@ namespace Pulsar.Compiler.Generation
             // Generate rule implementations in layer order
             foreach (var rule in rules.OrderBy(r => layerMap[r.Name]))
             {
+                // Add source tracking
+                if (rule.SourceInfo != null)
+                {
+                    builder.AppendLine($"                // Source: {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}");
+                }
                 builder.AppendLine($"                // Rule: {rule.Name}");
                 if (!string.IsNullOrEmpty(rule.Description))
                 {
                     builder.AppendLine($"                // Description: {rule.Description}");
                 }
+
                 builder.AppendLine($"                _logger.Debug(\"Evaluating rule {rule.Name}\");");
 
                 string condition = GenerateCondition(rule.Conditions);
-                if (!string.IsNullOrEmpty(condition))
+                if (!string.IsNullOrEmpty(condition) && condition != "true")
                 {
                     builder.AppendLine($"                if ({condition})");
                     builder.AppendLine("                {");
@@ -771,6 +788,7 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine($"                _logger.Error(ex, \"Error evaluating rule group {groupIndex}\");");
             builder.AppendLine("                throw;");
             builder.AppendLine("            }");
+            builder.AppendLine($"            _logger.Debug(\"Completed rule group {groupIndex}\");");
             builder.AppendLine("        }");
             builder.AppendLine("    }");
             builder.AppendLine("}");
@@ -797,8 +815,12 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine(GenerateCommonUsings());
             builder.AppendLine("namespace Pulsar.Runtime.Rules");
             builder.AppendLine("{");
+
+            // Generate concrete coordinator class instead of partial
             builder.AppendLine("    public class RuleCoordinator : IRuleCoordinator");
             builder.AppendLine("    {");
+
+            // Fields for logger and each rule group
             builder.AppendLine("        private readonly ILogger _logger;");
             builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
 
@@ -809,12 +831,14 @@ namespace Pulsar.Compiler.Generation
             }
 
             builder.AppendLine();
+
+            // Constructor
             builder.AppendLine("        public RuleCoordinator(ILogger logger, RingBufferManager bufferManager)");
             builder.AppendLine("        {");
             builder.AppendLine("            _logger = logger ?? throw new ArgumentNullException(nameof(logger));");
             builder.AppendLine("            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));");
 
-            // Initialize groups
+            // Initialize each group
             foreach (var groupIndex in groups.Keys)
             {
                 builder.AppendLine($"            _group{groupIndex} = new RuleGroup{groupIndex}(logger, bufferManager);");
@@ -822,6 +846,7 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("        }");
             builder.AppendLine();
 
+            // Evaluate method
             builder.AppendLine("        public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
             builder.AppendLine("        {");
             builder.AppendLine("            try");
