@@ -71,3 +71,5 @@ msbuild.*
 Pulsar.Compiler/obj/project.assets.json
 Pulsar.Compiler/obj/project.assets.json
 Pulsar.Compiler/obj/project.assets.json
+log.*
+*.trx

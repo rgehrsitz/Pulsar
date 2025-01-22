@@ -1,15 +1,16 @@
-// File: Pulsar.Compiler/Parsers/DslParser.cs
+// File: Pulsar.Compiler/DslParser.cs
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using Pulsar.Compiler.Exceptions;
+using Pulsar.Compiler.Models;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 using YamlDotNet.Serialization.NodeDeserializers;
-using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Parsers
 {
@@ -63,7 +64,7 @@ namespace Pulsar.Compiler.Parsers
                     {
                         // Store start mark before moving parser
                         var start = parser.Current?.Start;
-                        
+
                         // Mark is a struct, so we need to handle the nullable Mark? properly
                         if (start.HasValue)
                         {
@@ -93,6 +94,12 @@ namespace Pulsar.Compiler.Parsers
             var root = _deserializer.Deserialize<RuleRoot>(yamlContent);
             Debug.WriteLine($"\nParsed YAML root: Rules count = {root?.Rules?.Count ?? 0}");
 
+            // Validate that rules are not empty
+            if (root?.Rules == null || !root.Rules.Any())
+            {
+                throw new InvalidOperationException("The YAML file is invalid: no rules found.");
+            }
+
             if (root?.Rules?.Any() == true)
             {
                 var firstRule = root.Rules.First();
@@ -113,7 +120,7 @@ namespace Pulsar.Compiler.Parsers
                 Debug.WriteLine($"\nProcessing rule: {rule.Name}");
 
                 // Validate sensors and keys
-                ValidateSensors(rule, validSensors);
+                ValidateRule(rule, validSensors);
 
                 // Show actions debug info
                 if (rule.Actions != null)
@@ -148,6 +155,24 @@ namespace Pulsar.Compiler.Parsers
             }
 
             return ruleDefinitions;
+        }
+
+        private void ValidateRule(Rule rule, IEnumerable<string> validSensors)
+        {
+            if (string.IsNullOrEmpty(rule.Name))
+            {
+                throw new ValidationException("Rule name cannot be empty");
+            }
+
+            // Validate that rule has at least one condition
+            if (rule.Conditions == null ||
+                ((rule.Conditions.All == null || rule.Conditions.All.Count == 0) &&
+                 (rule.Conditions.Any == null || rule.Conditions.Any.Count == 0)))
+            {
+                throw new ValidationException($"Rule '{rule.Name}' must have at least one condition");
+            }
+
+            ValidateSensors(rule, validSensors.ToList());
         }
 
         private void ValidateSensors(Rule rule, List<string> validSensors)
@@ -354,7 +379,7 @@ namespace Pulsar.Compiler.Parsers
                         return setValueAction as ActionDefinition;
                     }
 
-                    if (actionItem.SendMessage != null)
+                    if (actionItem?.SendMessage != null)
                     {
                         Debug.WriteLine($"Found SendMessage action");
                         return new SendMessageAction
@@ -367,7 +392,7 @@ namespace Pulsar.Compiler.Parsers
 
                     Debug.WriteLine($"No valid action type found");
                     throw new InvalidOperationException(
-                        $"Unknown action type. Action item details: SetValue is {(actionItem.SetValue != null ? "present" : "null")}, SendMessage is {(actionItem.SendMessage != null ? "present" : "null")}"
+                        $"Unknown action type. Action item details: {actionItem?.ToString() ?? "null"}"
                     );
                 })
                 .ToList();
