@@ -1,9 +1,10 @@
-﻿// File: Pulsa.Compiler/Program.cs
+﻿// File: Pulsar.Compiler/Program.cs
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Serilog;
 using Pulsar.Compiler.Parsers;
 using Pulsar.Compiler.Models;
@@ -16,6 +17,7 @@ public class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        // Configure logging
         var logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.Console()
@@ -58,21 +60,112 @@ public class Program
         }
     }
 
-    private static void PrintUsage()
+    private static async Task CompileRules(Dictionary<string, string> options, ILogger logger)
     {
-        Console.WriteLine("Pulsar Rule Compiler");
-        Console.WriteLine();
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  compile [options]");
-        Console.WriteLine();
-        Console.WriteLine("Options:");
-        Console.WriteLine("  --rules <path>     Single YAML file or directory containing YAML files");
-        Console.WriteLine("  --config <path>    Path to system configuration file (default: system_config.yaml)");
-        Console.WriteLine("  --output <path>    Output directory for generated source files");
-        Console.WriteLine();
-        Console.WriteLine("Examples:");
-        Console.WriteLine("  compile --rules ./rules/myrules.yaml");
-        Console.WriteLine("  compile --rules ./rules/ --config system_config.yaml");
+        // Validate required options
+        if (!options.TryGetValue("rules", out var rulesPath))
+        {
+            throw new ArgumentException("--rules argument is required");
+        }
+
+        // Load configuration options
+        var configPath = options.GetValueOrDefault("config", "system_config.yaml");
+        var outputPath = options.GetValueOrDefault("output", "Generated");
+
+        // Load system configuration
+        var systemConfig = await LoadSystemConfig(configPath);
+
+        // Create build configuration
+        var buildConfig = CreateBuildConfig(options);
+
+        // Create and configure build-time orchestrator
+        var orchestrator = new BuildTimeOrchestrator(
+            logger,
+            systemConfig,
+            buildConfig
+        );
+
+        try
+        {
+            // Process rules and generate output
+            var result = await orchestrator.ProcessRulesDirectory(rulesPath, outputPath);
+
+            // Log build results
+            LogBuildResults(logger, result);
+
+            // Validate and log any warnings or high-complexity rules
+            ValidateBuildResult(logger, result);
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex, "Rule compilation failed");
+            throw;
+        }
+    }
+
+    private static void LogBuildResults(ILogger logger, BuildResult result)
+    {
+        // Log basic compilation statistics
+        logger.Information(
+            "Compilation completed: {RuleCount} rules compiled to {FileCount} files",
+            result.Manifest.Rules.Count,
+            result.GeneratedFiles.Count
+        );
+
+        // Log generated file names
+        foreach (var file in result.GeneratedFiles)
+        {
+            logger.Debug("Generated file: {FileName}", file.FileName);
+        }
+    }
+
+    private static void ValidateBuildResult(ILogger logger, BuildResult result)
+    {
+        // Log any warnings
+        foreach (var warning in result.Warnings)
+        {
+            logger.Warning(warning);
+        }
+
+        // Check and log high-complexity rules
+        foreach (var ruleMetric in result.RuleMetrics)
+        {
+            if (ruleMetric.Value.EstimatedComplexity > 100) // Example threshold
+            {
+                logger.Warning(
+                    "Rule {RuleName} has high complexity: {Complexity}",
+                    ruleMetric.Key,
+                    ruleMetric.Value.EstimatedComplexity
+                );
+            }
+        }
+    }
+
+    private static async Task<SystemConfig> LoadSystemConfig(string configPath)
+    {
+        if (!File.Exists(configPath))
+        {
+            throw new FileNotFoundException($"System configuration file not found: {configPath}");
+        }
+
+        var yaml = await File.ReadAllTextAsync(configPath);
+        var deserializer = new YamlDotNet.Serialization.DeserializerBuilder()
+            .Build();
+        return deserializer.Deserialize<SystemConfig>(yaml);
+    }
+
+    private static BuildConfig CreateBuildConfig(Dictionary<string, string> options)
+    {
+        return new BuildConfig
+        {
+            // Parse options with defaults
+            MaxRulesPerFile = int.Parse(options.GetValueOrDefault("max-rules", "100")),
+            MaxLinesPerFile = int.Parse(options.GetValueOrDefault("max-lines", "1000")),
+            GroupParallelRules = bool.Parse(options.GetValueOrDefault("group-parallel", "true")),
+            NamespaceName = options.GetValueOrDefault("namespace", "Pulsar.Generated"),
+            GenerateDebugInfo = bool.Parse(options.GetValueOrDefault("debug", "true")),
+            ComplexityThreshold = int.Parse(options.GetValueOrDefault("complexity", "100"))
+        };
     }
 
     private static Dictionary<string, string> ParseArguments(string[] args)
@@ -92,84 +185,26 @@ public class Program
         return options;
     }
 
-    private static async Task CompileRules(Dictionary<string, string> options, ILogger logger)
+    private static void PrintUsage()
     {
-        if (!options.TryGetValue("rules", out var rulesPath))
-        {
-            throw new ArgumentException("--rules argument is required");
-        }
-
-        var configPath = options.GetValueOrDefault("config", "system_config.yaml");
-        var outputPath = options.GetValueOrDefault("output", "Generated");
-        var buildConfig = LoadBuildConfig(options);
-
-        // Load system configuration
-        var systemConfig = await LoadSystemConfig(configPath);
-
-        // New BuildTimeOrchestrator usage
-        var orchestrator = new BuildTimeOrchestrator(logger, systemConfig, buildConfig);
-        var result = await orchestrator.ProcessRulesDirectory(rulesPath, outputPath);
-
-        // Log build results
-        foreach (var warning in result.Warnings)
-        {
-            logger.Warning(warning);
-        }
-
-        // Fix deconstruction syntax by explicitly typing it
-        foreach (KeyValuePair<string, RuleMetrics> pair in result.RuleMetrics)
-        {
-            if (pair.Value.EstimatedComplexity > buildConfig.ComplexityThreshold)
-            {
-                logger.Warning($"Rule {pair.Key} has high complexity: {pair.Value.EstimatedComplexity}");
-            }
-        }
-
-        logger.Information("Successfully compiled {count} rules to {files} files",
-            result.Manifest.Rules.Count,
-            result.GeneratedFiles.Count);
-    }
-
-    private static BuildConfig LoadBuildConfig(Dictionary<string, string> options)
-    {
-        return new BuildConfig
-        {
-            MaxRulesPerFile = int.Parse(options.GetValueOrDefault("max-rules", "100")),
-            MaxLinesPerFile = int.Parse(options.GetValueOrDefault("max-lines", "1000")),
-            GroupParallelRules = bool.Parse(options.GetValueOrDefault("group-parallel", "true")),
-            NamespaceName = options.GetValueOrDefault("namespace", "Pulsar.Generated"),
-            GenerateDebugInfo = bool.Parse(options.GetValueOrDefault("debug", "true")),
-            ComplexityThreshold = int.Parse(options.GetValueOrDefault("complexity", "100"))
-        };
-    }
-
-    private static List<string> GetRuleFiles(string rulesPath)
-    {
-        if (File.Exists(rulesPath))
-        {
-            // Single file
-            return new List<string> { rulesPath };
-        }
-
-        if (Directory.Exists(rulesPath))
-        {
-            // Directory of files
-            return Directory.GetFiles(rulesPath, "*.yaml", SearchOption.AllDirectories)
-                .ToList();
-        }
-
-        throw new ArgumentException($"Rules path not found: {rulesPath}");
-    }
-
-    private static async Task<SystemConfig> LoadSystemConfig(string configPath)
-    {
-        if (!File.Exists(configPath))
-        {
-            throw new FileNotFoundException($"System configuration file not found: {configPath}");
-        }
-
-        var yaml = await File.ReadAllTextAsync(configPath);
-        var deserializer = new YamlDotNet.Serialization.DeserializerBuilder().Build();
-        return deserializer.Deserialize<SystemConfig>(yaml);
+        Console.WriteLine("Pulsar Rule Compiler");
+        Console.WriteLine();
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  compile [options]");
+        Console.WriteLine();
+        Console.WriteLine("Options:");
+        Console.WriteLine("  --rules <path>     Single YAML file or directory containing YAML files");
+        Console.WriteLine("  --config <path>    Path to system configuration file (default: system_config.yaml)");
+        Console.WriteLine("  --output <path>    Output directory for generated source files");
+        Console.WriteLine("  --max-rules <n>    Maximum rules per generated file (default: 100)");
+        Console.WriteLine("  --max-lines <n>    Maximum lines per generated file (default: 1000)");
+        Console.WriteLine("  --group-parallel   Group parallel rules (default: true)");
+        Console.WriteLine("  --namespace <ns>   Generated code namespace (default: Pulsar.Generated)");
+        Console.WriteLine("  --debug <bool>     Generate debug information (default: true)");
+        Console.WriteLine("  --complexity <n>   Rule complexity threshold (default: 100)");
+        Console.WriteLine();
+        Console.WriteLine("Examples:");
+        Console.WriteLine("  compile --rules ./rules/myrules.yaml");
+        Console.WriteLine("  compile --rules ./rules/ --config system_config.yaml");
     }
 }
