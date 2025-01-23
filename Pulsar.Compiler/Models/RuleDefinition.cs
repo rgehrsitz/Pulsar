@@ -42,6 +42,11 @@ namespace Pulsar.Compiler.Models
         }
     }
 
+    public class RuleGroup
+    {
+        public List<RuleDefinition> Rules { get; set; } = new();
+    }
+
     public abstract class ConditionDefinition
     {
         public ConditionType Type { get; set; }

@@ -106,8 +106,14 @@ public class Program
         // Load system configuration
         var systemConfig = await LoadSystemConfig(configPath);
 
-        // New BuildTimeOrchestrator usage
-        var orchestrator = new BuildTimeOrchestrator(logger, systemConfig, buildConfig);
+        // Create BuildTimeOrchestrator with all required parameters
+        var orchestrator = new BuildTimeOrchestrator(
+            logger,
+            systemConfig,
+            buildConfig,
+            new DefaultCodeGenerator(),
+            new DslParser());
+
         var result = await orchestrator.ProcessRulesDirectory(rulesPath, outputPath);
 
         // Log build results
@@ -116,18 +122,21 @@ public class Program
             logger.Warning(warning);
         }
 
-        // Fix deconstruction syntax by explicitly typing it
-        foreach (KeyValuePair<string, RuleMetrics> pair in result.RuleMetrics)
+        foreach (var pair in result.RuleMetrics)
         {
             if (pair.Value.EstimatedComplexity > buildConfig.ComplexityThreshold)
             {
-                logger.Warning($"Rule {pair.Key} has high complexity: {pair.Value.EstimatedComplexity}");
+                logger.Warning("Rule {RuleName} has high complexity: {Complexity}",
+                    pair.Key,
+                    pair.Value.EstimatedComplexity);
             }
         }
 
-        logger.Information("Successfully compiled {count} rules to {files} files",
-            result.Manifest.Rules.Count,
-            result.GeneratedFiles.Count);
+        var ruleCount = result.Manifest.Rules.Count;
+        var fileCount = result.GeneratedFiles.Length;
+        logger.Information("Successfully compiled {RuleCount} rules to {FileCount} files",
+            ruleCount,
+            fileCount);
     }
 
     private static BuildConfig LoadBuildConfig(Dictionary<string, string> options)
