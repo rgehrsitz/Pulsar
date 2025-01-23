@@ -1,4 +1,4 @@
-﻿// File: Pulsar.Compiler/Program.cs
+// File: Pulsar.Compiler/Program.cs
 
 using System;
 using System.Collections.Generic;
@@ -78,11 +78,19 @@ public class Program
         // Create build configuration
         var buildConfig = CreateBuildConfig(options);
 
+        // Create code generator
+        var codeGenerator = new DefaultCodeGenerator();
+
+        // Create parser
+        var parser = new DslParser();
+
         // Create and configure build-time orchestrator
         var orchestrator = new BuildTimeOrchestrator(
             logger,
             systemConfig,
-            buildConfig
+            buildConfig,
+            codeGenerator,
+            parser
         );
 
         try
@@ -108,14 +116,14 @@ public class Program
         // Log basic compilation statistics
         logger.Information(
             "Compilation completed: {RuleCount} rules compiled to {FileCount} files",
-            result.Manifest.Rules.Count,
-            result.GeneratedFiles.Count
+            result.Manifest.Rules.Keys.Count,
+            result.GeneratedFiles.Length
         );
 
         // Log generated file names
         foreach (var file in result.GeneratedFiles)
         {
-            logger.Debug("Generated file: {FileName}", file.FileName);
+            logger.Debug("Generated file: {FileName}", file);
         }
     }
 

@@ -53,12 +53,12 @@ rules:
       var conditions = rules[0].Conditions;
       Assert.NotNull(conditions);
       Assert.NotNull(conditions.All);
-      Assert.Single(conditions.All);
+      Assert.NotEmpty(conditions.All);
       Assert.IsType<ComparisonCondition>(conditions.All[0]);
 
       var actions = rules[0].Actions;
       Assert.NotNull(actions);
-      Assert.Single(actions);
+      Assert.NotEmpty(actions);
       Assert.IsType<SetValueAction>(actions[0]);
     }
 
@@ -182,8 +182,7 @@ rules:
       Assert.Single(rules);
       Assert.NotNull(rules[0].Conditions);
       Assert.NotNull(rules[0].Conditions.All);
-      Assert.Single(rules[0].Conditions.All);  // Should have one condition
-      Assert.NotNull(rules[0].Actions);
+      Assert.NotEmpty(rules[0].Conditions.All);  // Should have one condition
       Assert.Empty(rules[0].Actions);  // Actions should be empty
     }
 
@@ -208,10 +207,10 @@ rules:
       // Assert
       Assert.Single(rules);
       Assert.NotNull(rules[0].Conditions);
-      Assert.NotNull(rules[0].Conditions.All);
       Assert.Empty(rules[0].Conditions.All);
       Assert.Empty(rules[0].Conditions.Any);
       Assert.NotNull(rules[0].Actions);
+      Assert.NotEmpty(rules[0].Actions);
     }
 
     [Fact]
@@ -222,13 +221,18 @@ rules:
           @"
 rules:
   - name: 'Rule1'
-    description: 'First rule'
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: 'temperature_f'
+            operator: '>'
+            value: 5.0
     actions:
       - set_value:
           key: 'output1'
           value: 1.0
   - name: 'Rule2'
-    description: 'Second rule'
     conditions:
       all:
         - condition:

@@ -1,5 +1,7 @@
 // File: Pulsar.Compiler/Models/SystemConfig.cs
 
+using System.Collections.Generic;
+
 namespace Pulsar.Compiler.Models
 {
     public class SystemConfig

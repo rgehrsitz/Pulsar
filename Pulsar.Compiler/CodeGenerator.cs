@@ -345,7 +345,7 @@ namespace Pulsar.Compiler.Generation
 
                 builder.AppendLine($"                _logger.Debug(\"Evaluating rule {rule.Name}\");");
 
-                string condition = GenerateCondition(rule.Conditions);
+                string condition = rule.Conditions != null ? GenerateCondition(rule.Conditions) : "true";
                 if (!string.IsNullOrEmpty(condition) && condition != "true")
                 {
                     builder.AppendLine($"                if ({condition})");
@@ -383,38 +383,65 @@ namespace Pulsar.Compiler.Generation
             };
         }
 
-        // These methods would be fully implemented here
         private static string GenerateCondition(ConditionGroup conditions, bool isPartOfOr = false)
         {
+            if (conditions == null || (!conditions.All.Any() && !conditions.Any.Any()))
+            {
+                return "true";
+            }
+
             var parts = new List<string>();
 
-            if (conditions.All?.Any() == true)
+            if (conditions.All.Any())
             {
-                var expressions = conditions.All.Select(c => GenerateConditionExpression(c, false));
-                parts.Add(string.Join(" && ", expressions));
+                var allConditions = conditions.All.Select(c => GenerateConditionExpression(c)).Where(c => !string.IsNullOrEmpty(c));
+                parts.Add($"({string.Join(" && ", allConditions)})");
             }
 
-            if (conditions.Any?.Any() == true)
+            if (conditions.Any.Any())
             {
-                var expressions = conditions.Any.Select(c => GenerateConditionExpression(c, true));
-                parts.Add($"({string.Join(" || ", expressions)})");
+                var anyConditions = conditions.Any.Select(c => GenerateConditionExpression(c)).Where(c => !string.IsNullOrEmpty(c));
+                parts.Add($"({string.Join(" || ", anyConditions)})");
             }
 
-            var result = string.Join(" && ", parts);
-            return isPartOfOr ? $"({result})" : result;
+            return parts.Count == 0 ? "true" : string.Join(" && ", parts);
         }
 
-        private static string GenerateConditionExpression(ConditionDefinition condition, bool isPartOfOr = false)
+        private static string GenerateConditionExpression(ConditionDefinition condition)
         {
-            return condition switch
+            switch (condition)
             {
-                ComparisonCondition comp => $"inputs[\"{comp.Sensor}\"] {GetOperator(comp.Operator)} {comp.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
-                ExpressionCondition expr => FixupExpression(expr.Expression),
-                ThresholdOverTimeCondition threshold => $"_bufferManager.IsAboveThresholdForDuration(\"{threshold.Sensor}\", {threshold.Threshold}, TimeSpan.FromMilliseconds({threshold.Duration}))",
-                ConditionGroup group => GenerateCondition(group, isPartOfOr),
-                _ => throw new NotSupportedException($"Unsupported condition type: {condition.GetType().Name}")
+                case ComparisonCondition comp:
+                    return $"inputs[\"{comp.Sensor}\"] {GetOperator(comp.Operator)} {comp.Value}";
+                
+                case ExpressionCondition expr:
+                    return expr.Expression;
+                
+                case ThresholdOverTimeCondition threshold:
+                    return $"IsAboveThresholdForDuration(\"{threshold.Sensor}\", {threshold.Threshold}, TimeSpan.FromMilliseconds({threshold.Duration}))";
+                
+                case ConditionGroup group:
+                    return GenerateCondition(group, true);
+                
+                default:
+                    return string.Empty;
+            }
+        }
+
+        private static string GetOperator(ComparisonOperator op)
+        {
+            return op switch
+            {
+                ComparisonOperator.LessThan => "<",
+                ComparisonOperator.GreaterThan => ">",
+                ComparisonOperator.LessThanOrEqual => "<=",
+                ComparisonOperator.GreaterThanOrEqual => ">=",
+                ComparisonOperator.EqualTo => "==",
+                ComparisonOperator.NotEqualTo => "!=",
+                _ => throw new ArgumentException($"Unsupported operator: {op}")
             };
         }
+
         private static void GenerateActions(StringBuilder builder, List<ActionDefinition> actions, string indent = "            ")
         {
             foreach (var action in actions.OfType<SetValueAction>())
@@ -443,20 +470,6 @@ namespace Pulsar.Compiler.Generation
                 builder.AppendLine($"{indent}// TODO: Implement SendMessage action");
                 builder.AppendLine($"{indent}// Channel: {action.Channel}, Message: {action.Message}");
             }
-        }
-
-        private static string GetOperator(ComparisonOperator op)
-        {
-            return op switch
-            {
-                ComparisonOperator.LessThan => "<",
-                ComparisonOperator.GreaterThan => ">",
-                ComparisonOperator.LessThanOrEqual => "<=",
-                ComparisonOperator.GreaterThanOrEqual => ">=",
-                ComparisonOperator.EqualTo => "==",
-                ComparisonOperator.NotEqualTo => "!=",
-                _ => throw new InvalidOperationException($"Unsupported operator: {op}")
-            };
         }
 
         internal static string FixupExpression(string expression)

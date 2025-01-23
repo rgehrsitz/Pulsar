@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Moq;
 using Pulsar.Compiler.Build;
 using Pulsar.Compiler.Models;
+using Pulsar.Compiler.Parsers;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
@@ -48,7 +49,15 @@ namespace Pulsar.Tests.CompilerTests
                 GroupParallelRules = true
             };
 
-            _orchestrator = new BuildTimeOrchestrator(_loggerMock.Object, systemConfig, buildConfig);
+            var codeGenerator = new Mock<ICodeGenerator>().Object;
+            var parser = new DslParser();
+
+            _orchestrator = new BuildTimeOrchestrator(
+                _loggerMock.Object,
+                systemConfig,
+                buildConfig,
+                codeGenerator,
+                parser);
         }
 
         public void Dispose()
@@ -94,15 +103,15 @@ rules:
             // Assert
             Assert.NotNull(result);
             Assert.NotEmpty(result.GeneratedFiles);
-            Assert.Contains(result.GeneratedFiles, f => f.FileName.Contains("RuleGroup"));
-            Assert.Contains(result.GeneratedFiles, f => f.FileName == "rules.manifest.json");
+            Assert.Contains(result.GeneratedFiles, f => f.FilePath.Contains("RuleGroup"));
+            Assert.Contains(result.GeneratedFiles, f => f.FilePath == "rules.manifest.json");
 
             // Verify manifest contains rule info
             Assert.Single(result.Manifest.Rules);
             Assert.Contains("TemperatureConversion", result.Manifest.Rules.Keys);
 
             // Verify file content
-            var ruleFile = result.GeneratedFiles.Find(f => f.Content.Contains("TemperatureConversion"));
+            var ruleFile = result.GeneratedFiles.FirstOrDefault(f => f.Content.Contains("TemperatureConversion"));
             Assert.NotNull(ruleFile);
             Assert.Contains("temperature_f", ruleFile.Content);
             Assert.Contains("temperature_c", ruleFile.Content);
@@ -121,11 +130,11 @@ rules:
             type: comparison
             sensor: 'temperature_f'
             operator: '>'
-            value: 100
+            value: -459.67
     actions:
       - set_value:
           key: 'temperature_c'
-          value: 1
+          value_expression: '(temperature_f - 32) * 5/9'
   - name: 'Rule2'
     conditions:
       all:
@@ -161,8 +170,8 @@ rules:
             Assert.NotNull(result);
 
             // Should have multiple rule group files due to MaxRulesPerFile = 2
-            var ruleGroups = result.GeneratedFiles.FindAll(f => f.FileName.Contains("RuleGroup"));
-            Assert.Equal(2, ruleGroups.Count); // 3 rules split into 2 groups
+            var ruleGroups = result.GeneratedFiles.Where(f => f.FilePath.Contains("RuleGroup")).ToArray();
+            Assert.Equal(2, ruleGroups.Length); // 3 rules split into 2 groups
 
             // Verify manifest
             Assert.Equal(3, result.Manifest.Rules.Count);

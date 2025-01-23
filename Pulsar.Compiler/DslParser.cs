@@ -109,6 +109,7 @@ namespace Pulsar.Compiler.Parsers
             }
 
             var ruleDefinitions = new List<RuleDefinition>();
+            var allSensors = new HashSet<string>();
 
             if (root?.Rules == null)
             {
@@ -125,13 +126,21 @@ namespace Pulsar.Compiler.Parsers
                 // Show actions debug info
                 if (rule.Actions != null)
                 {
-                    foreach (var action in rule.Actions)
+                    foreach (var actionItem in rule.Actions)
                     {
-                        if (action?.SetValue != null)
+                        if (actionItem != null)
                         {
-                            Debug.WriteLine(
-                                $"SetValue action found - Key: {action.SetValue.Key}, Value: {action.SetValue.Value}, Expression: {action.SetValue.ValueExpression}"
-                            );
+                            Debug.WriteLine("Processing action:");
+                            if (actionItem?.SetValue != null)
+                            {
+                                Debug.WriteLine($"Adding SetValue key: {actionItem.SetValue.Key}");
+                                allSensors.Add(actionItem.SetValue.Key);
+                            }
+                            if (actionItem?.SendMessage != null)
+                            {
+                                Debug.WriteLine($"SendMessage channel: {actionItem.SendMessage.Channel}");
+                                // Do we need to validate the channel?
+                            }
                         }
                     }
                 }
@@ -238,16 +247,19 @@ namespace Pulsar.Compiler.Parsers
             {
                 foreach (var actionItem in rule.Actions)
                 {
-                    Debug.WriteLine("Processing action:");
-                    if (actionItem?.SetValue != null)
+                    if (actionItem != null)
                     {
-                        Debug.WriteLine($"Adding SetValue key: {actionItem.SetValue.Key}");
-                        allSensors.Add(actionItem.SetValue.Key);
-                    }
-                    if (actionItem.SendMessage != null)
-                    {
-                        Debug.WriteLine($"SendMessage channel: {actionItem.SendMessage.Channel}");
-                        // Do we need to validate the channel?
+                        Debug.WriteLine("Processing action:");
+                        if (actionItem?.SetValue != null)
+                        {
+                            Debug.WriteLine($"Adding SetValue key: {actionItem.SetValue.Key}");
+                            allSensors.Add(actionItem.SetValue.Key);
+                        }
+                        if (actionItem?.SendMessage != null)
+                        {
+                            Debug.WriteLine($"SendMessage channel: {actionItem.SendMessage.Channel}");
+                            // Do we need to validate the channel?
+                        }
                     }
                 }
             }
@@ -276,7 +288,7 @@ namespace Pulsar.Compiler.Parsers
             }
         }
 
-        private ConditionGroup ConvertConditions(ConditionGroupYaml? conditionGroupYaml)
+        private ConditionGroup ConvertConditions(ConditionGroupYaml conditionGroupYaml)
         {
             // Ensure conditionGroupYaml is not null
             conditionGroupYaml ??= new ConditionGroupYaml();
@@ -409,12 +421,13 @@ namespace Pulsar.Compiler.Parsers
     {
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
-        public ConditionGroupYaml? Conditions { get; set; }
-        public List<ActionListItem>? Actions { get; set; }
+        public ConditionGroupYaml Conditions { get; set; } = new ConditionGroupYaml();
+        public List<ActionListItem> Actions { get; set; } = new List<ActionListItem>();
 
         // Line tracking properties
         public int LineNumber { get; set; }
         public string? OriginalText { get; set; }
+        public SourceInfo SourceInfo { get; set; } = new SourceInfo();
     }
 
     public class ActionListItem

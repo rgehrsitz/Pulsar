@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using Pulsar.Compiler.Build;
 using Pulsar.Compiler.Generation;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Validation;
@@ -764,7 +765,7 @@ namespace Pulsar.Tests.CompilerTests
             var rule2 = CreateRule("Rule2", new[] { "intermediate1" }, "intermediate2");
             var rule3 = CreateRule("Rule3", new[] { "intermediate2" }, "output");
 
-            var config = new RuleGroupingConfig
+            var config = new BuildConfig
             {
                 MaxRulesPerFile = 2,  // Force splitting into multiple groups
                 GroupParallelRules = true
@@ -832,7 +833,7 @@ namespace Pulsar.Tests.CompilerTests
                 CreateRule("DependentRule", new[] { "output1", "output2" }, "finalOutput")
             };
 
-            var config = new RuleGroupingConfig
+            var config = new BuildConfig
             {
                 MaxRulesPerFile = 2,
                 GroupParallelRules = true
@@ -936,7 +937,7 @@ namespace Pulsar.Tests.CompilerTests
         }
             };
 
-            var config = new RuleGroupingConfig
+            var config = new BuildConfig
             {
                 MaxRulesPerFile = 10,
                 MaxLinesPerFile = 100  // Set small to force splitting

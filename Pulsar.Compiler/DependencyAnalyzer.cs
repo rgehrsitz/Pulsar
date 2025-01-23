@@ -4,12 +4,15 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
 using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Analysis
 {
     public class DependencyAnalyzer
     {
+        private readonly Dictionary<string, RuleDefinition> _outputs = new();
+
         public List<RuleDefinition> AnalyzeDependencies(List<RuleDefinition> rules)
         {
             // Build a dependency graph
@@ -52,10 +55,9 @@ namespace Pulsar.Compiler.Analysis
                 var dependencies = GetDependencies(rule);
                 foreach (var dependency in dependencies)
                 {
-                    if (_outputs.TryGetValue(dependency, out var dependencyRule))
+                    if (graph.ContainsKey(dependency))
                     {
-                        graph[dependencyRule].Add(rule);
-                        Debug.WriteLine($"Added edge from {dependencyRule.Name} to {rule.Name}");
+                        graph[rule].Add(dependency);
                     }
                 }
             }
@@ -63,75 +65,72 @@ namespace Pulsar.Compiler.Analysis
             return graph;
         }
 
-        private List<string> GetDependencies(RuleDefinition rule)
+        private HashSet<RuleDefinition> GetDependencies(RuleDefinition rule)
         {
-            var dependencies = new List<string>();
+            var dependencies = new HashSet<RuleDefinition>();
 
-            // Collect dependencies from conditions
-            if (rule.Conditions?.All != null)
+            if (rule.Conditions != null)
             {
-                dependencies.AddRange(
-                    rule.Conditions.All.OfType<ComparisonCondition>().Select(cond => cond.Sensor)
-                );
+                // Check All conditions
+                foreach (var condition in rule.Conditions.All)
+                {
+                    AddConditionDependencies(condition, dependencies);
+                }
+
+                // Check Any conditions
+                foreach (var condition in rule.Conditions.Any)
+                {
+                    AddConditionDependencies(condition, dependencies);
+                }
             }
 
-            if (rule.Conditions?.Any != null)
-            {
-                dependencies.AddRange(
-                    rule.Conditions.Any.OfType<ComparisonCondition>().Select(cond => cond.Sensor)
-                );
-            }
-
-            return dependencies.Distinct().ToList();
+            return dependencies;
         }
 
-        private List<RuleDefinition> TopologicalSort(
-            Dictionary<RuleDefinition, List<RuleDefinition>> graph
-        )
+        private void AddConditionDependencies(ConditionDefinition condition, HashSet<RuleDefinition> dependencies)
         {
-            var sorted = new List<RuleDefinition>();
+            switch (condition)
+            {
+                case ComparisonCondition comparison:
+                    if (_outputs.TryGetValue(comparison.Sensor, out var outputRule))
+                    {
+                        dependencies.Add(outputRule);
+                    }
+                    break;
+
+                case ThresholdOverTimeCondition threshold:
+                    if (_outputs.TryGetValue(threshold.Sensor, out var thresholdRule))
+                    {
+                        dependencies.Add(thresholdRule);
+                    }
+                    break;
+
+                case ConditionGroup group:
+                    foreach (var subCondition in group.All.Concat(group.Any))
+                    {
+                        AddConditionDependencies(subCondition, dependencies);
+                    }
+                    break;
+            }
+        }
+
+        private List<RuleDefinition> TopologicalSort(Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+        {
             var visited = new HashSet<RuleDefinition>();
+            var sorted = new List<RuleDefinition>();
             var visiting = new HashSet<RuleDefinition>();
 
-            // Find nodes that have incoming edges (are depended upon)
-            var hasIncomingEdges = new HashSet<RuleDefinition>();
-            foreach (var kvp in graph)
-            {
-                foreach (var dependent in kvp.Value)
-                {
-                    hasIncomingEdges.Add(dependent);
-                }
-            }
-
-            Debug.WriteLine("\nProcessing nodes with no incoming edges first (base nodes):");
-            // First process nodes with no incoming edges (nothing depends on them)
-            foreach (var rule in graph.Keys)
-            {
-                if (!hasIncomingEdges.Contains(rule))
-                {
-                    Debug.WriteLine($"Starting with base node: {rule.Name}");
-                    if (!visited.Contains(rule))
-                    {
-                        Visit(rule, graph, visited, visiting, sorted);
-                    }
-                }
-            }
-
-            Debug.WriteLine("\nProcessing remaining nodes:");
-            // Then process any remaining nodes
             foreach (var rule in graph.Keys)
             {
                 if (!visited.Contains(rule))
                 {
-                    Debug.WriteLine($"Processing remaining node: {rule.Name}");
                     Visit(rule, graph, visited, visiting, sorted);
                 }
             }
 
+            sorted.Reverse();
             return sorted;
         }
-
-        private Dictionary<string, RuleDefinition> _outputs = new();
 
         private void Visit(
             RuleDefinition rule,
@@ -141,49 +140,26 @@ namespace Pulsar.Compiler.Analysis
             List<RuleDefinition> sorted
         )
         {
-            Debug.WriteLine($"Visiting {rule.Name}");
-
             if (visiting.Contains(rule))
             {
-                throw new InvalidOperationException(
-                    $"Cycle detected involving rule '{rule.Name}'!"
-                );
+                throw new InvalidOperationException("Circular dependency detected");
             }
 
-            if (!visited.Contains(rule))
+            if (visited.Contains(rule))
             {
-                visiting.Add(rule);
-
-                // Visit all dependents first
-                foreach (var dependent in graph[rule])
-                {
-                    if (!visited.Contains(dependent))
-                    {
-                        Visit(dependent, graph, visited, visiting, sorted);
-                    }
-                }
-
-                visiting.Remove(rule);
-                visited.Add(rule);
-
-                if (!sorted.Contains(rule))
-                {
-                    // If this rule has dependents, insert at beginning
-                    // Otherwise append to maintain original order
-                    if (graph[rule].Any())
-                    {
-                        sorted.Insert(0, rule);
-                        Debug.WriteLine(
-                            $"Added {rule.Name} to start of sorted list (has dependents)"
-                        );
-                    }
-                    else
-                    {
-                        sorted.Add(rule);
-                        Debug.WriteLine($"Added {rule.Name} to end of sorted list (no dependents)");
-                    }
-                }
+                return;
             }
+
+            visiting.Add(rule);
+
+            foreach (var dependency in graph[rule])
+            {
+                Visit(dependency, graph, visited, visiting, sorted);
+            }
+
+            visiting.Remove(rule);
+            visited.Add(rule);
+            sorted.Add(rule);
         }
     }
 }
