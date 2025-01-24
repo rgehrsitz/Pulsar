@@ -12,6 +12,7 @@ using StackExchange.Redis;
 using Serilog;
 using Xunit;
 using Xunit.Abstractions;
+using Pulsar.Runtime.Rules;
 
 namespace Pulsar.Tests.Runtime;
 
@@ -19,19 +20,50 @@ public class RuntimeOrchestratorTests : IDisposable
 {
     private readonly Mock<IRedisService> _redisMock;
     private readonly Mock<ILogger> _loggerMock;
-    private readonly string _testDllPath;
     private readonly RuntimeOrchestrator _orchestrator;
-    private readonly string[] _testSensors = new[] { "sensor1", "sensor2" };
+    private readonly string[] _testSensors;
     private readonly ITestOutputHelper _output;
+
+    private class TestRuleCoordinator : IRuleCoordinator
+    {
+        private readonly ILogger _logger;
+        private readonly Action<Dictionary<string, double>, Dictionary<string, double>> _evaluateAction;
+
+        public TestRuleCoordinator(ILogger logger, Action<Dictionary<string, double>, Dictionary<string, double>>? evaluateAction = null)
+        {
+            _logger = logger;
+            _evaluateAction = evaluateAction ?? DefaultEvaluateAction;
+        }
+
+        private void DefaultEvaluateAction(Dictionary<string, double> inputs, Dictionary<string, double> outputs)
+        {
+            if (inputs.TryGetValue("sensor1", out var value))
+            {
+                outputs["output1"] = value * 2;
+            }
+        }
+
+        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)
+        {
+            try
+            {
+                _logger.Debug("Evaluating rules in TestRuleCoordinator");
+                _evaluateAction(inputs, outputs);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error evaluating rules in TestRuleCoordinator");
+                throw;
+            }
+        }
+    }
 
     public RuntimeOrchestratorTests(ITestOutputHelper output)
     {
-        _output = output; // Initialize the output helper
+        _output = output;
         _redisMock = new Mock<IRedisService>();
 
         // Create logger mock for Serilog's fluent interface.
-        // Since ILogger.Information(...) (and similar methods) return void,
-        // you cannot do .Returns(_loggerMock.Object). Instead, remove or replace those lines.
         _loggerMock = new Mock<ILogger>();
         _loggerMock
             .Setup(x => x.Information(It.IsAny<string>(), It.IsAny<object[]>()))
@@ -61,39 +93,13 @@ public class RuntimeOrchestratorTests : IDisposable
                 // Handle fatal logs here
             });
 
-        // Create test DLL
-        _testDllPath = CreateTestRulesDll();
+        _testSensors = new[] { "sensor1", "sensor2" };
 
         _orchestrator = new RuntimeOrchestrator(
             _redisMock.Object,
             _loggerMock.Object,
             _testSensors,
             TimeSpan.FromMilliseconds(100));
-    }
-
-    private string CreateTestRulesDll()
-    {
-        var dllPath = Path.Combine(Path.GetTempPath(), $"TestRules_{Guid.NewGuid()}.dll");
-        var sourceFiles = CreateSourceFiles(@"
-        using System.Collections.Generic;
-        using Pulsar.Runtime.Buffers;
-
-        public class CompiledRules
-        {
-            public void Evaluate(
-                Dictionary<string, double> inputs,
-                Dictionary<string, double> outputs,
-                RingBufferManager bufferManager)
-            {
-                if (inputs.TryGetValue(""sensor1"", out var value))
-                {
-                    outputs[""output1""] = value * 2;
-                }
-            }
-        }");
-
-        Pulsar.Compiler.RoslynCompiler.CompileSource(sourceFiles, dllPath);
-        return dllPath;
     }
 
     private static List<GeneratedFileInfo> CreateSourceFiles(string code)
@@ -112,10 +118,14 @@ public class RuntimeOrchestratorTests : IDisposable
 
     public void Dispose()
     {
-        if (File.Exists(_testDllPath))
+        // Update Dispose to clean up only what's needed
+        try
         {
-            try { File.Delete(_testDllPath); }
-            catch { /* Ignore cleanup errors */ }
+            _orchestrator?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Warning: Cleanup failed: {ex.Message}");
         }
     }
 
@@ -125,10 +135,10 @@ public class RuntimeOrchestratorTests : IDisposable
         // Arrange
         var timestamp = DateTime.UtcNow;
         var inputs = new Dictionary<string, (double, DateTime)>
-        {
-            { "sensor1", (42.0, timestamp) },
-            { "sensor2", (24.0, timestamp) }
-        };
+    {
+        { "sensor1", (42.0, timestamp) },
+        { "sensor2", (24.0, timestamp) }
+    };
 
         _redisMock.Setup(x => x.GetSensorValuesAsync(It.IsAny<IEnumerable<string>>()))
             .ReturnsAsync(inputs);
@@ -138,8 +148,11 @@ public class RuntimeOrchestratorTests : IDisposable
             .Callback<Dictionary<string, double>>(outputs => capturedOutputs = outputs)
             .Returns(Task.CompletedTask);
 
+        // Create test rule coordinator instead of loading from string path
+        var ruleCoordinator = new TestRuleCoordinator(_loggerMock.Object);
+
         // Act
-        _orchestrator.LoadRules(_testDllPath);
+        _orchestrator.LoadRules(ruleCoordinator);
         await _orchestrator.ExecuteCycleAsync();
 
         // Assert
@@ -180,7 +193,7 @@ public class RuntimeOrchestratorTests : IDisposable
             .ThrowsAsync(testException);
 
         // Act & Assert
-        _orchestrator.LoadRules(_testDllPath);
+        _orchestrator.LoadRules(new TestRuleCoordinator(_loggerMock.Object));
         var ex = await Assert.ThrowsAsync<RedisConnectionException>(
             () => _orchestrator.ExecuteCycleAsync());
 
@@ -212,7 +225,7 @@ public class RuntimeOrchestratorTests : IDisposable
         _redisMock.Setup(x => x.GetSensorValuesAsync(It.IsAny<IEnumerable<string>>()))
             .ReturnsAsync(inputs);
 
-        _orchestrator.LoadRules(_testDllPath);
+        _orchestrator.LoadRules(new TestRuleCoordinator(_loggerMock.Object));
 
         // Act
         await _orchestrator.StartAsync();
@@ -244,7 +257,7 @@ public class RuntimeOrchestratorTests : IDisposable
             });
 
         // Act
-        _orchestrator.LoadRules(_testDllPath);
+        _orchestrator.LoadRules(new TestRuleCoordinator(_loggerMock.Object));
         await _orchestrator.ExecuteCycleAsync();
 
         // Assert
@@ -268,7 +281,7 @@ public class RuntimeOrchestratorTests : IDisposable
         {
             // Act & Assert
             var ex = Assert.Throws<InvalidOperationException>(
-                () => _orchestrator.LoadRules(invalidDllPath));
+                () => _orchestrator.LoadRules(new TestRuleCoordinator(_loggerMock.Object)));
 
             // Now the *rethrown* exception includes "Failed to load rules..."
             Assert.Contains("Failed to load rules", ex.Message);
@@ -290,7 +303,7 @@ public class RuntimeOrchestratorTests : IDisposable
     public async Task Dispose_CleansUpResourcesCorrectly()
     {
         // Act
-        _orchestrator.LoadRules(_testDllPath);
+        _orchestrator.LoadRules(new TestRuleCoordinator(_loggerMock.Object));
         await _orchestrator.StartAsync();
         await Task.Delay(100);
 

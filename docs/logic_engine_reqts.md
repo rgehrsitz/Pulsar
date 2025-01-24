@@ -166,6 +166,8 @@ The runtime system executes the compiled rules every 100ms by default, integrati
    - **Index-Based Access:**
      Use array or span indexing for sensors to avoid dictionary overhead in hot paths.
 
+     We are NOT using redis to store intermediate values. The concept, according to the spec (you have access to), is to do a bulk pull of the latest values every 100ms (default), evaluate all of the values against the rules, then send all of the updated values/status back to Redis. The idea was never to use redis in between each individual rule eval. That would slow things down tremendously.
+
 2. **Evaluation Logic:**
 
    - **Layered Execution Order:**
@@ -209,11 +211,13 @@ The runtime system executes the compiled rules every 100ms by default, integrati
 ## Redis-Specific Considerations
 
 1. **Data Organization:**
+
    - Use appropriate Redis data types (String, Hash, etc.) for different sensor types
    - Implement efficient bulk operations using Redis pipelining
    - Consider TTL for temporal data
 
 2. **Performance Optimization:**
+
    - Minimize Redis round trips through batching
    - Use Redis server-side scripts where appropriate
    - Implement connection pooling and retry policies
@@ -257,32 +261,33 @@ This refined requirement set clarifies the separation of concerns:
 - **Compiler:** A build-time tool that validates, analyzes dependencies, checks for cycles, and generates optimized C# code.
 - **Runtime:** Executes the compiled code every cycle, handles data I/O, manages history only where needed, ensures determinism and performance, and provides observability and failover capabilities.
 
- ```mermaid
+````mermaid
 sequenceDiagram
-    participant Timer
-    participant Runtime
-    participant Redis
-    participant RingBuffer
-    participant Rules
-    
-    Note over Timer,Rules: 100ms Cycle
-    Timer->>Runtime: Trigger Cycle
-    activate Runtime
-    
-    Runtime->>Redis: Bulk Fetch (Pipeline)
-    Redis-->>Runtime: Sensor Values
-    
-    Runtime->>RingBuffer: Update Historical Values
-    Runtime->>Rules: Layer 0 Evaluation
-    Runtime->>Rules: Layer 1 Evaluation
-    Runtime->>Rules: Layer N Evaluation
-    
-    Runtime->>Redis: Bulk Write Results (Pipeline)
-    Redis-->>Runtime: Confirmation
-    
-    Runtime->>Runtime: Calculate Cycle Stats
-    Runtime-->>Timer: Complete Cycle
-    deactivate Runtime
-    
-    Note over Timer,Rules: Next 100ms Cycle
-    ```
+   participant Timer
+   participant Runtime
+   participant Redis
+   participant RingBuffer
+   participant Rules
+
+   Note over Timer,Rules: 100ms Cycle
+   Timer->>Runtime: Trigger Cycle
+   activate Runtime
+
+   Runtime->>Redis: Bulk Fetch (Pipeline)
+   Redis-->>Runtime: Sensor Values
+
+   Runtime->>RingBuffer: Update Historical Values
+   Runtime->>Rules: Layer 0 Evaluation
+   Runtime->>Rules: Layer 1 Evaluation
+   Runtime->>Rules: Layer N Evaluation
+
+   Runtime->>Redis: Bulk Write Results (Pipeline)
+   Redis-->>Runtime: Confirmation
+
+   Runtime->>Runtime: Calculate Cycle Stats
+   Runtime-->>Timer: Complete Cycle
+   deactivate Runtime
+
+   Note over Timer,Rules: Next 100ms Cycle
+   ```
+````
