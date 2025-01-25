@@ -22,6 +22,13 @@ namespace Pulsar.Compiler.Models
         [JsonPropertyName("rules")]
         public Dictionary<string, RuleMetadata> Rules { get; set; } = new();
 
+        // New properties for enhanced tracking
+        [JsonPropertyName("buildMetrics")]
+        public BuildMetrics BuildMetrics { get; set; } = new BuildMetrics();
+
+        [JsonPropertyName("dependencyAnalysis")]
+        public DependencyAnalysis DependencyAnalysis { get; set; } = new DependencyAnalysis();
+
         public void SaveToFile(string path)
         {
             var options = new JsonSerializerOptions
@@ -45,6 +52,33 @@ namespace Pulsar.Compiler.Models
             return JsonSerializer.Deserialize<RuleManifest>(json, options)
                 ?? throw new InvalidOperationException("Failed to deserialize manifest");
         }
+    }
+
+    public class BuildMetrics
+    {
+        [JsonPropertyName("totalRules")]
+        public int TotalRules { get; set; }
+
+        [JsonPropertyName("ruleComplexities")]
+        public Dictionary<string, int> RuleComplexities { get; set; } = new();
+
+        [JsonPropertyName("temporalRuleCount")]
+        public int TemporalRuleCount { get; set; }
+
+        [JsonPropertyName("averageRuleComplexity")]
+        public double AverageRuleComplexity { get; set; }
+    }
+
+    public class DependencyAnalysis
+    {
+        [JsonPropertyName("ruleDependencies")]
+        public Dictionary<string, List<string>> RuleDependencies { get; set; } = new();
+
+        [JsonPropertyName("sensorDependencies")]
+        public Dictionary<string, List<string>> SensorDependencies { get; set; } = new();
+
+        [JsonPropertyName("maxDependencyDepth")]
+        public int MaxDependencyDepth { get; set; }
     }
 
     public class GeneratedFileInfo
@@ -108,6 +142,9 @@ namespace Pulsar.Compiler.Models
 
         [JsonPropertyName("usesTemporalConditions")]
         public bool UsesTemporalConditions { get; set; }
+
+        [JsonPropertyName("estimatedComplexity")]
+        public int EstimatedComplexity { get; set; }
     }
 
     public class GeneratedSourceInfo

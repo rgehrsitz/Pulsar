@@ -50,6 +50,7 @@ namespace Pulsar.Compiler.Models
     public abstract class ConditionDefinition
     {
         public ConditionType Type { get; set; }
+        public SourceInfo? SourceInfo { get; set; } // Add this line
     }
 
     public enum ConditionType
@@ -95,6 +96,7 @@ namespace Pulsar.Compiler.Models
     public abstract class ActionDefinition
     {
         public ActionType Type { get; set; }
+        public SourceInfo? SourceInfo { get; set; } // Add this line
     }
 
     public enum ActionType
