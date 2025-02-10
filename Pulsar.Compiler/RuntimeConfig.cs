@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/RuntimeConfig.cs
+
 namespace Pulsar.Compiler
 {
     // This is a placeholder for RuntimeConfig. Update the properties based on your actual configuration requirements as per the AOT plan.

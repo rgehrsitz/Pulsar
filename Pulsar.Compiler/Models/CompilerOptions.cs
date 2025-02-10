@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/Models/CompilerOptions.cs
+
 using Pulsar.Compiler.Config;
 
 namespace Pulsar.Compiler.Models
@@ -7,13 +9,14 @@ namespace Pulsar.Compiler.Models
         /// <summary>
         /// Build configuration to be used during compilation.
         /// </summary>
-        public BuildConfig BuildConfig { get; set; } = new BuildConfig
-        {
-            OutputPath = "Generated",
-            Target = "win-x64",
-            ProjectName = "Pulsar.Compiler",
-            TargetFramework = "net9.0"
-        };
+        public BuildConfig BuildConfig { get; set; } =
+            new BuildConfig
+            {
+                OutputPath = "Generated",
+                Target = "win-x64",
+                ProjectName = "Pulsar.Compiler",
+                TargetFramework = "net9.0",
+            };
 
         /// <summary>
         /// Optional list of valid sensors for rule validation.

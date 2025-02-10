@@ -31,10 +31,10 @@ public class CircularBuffer
     private readonly object _lock = new();
     private readonly IDateTimeProvider _dateTimeProvider;
 
-
     public CircularBuffer(int capacity, IDateTimeProvider dateTimeProvider)
     {
-        if (capacity <= 0) throw new ArgumentException("Capacity must be positive", nameof(capacity));
+        if (capacity <= 0)
+            throw new ArgumentException("Capacity must be positive", nameof(capacity));
         _buffer = new TimestampedValue[capacity];
         _head = 0;
         _count = 0;
@@ -47,7 +47,8 @@ public class CircularBuffer
         {
             _buffer[_head] = new TimestampedValue(timestamp, value);
             _head = (_head + 1) % _buffer.Length;
-            if (_count < _buffer.Length) _count++;
+            if (_count < _buffer.Length)
+                _count++;
         }
     }
 
@@ -109,17 +110,21 @@ public class CircularBuffer
         }
     }
 
-
-
-    public bool IsAboveThresholdForDuration(double threshold, TimeSpan duration, bool extendLastKnown = false)
+    public bool IsAboveThresholdForDuration(
+        double threshold,
+        TimeSpan duration,
+        bool extendLastKnown = false
+    )
     {
         // In strict mode (extendLastKnown == false), we now pass includeOlder: true so that we capture
         // a reading immediately preceding the window as a guard value.
         var values = GetValues(duration, includeOlder: extendLastKnown ? true : true)
-                        .OrderBy(v => v.Timestamp)
-                        .ToList();
+            .OrderBy(v => v.Timestamp)
+            .ToList();
 
-        Debug.WriteLine($"\nChecking threshold {threshold} for duration {duration.TotalMilliseconds}ms (Mode: {(extendLastKnown ? "extend_last_known" : "strict")})");
+        Debug.WriteLine(
+            $"\nChecking threshold {threshold} for duration {duration.TotalMilliseconds}ms (Mode: {(extendLastKnown ? "extend_last_known" : "strict")})"
+        );
         Debug.WriteLine($"Total values: {values.Count}");
 
         if (!values.Any())
@@ -147,13 +152,19 @@ public class CircularBuffer
 
         // Compute the duration from the rule-run time to the last value's timestamp.
         var durationSinceLastReading = now - lastValue.Timestamp;
-        Debug.WriteLine($"Extended mode - Duration since last reading: {durationSinceLastReading.TotalMilliseconds}ms");
+        Debug.WriteLine(
+            $"Extended mode - Duration since last reading: {durationSinceLastReading.TotalMilliseconds}ms"
+        );
         Debug.WriteLine($"Required duration: {duration.TotalMilliseconds}ms");
 
         return durationSinceLastReading >= duration;
     }
 
-    private bool HasContinuousSequenceAboveThreshold(List<TimestampedValue> values, double threshold, TimeSpan requiredDuration)
+    private bool HasContinuousSequenceAboveThreshold(
+        List<TimestampedValue> values,
+        double threshold,
+        TimeSpan requiredDuration
+    )
     {
         if (!values.Any())
         {
@@ -165,7 +176,9 @@ public class CircularBuffer
         // to have any chance of covering a duration.
         if (values.Count < 2)
         {
-            Debug.WriteLine("Not enough values (guard + at least one in-window) to cover the duration");
+            Debug.WriteLine(
+                "Not enough values (guard + at least one in-window) to cover the duration"
+            );
             return false;
         }
 
@@ -175,20 +188,24 @@ public class CircularBuffer
         var windowStart = windowEnd - requiredDuration;
 
         // Get readings that fall within the window.
-        var windowValues = values.Where(v => v.Timestamp >= windowStart && v.Timestamp <= windowEnd).ToList();
+        var windowValues = values
+            .Where(v => v.Timestamp >= windowStart && v.Timestamp <= windowEnd)
+            .ToList();
 
         // Find the guard reading: the most recent value that occurred before the window.
         var previousReading = values
-             .Where(v => v.Timestamp < windowStart)
-             .OrderByDescending(v => v.Timestamp)
-             .FirstOrDefault();
+            .Where(v => v.Timestamp < windowStart)
+            .OrderByDescending(v => v.Timestamp)
+            .FirstOrDefault();
 
         Debug.WriteLine($"Window start: {windowStart:HH:mm:ss.fff}");
         Debug.WriteLine($"Window end: {windowEnd:HH:mm:ss.fff}");
         Debug.WriteLine($"Values in window: {windowValues.Count}");
         if (previousReading.Timestamp != default)
         {
-            Debug.WriteLine($"Previous reading: {previousReading.Value} at {previousReading.Timestamp:HH:mm:ss.fff}");
+            Debug.WriteLine(
+                $"Previous reading: {previousReading.Value} at {previousReading.Timestamp:HH:mm:ss.fff}"
+            );
         }
         else
         {
@@ -198,7 +215,8 @@ public class CircularBuffer
         // Validate that every reading in the window is above threshold.
         bool windowValid = windowValues.All(v => v.Value > threshold);
         // Validate that the guard reading (if present) is above threshold.
-        bool previousValid = previousReading.Timestamp == default || previousReading.Value > threshold;
+        bool previousValid =
+            previousReading.Timestamp == default || previousReading.Value > threshold;
 
         Debug.WriteLine($"Window valid: {windowValid}");
         Debug.WriteLine($"Previous reading valid: {previousValid}");
@@ -206,16 +224,20 @@ public class CircularBuffer
         return windowValid && previousValid;
     }
 
-
-
-    public bool IsBelowThresholdForDuration(double threshold, TimeSpan duration, bool extendLastKnown = false)
+    public bool IsBelowThresholdForDuration(
+        double threshold,
+        TimeSpan duration,
+        bool extendLastKnown = false
+    )
     {
         // For extended mode, pass includeOlder=true to obtain fallback data.
         var values = GetValues(duration, includeOlder: extendLastKnown)
-                        .OrderBy(v => v.Timestamp)
-                        .ToList();
+            .OrderBy(v => v.Timestamp)
+            .ToList();
 
-        Debug.WriteLine($"\nChecking threshold {threshold} for duration {duration.TotalMilliseconds}ms (Mode: {(extendLastKnown ? "extend_last_known" : "strict")})");
+        Debug.WriteLine(
+            $"\nChecking threshold {threshold} for duration {duration.TotalMilliseconds}ms (Mode: {(extendLastKnown ? "extend_last_known" : "strict")})"
+        );
         Debug.WriteLine($"Total values: {values.Count}");
 
         if (!values.Any())
@@ -243,13 +265,19 @@ public class CircularBuffer
 
         // Compute the duration from the rule-run time to the last reading's timestamp.
         var durationSinceLastReading = now - lastValue.Timestamp;
-        Debug.WriteLine($"Extended mode - Duration since last reading: {durationSinceLastReading.TotalMilliseconds}ms");
+        Debug.WriteLine(
+            $"Extended mode - Duration since last reading: {durationSinceLastReading.TotalMilliseconds}ms"
+        );
         Debug.WriteLine($"Required duration: {duration.TotalMilliseconds}ms");
 
         return durationSinceLastReading >= duration;
     }
 
-    private bool HasContinuousSequenceBelowThreshold(List<TimestampedValue> values, double threshold, TimeSpan requiredDuration)
+    private bool HasContinuousSequenceBelowThreshold(
+        List<TimestampedValue> values,
+        double threshold,
+        TimeSpan requiredDuration
+    )
     {
         if (!values.Any())
         {
@@ -280,11 +308,11 @@ public class CircularBuffer
         }
 
         var continuousDuration = lastReading.Timestamp - firstInSequence.Timestamp;
-        Debug.WriteLine($"Continuous sequence (below): from {firstInSequence.Timestamp:HH:mm:ss.fff} to {lastReading.Timestamp:HH:mm:ss.fff} ({continuousDuration.TotalMilliseconds}ms)");
+        Debug.WriteLine(
+            $"Continuous sequence (below): from {firstInSequence.Timestamp:HH:mm:ss.fff} to {lastReading.Timestamp:HH:mm:ss.fff} ({continuousDuration.TotalMilliseconds}ms)"
+        );
         return continuousDuration >= requiredDuration;
     }
-
-
 }
 
 /// <summary>
@@ -297,7 +325,7 @@ public class RingBufferManager : IDisposable
     private readonly IDateTimeProvider _dateTimeProvider;
     private bool _disposed;
 
-    public RingBufferManager(int capacity = 100, IDateTimeProvider dateTimeProvider = null)
+    public RingBufferManager(int capacity = 100, IDateTimeProvider? dateTimeProvider = null)
     {
         _capacity = capacity;
         _buffers = new ConcurrentDictionary<string, CircularBuffer>();
@@ -306,7 +334,10 @@ public class RingBufferManager : IDisposable
 
     public void UpdateBuffer(string sensor, double value, DateTime timestamp)
     {
-        var buffer = _buffers.GetOrAdd(sensor, _ => new CircularBuffer(_capacity, _dateTimeProvider));
+        var buffer = _buffers.GetOrAdd(
+            sensor,
+            _ => new CircularBuffer(_capacity, _dateTimeProvider)
+        );
         buffer.Add(value, timestamp);
     }
 
@@ -319,16 +350,26 @@ public class RingBufferManager : IDisposable
         }
     }
 
-    public bool IsAboveThresholdForDuration(string sensor, double threshold, TimeSpan duration, bool extendLastKnown = false)
+    public bool IsAboveThresholdForDuration(
+        string sensor,
+        double threshold,
+        TimeSpan duration,
+        bool extendLastKnown = false
+    )
     {
-        return _buffers.TryGetValue(sensor, out var buffer) &&
-               buffer.IsAboveThresholdForDuration(threshold, duration, extendLastKnown);
+        return _buffers.TryGetValue(sensor, out var buffer)
+            && buffer.IsAboveThresholdForDuration(threshold, duration, extendLastKnown);
     }
 
-    public bool IsBelowThresholdForDuration(string sensor, double threshold, TimeSpan duration, bool extendLastKnown = false)
+    public bool IsBelowThresholdForDuration(
+        string sensor,
+        double threshold,
+        TimeSpan duration,
+        bool extendLastKnown = false
+    )
     {
-        return _buffers.TryGetValue(sensor, out var buffer) &&
-               buffer.IsBelowThresholdForDuration(threshold, duration, extendLastKnown);
+        return _buffers.TryGetValue(sensor, out var buffer)
+            && buffer.IsBelowThresholdForDuration(threshold, duration, extendLastKnown);
     }
 
     public void Clear()

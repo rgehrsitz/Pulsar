@@ -1,4 +1,5 @@
 // File: Pulsar.Compiler/ExpressionValidator.cs
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,17 +11,26 @@ namespace Pulsar.Compiler.Validation
     {
         private static readonly HashSet<string> AllowedOperators = new()
         {
-            "+", "-", "*", "/", ">", "<", ">=", "<=", "==", "!="
+            "+",
+            "-",
+            "*",
+            "/",
+            ">",
+            "<",
+            ">=",
+            "<=",
+            "==",
+            "!=",
         };
 
-        private static readonly HashSet<string> AllowedSpecialCharacters = new()
-        {
-            "(", ")"
-        };
+        private static readonly HashSet<string> AllowedSpecialCharacters = new() { "(", ")" };
 
         private static readonly HashSet<string> AllowedFunctions = new()
         {
-            "Math.Abs", "Math.Min", "Math.Max", "Math.Round"
+            "Math.Abs",
+            "Math.Min",
+            "Math.Max",
+            "Math.Round",
             // Add other allowed functions as needed
         };
 
@@ -30,7 +40,9 @@ namespace Pulsar.Compiler.Validation
 
             // Remove all whitespace for consistent processing
             expression = Regex.Replace(expression, @"\s+", "");
-            System.Diagnostics.Debug.WriteLine($"Expression after whitespace removal: {expression}");
+            System.Diagnostics.Debug.WriteLine(
+                $"Expression after whitespace removal: {expression}"
+            );
 
             // Validate balanced parentheses
             ValidateParentheses(expression);
@@ -58,7 +70,11 @@ namespace Pulsar.Compiler.Validation
                         throw new ArgumentException($"Invalid function in expression: {token}");
                     }
                 }
-                else if (!IsValidIdentifier(token) && !IsNumeric(token) && !AllowedSpecialCharacters.Contains(token))
+                else if (
+                    !IsValidIdentifier(token)
+                    && !IsNumeric(token)
+                    && !AllowedSpecialCharacters.Contains(token)
+                )
                 {
                     throw new ArgumentException($"Invalid token in expression: {token}");
                 }
@@ -70,8 +86,10 @@ namespace Pulsar.Compiler.Validation
             int count = 0;
             foreach (char c in expression)
             {
-                if (c == '(') count++;
-                if (c == ')') count--;
+                if (c == '(')
+                    count++;
+                if (c == ')')
+                    count--;
                 if (count < 0)
                 {
                     throw new ArgumentException("Unmatched parentheses in expression");
@@ -86,21 +104,18 @@ namespace Pulsar.Compiler.Validation
         private static IEnumerable<string> TokenizeExpression(string expression)
         {
             // Updated pattern to better handle decimals and function calls
-            var tokenPattern = @"(?:Math\.[a-zA-Z][a-zA-Z0-9]*)|[a-zA-Z_][a-zA-Z0-9_]*|\d+\.\d+|\d+|[+\-*/><]=?|==|!=|\(|\)";
-            return Regex.Matches(expression, tokenPattern)
-                       .Select(m => m.Value);
+            var tokenPattern =
+                @"(?:Math\.[a-zA-Z][a-zA-Z0-9]*)|[a-zA-Z_][a-zA-Z0-9_]*|\d+\.\d+|\d+|[+\-*/><]=?|==|!=|\(|\)";
+            return Regex.Matches(expression, tokenPattern).Select(m => m.Value);
         }
 
-        private static bool IsOperator(string token) =>
-            AllowedOperators.Contains(token);
+        private static bool IsOperator(string token) => AllowedOperators.Contains(token);
 
-        private static bool IsFunction(string token) =>
-            token.Contains(".") && !IsNumeric(token); // Don't treat decimals as functions
+        private static bool IsFunction(string token) => token.Contains(".") && !IsNumeric(token); // Don't treat decimals as functions
 
         private static bool IsValidIdentifier(string token) =>
             Regex.IsMatch(token, @"^[a-zA-Z_][a-zA-Z0-9_]*$");
 
-        private static bool IsNumeric(string token) =>
-            double.TryParse(token, out _);
+        private static bool IsNumeric(string token) => double.TryParse(token, out _);
     }
 }

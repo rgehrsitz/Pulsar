@@ -1,4 +1,4 @@
-// File: Pulsar.Compiler/Build/Templates/ProjectTemplate/RuntimeConfig.cs
+// File: Pulsar.Compiler/Config/Templates/ProjectTemplate/RuntimeConfig.cs
 
 using System;
 using System.Text.Json;
@@ -37,7 +37,11 @@ public class RuntimeConfig
 
 public class TimeSpanJsonConverter : JsonConverter<TimeSpan?>
 {
-    public override TimeSpan? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override TimeSpan? Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    )
     {
         if (reader.TokenType == JsonTokenType.String)
         {
@@ -47,7 +51,11 @@ public class TimeSpanJsonConverter : JsonConverter<TimeSpan?>
         return null;
     }
 
-    public override void Write(Utf8JsonWriter writer, TimeSpan? value, JsonSerializerOptions options)
+    public override void Write(
+        Utf8JsonWriter writer,
+        TimeSpan? value,
+        JsonSerializerOptions options
+    )
     {
         if (value.HasValue)
         {

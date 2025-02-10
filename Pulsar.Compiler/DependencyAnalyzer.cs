@@ -26,7 +26,8 @@ namespace Pulsar.Compiler.Analysis
         }
 
         private Dictionary<RuleDefinition, List<RuleDefinition>> BuildDependencyGraph(
-            List<RuleDefinition> rules)
+            List<RuleDefinition> rules
+        )
         {
             var graph = new Dictionary<RuleDefinition, List<RuleDefinition>>();
 
@@ -57,7 +58,9 @@ namespace Pulsar.Compiler.Analysis
                     if (_outputs.TryGetValue(dependency, out var dependencyRule))
                     {
                         graph[dependencyRule].Add(rule);
-                        Debug.WriteLine($"Added dependency edge from {dependencyRule.Name} to {rule.Name}");
+                        Debug.WriteLine(
+                            $"Added dependency edge from {dependencyRule.Name} to {rule.Name}"
+                        );
                     }
                 }
             }
@@ -128,16 +131,26 @@ namespace Pulsar.Compiler.Analysis
         private bool IsMathFunction(string token)
         {
             // List of known math functions to exclude from sensor extraction
-            string[] mathFunctions = {
-                "Math", "Abs", "Max", "Min", "Round",
-                "Floor", "Ceiling", "Sqrt",
-                "Sin", "Cos", "Tan"
+            string[] mathFunctions =
+            {
+                "Math",
+                "Abs",
+                "Max",
+                "Min",
+                "Round",
+                "Floor",
+                "Ceiling",
+                "Sqrt",
+                "Sin",
+                "Cos",
+                "Tan",
             };
             return mathFunctions.Contains(token);
         }
 
         private List<RuleDefinition> TopologicalSort(
-            Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+            Dictionary<RuleDefinition, List<RuleDefinition>> graph
+        )
         {
             var sorted = new List<RuleDefinition>();
             var visited = new HashSet<RuleDefinition>();
@@ -186,7 +199,8 @@ namespace Pulsar.Compiler.Analysis
             Dictionary<RuleDefinition, List<RuleDefinition>> graph,
             HashSet<RuleDefinition> visited,
             HashSet<RuleDefinition> visiting,
-            List<RuleDefinition> sorted)
+            List<RuleDefinition> sorted
+        )
         {
             Debug.WriteLine($"Visiting {rule.Name}");
 

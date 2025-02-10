@@ -1,3 +1,5 @@
+// File: Pulse.Compiler/Core/CompilationPipeline.cs
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -36,7 +38,11 @@ namespace Pulsar.Compiler.Core
 
             // Parse the YAML to obtain rule definitions
             // Pass the valid sensors from options
-            List<RuleDefinition> rules = _parser.ParseRules(yamlContent, options.ValidSensors.ToList(), Path.GetFileName(rulesFilePath));
+            List<RuleDefinition> rules = _parser.ParseRules(
+                yamlContent,
+                options.ValidSensors.ToList(),
+                Path.GetFileName(rulesFilePath)
+            );
 
             // Compile the rules using the provided compiler
             return _compiler.Compile(rules.ToArray(), options);

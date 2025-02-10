@@ -1,13 +1,13 @@
 // File: Pulsar.Compiler/Validation/ExpressionHelper.cs
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Text.RegularExpressions;
 
 namespace Pulsar.Compiler.Validation
 {
@@ -16,17 +16,34 @@ namespace Pulsar.Compiler.Validation
         // Predefined set of allowed mathematical functions
         private static readonly HashSet<string> AllowedMathFunctions = new HashSet<string>
         {
-            "Math.Abs", "Math.Pow", "Math.Sqrt",
-            "Math.Sin", "Math.Cos", "Math.Tan",
-            "Math.Log", "Math.Exp",
-            "Math.Floor", "Math.Ceiling", "Math.Round",
-            "Math.Max", "Math.Min"
+            "Math.Abs",
+            "Math.Pow",
+            "Math.Sqrt",
+            "Math.Sin",
+            "Math.Cos",
+            "Math.Tan",
+            "Math.Log",
+            "Math.Exp",
+            "Math.Floor",
+            "Math.Ceiling",
+            "Math.Round",
+            "Math.Max",
+            "Math.Min",
         };
 
         // Predefined set of allowed operators
         private static readonly HashSet<string> AllowedOperators = new HashSet<string>
         {
-            "+", "-", "*", "/", ">", "<", ">=", "<=", "==", "!="
+            "+",
+            "-",
+            "*",
+            "/",
+            ">",
+            "<",
+            ">=",
+            "<=",
+            "==",
+            "!=",
         };
 
         /// <summary>
@@ -60,7 +77,8 @@ namespace Pulsar.Compiler.Validation
         /// </summary>
         private static void ValidateSyntax(string expression)
         {
-            var code = $@"
+            var code =
+                $@"
             using System;
             public class ExpressionValidator {{
                 public bool Validate() {{
@@ -69,14 +87,15 @@ namespace Pulsar.Compiler.Validation
             }}";
 
             var syntaxTree = CSharpSyntaxTree.ParseText(code);
-            var diagnostics = syntaxTree.GetDiagnostics()
+            var diagnostics = syntaxTree
+                .GetDiagnostics()
                 .Where(d => d.Severity == DiagnosticSeverity.Error);
 
             if (diagnostics.Any())
             {
                 throw new ExpressionValidationException(
-                    "Syntax validation failed: " +
-                    string.Join(", ", diagnostics.Select(d => d.GetMessage()))
+                    "Syntax validation failed: "
+                        + string.Join(", ", diagnostics.Select(d => d.GetMessage()))
                 );
             }
         }
@@ -96,7 +115,12 @@ namespace Pulsar.Compiler.Validation
                 var functionName = match.Groups[2].Value;
 
                 // Check if it's a method call or just an identifier
-                if (Regex.IsMatch(fullFunctionName, @"[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*"))
+                if (
+                    Regex.IsMatch(
+                        fullFunctionName,
+                        @"[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*"
+                    )
+                )
                 {
                     if (!AllowedMathFunctions.Contains(fullFunctionName))
                     {
@@ -122,9 +146,7 @@ namespace Pulsar.Compiler.Validation
                 var op = match.Value;
                 if (!AllowedOperators.Contains(op))
                 {
-                    throw new ExpressionValidationException(
-                        $"Unauthorized operator: {op}"
-                    );
+                    throw new ExpressionValidationException($"Unauthorized operator: {op}");
                 }
             }
         }
@@ -143,8 +165,10 @@ namespace Pulsar.Compiler.Validation
                 var identifier = match.Value;
 
                 // Exclude known keywords and math functions
-                if (IsReservedKeyword(identifier) ||
-                    AllowedMathFunctions.Any(f => f.EndsWith(identifier)))
+                if (
+                    IsReservedKeyword(identifier)
+                    || AllowedMathFunctions.Any(f => f.EndsWith(identifier))
+                )
                 {
                     continue;
                 }
@@ -159,10 +183,20 @@ namespace Pulsar.Compiler.Validation
         /// </summary>
         private static bool IsReservedKeyword(string identifier)
         {
-            string[] reservedKeywords = {
-                "true", "false", "null",
-                "int", "double", "float", "decimal",
-                "return", "if", "else", "for", "while"
+            string[] reservedKeywords =
+            {
+                "true",
+                "false",
+                "null",
+                "int",
+                "double",
+                "float",
+                "decimal",
+                "return",
+                "if",
+                "else",
+                "for",
+                "while",
             };
 
             return reservedKeywords.Contains(identifier);
@@ -173,7 +207,8 @@ namespace Pulsar.Compiler.Validation
         /// </summary>
         private class ExpressionValidationException : Exception
         {
-            public ExpressionValidationException(string message) : base(message) { }
+            public ExpressionValidationException(string message)
+                : base(message) { }
         }
 
         /// <summary>
@@ -193,8 +228,10 @@ namespace Pulsar.Compiler.Validation
                 var identifier = match.Value;
 
                 // Exclude math functions, keywords, and known non-sensor identifiers
-                if (!IsReservedKeyword(identifier) &&
-                    !AllowedMathFunctions.Any(f => f.EndsWith(identifier)))
+                if (
+                    !IsReservedKeyword(identifier)
+                    && !AllowedMathFunctions.Any(f => f.EndsWith(identifier))
+                )
                 {
                     sensors.Add(identifier);
                 }

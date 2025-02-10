@@ -6,9 +6,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
-using Pulsar.Compiler.Config;
 using Serilog; // Added missing using directive for ILogger
 
 namespace Pulsar.Compiler.Generation
@@ -23,7 +23,10 @@ namespace Pulsar.Compiler.Generation
 
     public class CodeGenerator
     {
-        public static List<GeneratedFileInfo> GenerateCSharp(List<RuleDefinition> rules, BuildConfig? config = null)
+        public static List<GeneratedFileInfo> GenerateCSharp(
+            List<RuleDefinition> rules,
+            BuildConfig? config = null
+        )
         {
             // Supply defaults for required members if config is null
             config ??= new BuildConfig
@@ -31,19 +34,22 @@ namespace Pulsar.Compiler.Generation
                 OutputPath = "Generated",
                 Target = "win-x64",
                 ProjectName = "Pulsar.Compiler",
-                TargetFramework = "net9.0"
+                TargetFramework = "net9.0",
             };
 
             var files = config.StandaloneExecutable
                 ? GenerateStandaloneProgram(rules, config)
-                : GenerateRuleFiles(rules, config);  // Use the existing method for non-standalone
+                : GenerateRuleFiles(rules, config); // Use the existing method for non-standalone
 
             files = ApplyPostGenerationFixups(files);
 
             return files;
         }
 
-        private static List<GeneratedFileInfo> GenerateStandaloneProgram(List<RuleDefinition> rules, BuildConfig config)
+        private static List<GeneratedFileInfo> GenerateStandaloneProgram(
+            List<RuleDefinition> rules,
+            BuildConfig config
+        )
         {
             var files = new List<GeneratedFileInfo>();
 
@@ -70,7 +76,8 @@ namespace Pulsar.Compiler.Generation
         /// </summary>
         private static void AddSourceTrackingComments(
             GeneratedFileInfo fileInfo,
-            List<RuleDefinition> groupRules)
+            List<RuleDefinition> groupRules
+        )
         {
             var sourceFiles = groupRules
                 .Select(r => r.SourceInfo?.FileName)
@@ -83,8 +90,11 @@ namespace Pulsar.Compiler.Generation
             {
                 var sourceComment = $"// Source Files: {string.Join(", ", sourceFiles)}\n";
                 sourceComment += "// Rules in this group:\n";
-                sourceComment += string.Join("\n",
-                    groupRules.Select(r => $"//   - {r.Name} (from {r.SourceInfo?.FileName ?? "unknown"})")
+                sourceComment += string.Join(
+                    "\n",
+                    groupRules.Select(r =>
+                        $"//   - {r.Name} (from {r.SourceInfo?.FileName ?? "unknown"})"
+                    )
                 );
 
                 fileInfo.Content = fileInfo.Content.Insert(
@@ -108,7 +118,9 @@ namespace Pulsar.Compiler.Generation
             return builder.ToString();
         }
 
-        private static GeneratedFileInfo GenerateCompiledRulesClass(Dictionary<int, List<RuleDefinition>> rulesByLayer)
+        private static GeneratedFileInfo GenerateCompiledRulesClass(
+            Dictionary<int, List<RuleDefinition>> rulesByLayer
+        )
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
@@ -120,13 +132,21 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("        private readonly ILogger _logger;");
             builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
             builder.AppendLine();
-            builder.AppendLine("        public CompiledRules(ILogger logger, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                "        public CompiledRules(ILogger logger, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
-            builder.AppendLine("            _logger = logger ?? throw new ArgumentNullException(nameof(logger));");
-            builder.AppendLine("            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));");
+            builder.AppendLine(
+                "            _logger = logger ?? throw new ArgumentNullException(nameof(logger));"
+            );
+            builder.AppendLine(
+                "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
+            );
             builder.AppendLine("        }");
             builder.AppendLine();
-            builder.AppendLine("        public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                "        public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
             builder.AppendLine("            try");
             builder.AppendLine("            {");
@@ -135,14 +155,18 @@ namespace Pulsar.Compiler.Generation
             // Call each layer's evaluation method in order
             foreach (var layer in rulesByLayer.Keys.OrderBy(k => k))
             {
-                builder.AppendLine($"                EvaluateLayer{layer}(inputs, outputs, bufferManager);");
+                builder.AppendLine(
+                    $"                EvaluateLayer{layer}(inputs, outputs, bufferManager);"
+                );
             }
 
             builder.AppendLine("                _logger.Debug(\"Rule evaluation completed\");");
             builder.AppendLine("            }");
             builder.AppendLine("            catch (Exception ex)");
             builder.AppendLine("            {");
-            builder.AppendLine("                _logger.Error(ex, \"Error during rule evaluation\");");
+            builder.AppendLine(
+                "                _logger.Error(ex, \"Error during rule evaluation\");"
+            );
             builder.AppendLine("                throw;");
             builder.AppendLine("            }");
             builder.AppendLine("        }");
@@ -157,12 +181,15 @@ namespace Pulsar.Compiler.Generation
                 LayerRange = new RuleLayerRange
                 {
                     Start = rulesByLayer.Keys.Any() ? rulesByLayer.Keys.Min() : 0,
-                    End = rulesByLayer.Keys.Any() ? rulesByLayer.Keys.Max() : 0
-                }
+                    End = rulesByLayer.Keys.Any() ? rulesByLayer.Keys.Max() : 0,
+                },
             };
         }
 
-        private static GeneratedFileInfo GenerateLayerImplementation(int layer, List<RuleDefinition> rules)
+        private static GeneratedFileInfo GenerateLayerImplementation(
+            int layer,
+            List<RuleDefinition> rules
+        )
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
@@ -171,7 +198,9 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("{");
             builder.AppendLine("    public partial class CompiledRules");
             builder.AppendLine("    {");
-            builder.AppendLine($"        private void EvaluateLayer{layer}(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                $"        private void EvaluateLayer{layer}(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
             builder.AppendLine($"            _logger.Debug(\"Evaluating layer {layer}\");");
             builder.AppendLine("            try");
@@ -183,7 +212,9 @@ namespace Pulsar.Compiler.Generation
                 // Add source tracking
                 if (rule.SourceInfo != null)
                 {
-                    builder.AppendLine($"                // Source: {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}");
+                    builder.AppendLine(
+                        $"                // Source: {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}"
+                    );
                 }
                 builder.AppendLine($"                // Rule: {rule.Name}");
                 if (!string.IsNullOrEmpty(rule.Description))
@@ -192,7 +223,9 @@ namespace Pulsar.Compiler.Generation
                 }
 
                 // Add debug logging
-                builder.AppendLine($"                _logger.Debug(\"Evaluating rule {rule.Name}\");");
+                builder.AppendLine(
+                    $"                _logger.Debug(\"Evaluating rule {rule.Name}\");"
+                );
 
                 string condition = GenerateCondition(rule.Conditions);
                 // Only generate if statement if there are actual conditions
@@ -205,14 +238,16 @@ namespace Pulsar.Compiler.Generation
                 }
                 else
                 {
-                    GenerateActions(builder, rule.Actions, "                ");  // Uses default indent
+                    GenerateActions(builder, rule.Actions, "                "); // Uses default indent
                 }
             }
 
             builder.AppendLine("            }");
             builder.AppendLine("            catch (Exception ex)");
             builder.AppendLine("            {");
-            builder.AppendLine($"                _logger.Error(ex, \"Error evaluating layer {layer}\");");
+            builder.AppendLine(
+                $"                _logger.Error(ex, \"Error evaluating layer {layer}\");"
+            );
             builder.AppendLine("                throw;");
             builder.AppendLine("            }");
             builder.AppendLine($"            _logger.Debug(\"Completed layer {layer}\");");
@@ -225,18 +260,24 @@ namespace Pulsar.Compiler.Generation
                 FileName = $"CompiledRules.Layer{layer}.cs",
                 Content = builder.ToString(),
                 Namespace = "Pulsar.Runtime.Rules",
-                LayerRange = new RuleLayerRange { Start = layer, End = layer }
+                LayerRange = new RuleLayerRange { Start = layer, End = layer },
             };
         }
 
-        private static void GenerateActions(StringBuilder builder, List<ActionDefinition> actions, string indent = "            ")
+        private static void GenerateActions(
+            StringBuilder builder,
+            List<ActionDefinition> actions,
+            string indent = "            "
+        )
         {
             foreach (var action in actions.OfType<SetValueAction>())
             {
                 string valueAssignment;
                 if (action.Value.HasValue)
                 {
-                    valueAssignment = action.Value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    valueAssignment = action.Value.Value.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture
+                    );
                 }
                 else if (!string.IsNullOrEmpty(action.ValueExpression))
                 {
@@ -276,8 +317,17 @@ namespace Pulsar.Compiler.Generation
             // List of Math functions to preserve
             var mathFunctions = new[]
             {
-                "Math.Abs", "Math.Pow", "Math.Sqrt", "Math.Sin", "Math.Cos", "Math.Tan",
-                "Math.Log", "Math.Exp", "Math.Floor", "Math.Ceiling", "Math.Round"
+                "Math.Abs",
+                "Math.Pow",
+                "Math.Sqrt",
+                "Math.Sin",
+                "Math.Cos",
+                "Math.Tan",
+                "Math.Log",
+                "Math.Exp",
+                "Math.Floor",
+                "Math.Ceiling",
+                "Math.Round",
             };
 
             // First handle Math function calls - preserve case
@@ -308,13 +358,21 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("        private readonly ILogger _logger;");
             builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
             builder.AppendLine();
-            builder.AppendLine("        public CompiledRules(ILogger logger, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                "        public CompiledRules(ILogger logger, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
-            builder.AppendLine("            _logger = logger ?? throw new ArgumentNullException(nameof(logger));");
-            builder.AppendLine("            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));");
+            builder.AppendLine(
+                "            _logger = logger ?? throw new ArgumentNullException(nameof(logger));"
+            );
+            builder.AppendLine(
+                "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
+            );
             builder.AppendLine("        }");
             builder.AppendLine();
-            builder.AppendLine("        public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                "        public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
             builder.AppendLine("            _logger.Debug(\"No rules to evaluate\");");
             builder.AppendLine("        }");
@@ -325,14 +383,16 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = "CompiledRules.cs",
                 Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules"
+                Namespace = "Pulsar.Runtime.Rules",
             };
         }
 
         private static string GenerateFileHeader()
         {
             return @"// Generated code - do not modify directly
-// Generated at: " + DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC") + @"
+// Generated at: "
+                + DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC")
+                + @"
 ";
         }
 
@@ -345,7 +405,9 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("{");
             builder.AppendLine("    public interface ICompiledRules");
             builder.AppendLine("    {");
-            builder.AppendLine("        void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager);");
+            builder.AppendLine(
+                "        void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager);"
+            );
             builder.AppendLine("    }");
             builder.AppendLine("}");
 
@@ -353,7 +415,7 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = "ICompiledRules.cs",
                 Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules"
+                Namespace = "Pulsar.Runtime.Rules",
             };
         }
 
@@ -375,7 +437,9 @@ namespace Pulsar.Compiler.Generation
             return layerMap;
         }
 
-        private static Dictionary<string, HashSet<string>> BuildDependencyGraph(List<RuleDefinition> rules)
+        private static Dictionary<string, HashSet<string>> BuildDependencyGraph(
+            List<RuleDefinition> rules
+        )
         {
             var graph = new Dictionary<string, HashSet<string>>();
             var outputRules = new Dictionary<string, string>();
@@ -410,11 +474,14 @@ namespace Pulsar.Compiler.Generation
             Dictionary<string, HashSet<string>> graph,
             Dictionary<string, int> layerMap,
             HashSet<string> visited,
-            HashSet<string> visiting)
+            HashSet<string> visiting
+        )
         {
             if (visiting.Contains(ruleName))
             {
-                throw new InvalidOperationException($"Cyclic dependency detected involving rule '{ruleName}'");
+                throw new InvalidOperationException(
+                    $"Cyclic dependency detected involving rule '{ruleName}'"
+                );
             }
 
             if (visited.Contains(ruleName))
@@ -439,7 +506,10 @@ namespace Pulsar.Compiler.Generation
             visited.Add(ruleName);
         }
 
-        private static List<string> GetDependencies(RuleDefinition rule, Dictionary<string, string> outputRules)
+        private static List<string> GetDependencies(
+            RuleDefinition rule,
+            Dictionary<string, string> outputRules
+        )
         {
             var dependencies = new HashSet<string>();
 
@@ -485,10 +555,10 @@ namespace Pulsar.Compiler.Generation
 
         private static Dictionary<int, List<RuleDefinition>> GetRulesByLayer(
             List<RuleDefinition> rules,
-            Dictionary<string, int> layerMap)
+            Dictionary<string, int> layerMap
+        )
         {
-            return rules.GroupBy(r => layerMap[r.Name])
-                       .ToDictionary(g => g.Key, g => g.ToList());
+            return rules.GroupBy(r => layerMap[r.Name]).ToDictionary(g => g.Key, g => g.ToList());
         }
 
         private static GeneratedFileInfo GenerateRuleImplementation(RuleDefinition rule, int layer)
@@ -509,7 +579,9 @@ namespace Pulsar.Compiler.Generation
             }
 
             string condition = GenerateCondition(rule.Conditions);
-            builder.AppendLine($"        private void Evaluate_{rule.Name}(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                $"        private void Evaluate_{rule.Name}(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
             if (!string.IsNullOrEmpty(condition))
             {
@@ -532,16 +604,19 @@ namespace Pulsar.Compiler.Generation
                 FileName = $"Rule_{rule.Name}.cs",
                 Content = builder.ToString(),
                 Namespace = "Pulsar.Runtime.Rules",
-                LayerRange = new RuleLayerRange { Start = layer, End = layer }
+                LayerRange = new RuleLayerRange { Start = layer, End = layer },
             };
         }
 
-        private static GeneratedFileInfo GenerateMetadataFile(List<RuleDefinition> rules, Dictionary<string, int> layerMap)
+        private static GeneratedFileInfo GenerateMetadataFile(
+            List<RuleDefinition> rules,
+            Dictionary<string, int> layerMap
+        )
         {
             var metadata = new RuleManifest
             {
                 GeneratedAt = DateTime.UtcNow,
-                SchemaVersion = "1.0"
+                SchemaVersion = "1.0",
             };
 
             foreach (var rule in rules)
@@ -553,26 +628,29 @@ namespace Pulsar.Compiler.Generation
                     Layer = layerMap[rule.Name],
                     Description = rule.Description,
                     InputSensors = GetInputSensors(rule),
-                    OutputSensors = GetOutputSensors(rule)
+                    OutputSensors = GetOutputSensors(rule),
                 };
             }
 
-            var json = System.Text.Json.JsonSerializer.Serialize(metadata, new System.Text.Json.JsonSerializerOptions
-            {
-                WriteIndented = true
-            });
+            var json = System.Text.Json.JsonSerializer.Serialize(
+                metadata,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true }
+            );
 
             return new GeneratedFileInfo
             {
                 FileName = "rules.manifest.json",
                 Content = json,
-                Namespace = "Pulsar.Runtime.Rules"
+                Namespace = "Pulsar.Runtime.Rules",
             };
         }
 
         private static string GenerateCondition(ConditionGroup? conditions, bool isPartOfOr = false)
         {
-            if (conditions == null || (!conditions.All?.Any() ?? true) && (!conditions.Any?.Any() ?? true))
+            if (
+                conditions == null
+                || (!conditions.All?.Any() ?? true) && (!conditions.Any?.Any() ?? true)
+            )
             {
                 return string.Empty;
             }
@@ -595,15 +673,22 @@ namespace Pulsar.Compiler.Generation
             return isPartOfOr ? $"({result})" : result;
         }
 
-        private static string GenerateConditionExpression(ConditionDefinition condition, bool isPartOfOr = false)
+        private static string GenerateConditionExpression(
+            ConditionDefinition condition,
+            bool isPartOfOr = false
+        )
         {
             string expression = condition switch
             {
-                ComparisonCondition comp => $"inputs[\"{comp.Sensor}\"] {GetOperator(comp.Operator)} {comp.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+                ComparisonCondition comp =>
+                    $"inputs[\"{comp.Sensor}\"] {GetOperator(comp.Operator)} {comp.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
                 ExpressionCondition expr => FixupExpression(expr.Expression),
-                ThresholdOverTimeCondition threshold => $"_bufferManager.IsAboveThresholdForDuration(\"{threshold.Sensor}\", {threshold.Threshold}, TimeSpan.FromMilliseconds({threshold.Duration}))",
+                ThresholdOverTimeCondition threshold =>
+                    $"_bufferManager.IsAboveThresholdForDuration(\"{threshold.Sensor}\", {threshold.Threshold}, TimeSpan.FromMilliseconds({threshold.Duration}))",
                 ConditionGroup group => GenerateCondition(group, isPartOfOr),
-                _ => throw new NotSupportedException($"Unsupported condition type: {condition.GetType().Name}")
+                _ => throw new NotSupportedException(
+                    $"Unsupported condition type: {condition.GetType().Name}"
+                ),
             };
 
             return expression;
@@ -642,15 +727,14 @@ namespace Pulsar.Compiler.Generation
 
         private static List<string> GetOutputSensors(RuleDefinition rule)
         {
-            return rule.Actions.OfType<SetValueAction>()
-                       .Select(a => a.Key)
-                       .ToList();
+            return rule.Actions.OfType<SetValueAction>().Select(a => a.Key).ToList();
         }
 
         private static Dictionary<int, List<RuleDefinition>> SplitRulesIntoGroups(
             List<RuleDefinition> rules,
             Dictionary<string, int> layerMap,
-            RuleGroupingConfig config)
+            RuleGroupingConfig config
+        )
         {
             var groups = new Dictionary<int, List<RuleDefinition>>();
             var currentGroupIndex = 0;
@@ -659,7 +743,8 @@ namespace Pulsar.Compiler.Generation
             var sortedRules = rules.OrderBy(r => layerMap[r.Name]).ToList();
 
             // Group rules by layer first
-            var rulesByLayer = sortedRules.GroupBy(r => layerMap[r.Name])
+            var rulesByLayer = sortedRules
+                .GroupBy(r => layerMap[r.Name])
                 .OrderBy(g => g.Key)
                 .ToList();
 
@@ -699,8 +784,10 @@ namespace Pulsar.Compiler.Generation
                     // Start a new group if:
                     // 1. Current group has reached max size, or
                     // 2. Current rule is in a different layer than previous rules and current group is not empty
-                    if (currentRules.Count >= config.MaxRulesPerFile ||
-                        (ruleLayer != currentLayer && currentRules.Any()))
+                    if (
+                        currentRules.Count >= config.MaxRulesPerFile
+                        || (ruleLayer != currentLayer && currentRules.Any())
+                    )
                     {
                         groups[currentGroupIndex] = currentRules;
                         currentRules = new List<RuleDefinition>();
@@ -717,20 +804,32 @@ namespace Pulsar.Compiler.Generation
                 }
             }
 
-            Log.Information("[CodeGenerator] RuleGroupingConfig: MaxRulesPerFile = {MaxRulesPerFile}, GroupParallelRules = {GroupParallelRules}", config.MaxRulesPerFile, config.GroupParallelRules);
-            Log.Information("[CodeGenerator] Total rule groups generated: {GroupCount}", groups.Count);
+            Log.Information(
+                "[CodeGenerator] RuleGroupingConfig: MaxRulesPerFile = {MaxRulesPerFile}, GroupParallelRules = {GroupParallelRules}",
+                config.MaxRulesPerFile,
+                config.GroupParallelRules
+            );
+            Log.Information(
+                "[CodeGenerator] Total rule groups generated: {GroupCount}",
+                groups.Count
+            );
             foreach (var kvp in groups)
             {
-                Log.Information("[CodeGenerator] Group {GroupIndex} has {RuleCount} rules.", kvp.Key, kvp.Value.Count);
+                Log.Information(
+                    "[CodeGenerator] Group {GroupIndex} has {RuleCount} rules.",
+                    kvp.Key,
+                    kvp.Value.Count
+                );
             }
 
             return groups;
         }
 
         private static GeneratedFileInfo GenerateGroupImplementation(
-           int groupIndex,
-           List<RuleDefinition> rules,
-           Dictionary<string, int> layerMap)
+            int groupIndex,
+            List<RuleDefinition> rules,
+            Dictionary<string, int> layerMap
+        )
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
@@ -746,19 +845,29 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine();
 
             // Constructor
-            builder.AppendLine($"        public RuleGroup{groupIndex}(ILogger logger, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                $"        public RuleGroup{groupIndex}(ILogger logger, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
-            builder.AppendLine("            _logger = logger ?? throw new ArgumentNullException(nameof(logger));");
-            builder.AppendLine("            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));");
+            builder.AppendLine(
+                "            _logger = logger ?? throw new ArgumentNullException(nameof(logger));"
+            );
+            builder.AppendLine(
+                "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
+            );
             builder.AppendLine("        }");
             builder.AppendLine();
 
             // Interface implementation
-            builder.AppendLine("        public void EvaluateGroup(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                "        public void EvaluateGroup(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
             builder.AppendLine("            try");
             builder.AppendLine("            {");
-            builder.AppendLine($"                _logger.Debug(\"Evaluating rule group {groupIndex}\");");
+            builder.AppendLine(
+                $"                _logger.Debug(\"Evaluating rule group {groupIndex}\");"
+            );
 
             // Generate rule implementations in layer order
             foreach (var rule in rules.OrderBy(r => layerMap[r.Name]))
@@ -766,7 +875,9 @@ namespace Pulsar.Compiler.Generation
                 // Add source tracking
                 if (rule.SourceInfo != null)
                 {
-                    builder.AppendLine($"                // Source: {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}");
+                    builder.AppendLine(
+                        $"                // Source: {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}"
+                    );
                 }
                 builder.AppendLine($"                // Rule: {rule.Name}");
                 if (!string.IsNullOrEmpty(rule.Description))
@@ -774,7 +885,9 @@ namespace Pulsar.Compiler.Generation
                     builder.AppendLine($"                // Description: {rule.Description}");
                 }
 
-                builder.AppendLine($"                _logger.Debug(\"Evaluating rule {rule.Name}\");");
+                builder.AppendLine(
+                    $"                _logger.Debug(\"Evaluating rule {rule.Name}\");"
+                );
 
                 string condition = GenerateCondition(rule.Conditions);
                 if (!string.IsNullOrEmpty(condition) && condition != "true")
@@ -793,10 +906,14 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("            }");
             builder.AppendLine("            catch (Exception ex)");
             builder.AppendLine("            {");
-            builder.AppendLine($"                _logger.Error(ex, \"Error evaluating rule group {groupIndex}\");");
+            builder.AppendLine(
+                $"                _logger.Error(ex, \"Error evaluating rule group {groupIndex}\");"
+            );
             builder.AppendLine("                throw;");
             builder.AppendLine("            }");
-            builder.AppendLine($"            _logger.Debug(\"Completed rule group {groupIndex}\");");
+            builder.AppendLine(
+                $"            _logger.Debug(\"Completed rule group {groupIndex}\");"
+            );
             builder.AppendLine("        }");
             builder.AppendLine("    }");
             builder.AppendLine("}");
@@ -809,14 +926,15 @@ namespace Pulsar.Compiler.Generation
                 LayerRange = new RuleLayerRange
                 {
                     Start = rules.Min(r => layerMap[r.Name]),
-                    End = rules.Max(r => layerMap[r.Name])
-                }
+                    End = rules.Max(r => layerMap[r.Name]),
+                },
             };
         }
 
         private static GeneratedFileInfo GenerateRuleCoordinator(
-                    Dictionary<int, List<RuleDefinition>> groups,
-                    Dictionary<string, int> layerMap)
+            Dictionary<int, List<RuleDefinition>> groups,
+            Dictionary<string, int> layerMap
+        )
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
@@ -829,15 +947,25 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("{");
 
             // Generate concrete coordinator class with AOT compatibility
-            builder.AppendLine("    [UnconditionalSuppressMessage(\"Trimming\", \"IL2026\", Justification = \"Types preserved in trimming.xml\")]");
-            builder.AppendLine("    [UnconditionalSuppressMessage(\"Trimming\", \"IL2074\", Justification = \"Required interfaces preserved\")]");
+            builder.AppendLine(
+                "    [UnconditionalSuppressMessage(\"Trimming\", \"IL2026\", Justification = \"Types preserved in trimming.xml\")]"
+            );
+            builder.AppendLine(
+                "    [UnconditionalSuppressMessage(\"Trimming\", \"IL2074\", Justification = \"Required interfaces preserved\")]"
+            );
             builder.AppendLine("    public class RuleCoordinator : IRuleCoordinator");
             builder.AppendLine("    {");
 
             // Add performance metrics
-            builder.AppendLine("        private static readonly Meter s_meter = new(\"Pulsar.Runtime\");");
-            builder.AppendLine("        private static readonly Counter<int> s_evaluationCount = s_meter.CreateCounter<int>(\"rule_evaluations_total\");");
-            builder.AppendLine("        private static readonly Histogram<double> s_evaluationDuration = s_meter.CreateHistogram<double>(\"rule_evaluation_duration_seconds\");");
+            builder.AppendLine(
+                "        private static readonly Meter s_meter = new(\"Pulsar.Runtime\");"
+            );
+            builder.AppendLine(
+                "        private static readonly Counter<int> s_evaluationCount = s_meter.CreateCounter<int>(\"rule_evaluations_total\");"
+            );
+            builder.AppendLine(
+                "        private static readonly Histogram<double> s_evaluationDuration = s_meter.CreateHistogram<double>(\"rule_evaluation_duration_seconds\");"
+            );
             builder.AppendLine();
 
             // Fields for logger and each rule group
@@ -853,19 +981,29 @@ namespace Pulsar.Compiler.Generation
                 {
                     if (rule.SourceInfo != null)
                     {
-                        builder.AppendLine($"        // - {rule.Name} from {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}");
+                        builder.AppendLine(
+                            $"        // - {rule.Name} from {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}"
+                        );
                     }
                 }
-                builder.AppendLine($"        private readonly RuleGroup{group.Key} _group{group.Key};");
+                builder.AppendLine(
+                    $"        private readonly RuleGroup{group.Key} _group{group.Key};"
+                );
             }
 
             builder.AppendLine();
 
             // Constructor
-            builder.AppendLine("        public RuleCoordinator(ILogger logger, RingBufferManager bufferManager)");
+            builder.AppendLine(
+                "        public RuleCoordinator(ILogger logger, RingBufferManager bufferManager)"
+            );
             builder.AppendLine("        {");
-            builder.AppendLine("            _logger = logger ?? throw new ArgumentNullException(nameof(logger));");
-            builder.AppendLine("            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));");
+            builder.AppendLine(
+                "            _logger = logger ?? throw new ArgumentNullException(nameof(logger));"
+            );
+            builder.AppendLine(
+                "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
+            );
             builder.AppendLine();
 
             // Initialize each group with proper error handling
@@ -873,11 +1011,15 @@ namespace Pulsar.Compiler.Generation
             {
                 builder.AppendLine($"            try");
                 builder.AppendLine("            {");
-                builder.AppendLine($"                _group{groupIndex} = new RuleGroup{groupIndex}(logger, bufferManager);");
+                builder.AppendLine(
+                    $"                _group{groupIndex} = new RuleGroup{groupIndex}(logger, bufferManager);"
+                );
                 builder.AppendLine("            }");
                 builder.AppendLine("            catch (Exception ex)");
                 builder.AppendLine("            {");
-                builder.AppendLine($"                _logger.Error(ex, \"Failed to initialize rule group {groupIndex}\");");
+                builder.AppendLine(
+                    $"                _logger.Error(ex, \"Failed to initialize rule group {groupIndex}\");"
+                );
                 builder.AppendLine("                throw;");
                 builder.AppendLine("            }");
             }
@@ -885,7 +1027,9 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine();
 
             // EvaluateRules implementation from IRuleCoordinator
-            builder.AppendLine("        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)");
+            builder.AppendLine(
+                "        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)"
+            );
             builder.AppendLine("        {");
             builder.AppendLine("            try");
             builder.AppendLine("            {");
@@ -904,7 +1048,9 @@ namespace Pulsar.Compiler.Generation
             foreach (var groupIndex in orderedGroups)
             {
                 var groupRules = groups[groupIndex];
-                builder.AppendLine($"                // Layer {layerMap[groupRules[0].Name]} rules:");
+                builder.AppendLine(
+                    $"                // Layer {layerMap[groupRules[0].Name]} rules:"
+                );
                 foreach (var rule in groupRules)
                 {
                     builder.AppendLine($"                // - {rule.Name}");
@@ -913,11 +1059,15 @@ namespace Pulsar.Compiler.Generation
 
                 builder.AppendLine($"                try");
                 builder.AppendLine("                {");
-                builder.AppendLine($"                    _group{groupIndex}.EvaluateGroup(inputs, outputs, _bufferManager);");
+                builder.AppendLine(
+                    $"                    _group{groupIndex}.EvaluateGroup(inputs, outputs, _bufferManager);"
+                );
                 builder.AppendLine("                }");
                 builder.AppendLine("                catch (Exception ex)");
                 builder.AppendLine("                {");
-                builder.AppendLine($"                    _logger.Error(ex, \"Error evaluating rule group {groupIndex}\");");
+                builder.AppendLine(
+                    $"                    _logger.Error(ex, \"Error evaluating rule group {groupIndex}\");"
+                );
                 builder.AppendLine("                    throw;");
                 builder.AppendLine("                }");
                 builder.AppendLine();
@@ -925,13 +1075,19 @@ namespace Pulsar.Compiler.Generation
 
             // Record performance metrics
             builder.AppendLine("                var duration = DateTime.UtcNow - startTime;");
-            builder.AppendLine("                s_evaluationDuration.Record(duration.TotalSeconds);");
+            builder.AppendLine(
+                "                s_evaluationDuration.Record(duration.TotalSeconds);"
+            );
             builder.AppendLine();
-            builder.AppendLine("                _logger.Debug(\"Completed rule evaluation in {Duration}ms\", duration.TotalMilliseconds);");
+            builder.AppendLine(
+                "                _logger.Debug(\"Completed rule evaluation in {Duration}ms\", duration.TotalMilliseconds);"
+            );
             builder.AppendLine("            }");
             builder.AppendLine("            catch (Exception ex)");
             builder.AppendLine("            {");
-            builder.AppendLine("                _logger.Error(ex, \"Error during rule evaluation\");");
+            builder.AppendLine(
+                "                _logger.Error(ex, \"Error during rule evaluation\");"
+            );
             builder.AppendLine("                throw;");
             builder.AppendLine("            }");
             builder.AppendLine("        }");
@@ -965,10 +1121,9 @@ namespace Pulsar.Compiler.Generation
                 LayerRange = new RuleLayerRange
                 {
                     Start = orderedGroups.First(),
-                    End = orderedGroups.Last()
-                }
+                    End = orderedGroups.Last(),
+                },
             };
-
         }
 
         private static GeneratedFileInfo GenerateProgramClass(BuildConfig config)
@@ -976,7 +1131,8 @@ namespace Pulsar.Compiler.Generation
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
             builder.AppendLine(GenerateCommonUsings());
-            builder.AppendLine(@"
+            builder.AppendLine(
+                @"
 using System.Threading;
 using StackExchange.Redis;
 using Pulsar.Runtime;
@@ -1066,14 +1222,15 @@ namespace Pulsar.Runtime.Rules
             return new RuleCoordinator(logger, bufferManager);
         }
     }
-}");
+}"
+            );
 
             return new GeneratedFileInfo
             {
                 FileName = "Program.cs",
                 FilePath = Path.Combine("Generated", "Program.cs"),
                 Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules"
+                Namespace = "Pulsar.Runtime.Rules",
             };
         }
 
@@ -1081,30 +1238,42 @@ namespace Pulsar.Runtime.Rules
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
-            builder.AppendLine(@"
+            builder.AppendLine(
+                @"
 namespace Pulsar.Runtime.Rules
 {
     internal static class EmbeddedConfig
-    {");
+    {"
+            );
 
-            builder.AppendLine($"        public static readonly string RedisConnectionString = \"{config.RedisConnection}\";");
-            builder.AppendLine($"        public static readonly int CycleTime = {config.CycleTime};");
-            builder.AppendLine($"        public static readonly int BufferCapacity = {config.BufferCapacity};");
-            builder.AppendLine($"        public static readonly string[] ValidSensors = new string[] {{");
+            builder.AppendLine(
+                $"        public static readonly string RedisConnectionString = \"{config.RedisConnection}\";"
+            );
+            builder.AppendLine(
+                $"        public static readonly int CycleTime = {config.CycleTime};"
+            );
+            builder.AppendLine(
+                $"        public static readonly int BufferCapacity = {config.BufferCapacity};"
+            );
+            builder.AppendLine(
+                $"        public static readonly string[] ValidSensors = new string[] {{"
+            );
             foreach (var sensor in config.AdditionalUsings)
             {
                 builder.AppendLine($"            \"{sensor}\",");
             }
             builder.AppendLine("        };");
-            builder.AppendLine(@"    }
-}");
+            builder.AppendLine(
+                @"    }
+}"
+            );
 
             return new GeneratedFileInfo
             {
                 FileName = "EmbeddedConfig.cs",
                 FilePath = Path.Combine("Generated", "EmbeddedConfig.cs"),
                 Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules"
+                Namespace = "Pulsar.Runtime.Rules",
             };
         }
 
@@ -1112,7 +1281,8 @@ namespace Pulsar.Runtime.Rules
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
-            builder.AppendLine(@"
+            builder.AppendLine(
+                @"
 using Serilog.Events;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -1146,18 +1316,22 @@ namespace Pulsar.Runtime.Rules
         [JsonPropertyName(""RequiredSensors"")]
         public string[] RequiredSensors { get; set; } = Array.Empty<string>();
     }
-}");
+}"
+            );
 
             return new GeneratedFileInfo
             {
                 FileName = "RuntimeConfig.cs",
                 FilePath = Path.Combine("Generated", "RuntimeConfig.cs"),
                 Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules"
+                Namespace = "Pulsar.Runtime.Rules",
             };
         }
 
-        private static List<GeneratedFileInfo> GenerateRuleFiles(List<RuleDefinition> rules, BuildConfig config)
+        private static List<GeneratedFileInfo> GenerateRuleFiles(
+            List<RuleDefinition> rules,
+            BuildConfig config
+        )
         {
             var files = new List<GeneratedFileInfo>();
 
@@ -1169,12 +1343,16 @@ namespace Pulsar.Runtime.Rules
             files.Add(GenerateInterfaceFile());
 
             // Generate rule group implementations
-            var groups = SplitRulesIntoGroups(rules, layerMap, new RuleGroupingConfig
-            {
-                MaxRulesPerFile = config.MaxRulesPerFile,
-                MaxLinesPerFile = config.MaxLinesPerFile,
-                GroupParallelRules = config.GroupParallelRules
-            });
+            var groups = SplitRulesIntoGroups(
+                rules,
+                layerMap,
+                new RuleGroupingConfig
+                {
+                    MaxRulesPerFile = config.MaxRulesPerFile,
+                    MaxLinesPerFile = config.MaxLinesPerFile,
+                    GroupParallelRules = config.GroupParallelRules,
+                }
+            );
 
             foreach (var group in groups)
             {
@@ -1205,11 +1383,17 @@ namespace Pulsar.Runtime.Rules
             builder.AppendLine("  </PropertyGroup>");
             builder.AppendLine("  <ItemGroup>");
             builder.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"4.0.0\" />");
-            builder.AppendLine("    <PackageReference Include=\"Prometheus.Client\" Version=\"4.1.0\" />");
-            builder.AppendLine("    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.8.16\" />");
+            builder.AppendLine(
+                "    <PackageReference Include=\"Prometheus.Client\" Version=\"4.1.0\" />"
+            );
+            builder.AppendLine(
+                "    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.8.16\" />"
+            );
             builder.AppendLine("  </ItemGroup>");
             builder.AppendLine("  <ItemGroup>");
-            builder.AppendLine("    <ProjectReference Include=\"../../Pulsar.Runtime/Pulsar.Runtime.csproj\" />");
+            builder.AppendLine(
+                "    <ProjectReference Include=\"../../Pulsar.Runtime/Pulsar.Runtime.csproj\" />"
+            );
             builder.AppendLine("  </ItemGroup>");
             builder.AppendLine("</Project>");
 
@@ -1218,16 +1402,21 @@ namespace Pulsar.Runtime.Rules
                 FileName = "Runtime.csproj",
                 FilePath = "Runtime.csproj",
                 Content = builder.ToString(),
-                Namespace = ""
+                Namespace = "",
             };
         }
 
-        private static List<GeneratedFileInfo> ApplyPostGenerationFixups(List<GeneratedFileInfo> files)
+        private static List<GeneratedFileInfo> ApplyPostGenerationFixups(
+            List<GeneratedFileInfo> files
+        )
         {
             foreach (var file in files)
             {
                 // Replace 'using Pulsar.Runtime.Common;' with 'using Pulsar.Runtime;'
-                file.Content = file.Content.Replace("using Pulsar.Runtime.Common;", "using Pulsar.Runtime;");
+                file.Content = file.Content.Replace(
+                    "using Pulsar.Runtime.Common;",
+                    "using Pulsar.Runtime;"
+                );
 
                 // For RuntimeConfig.cs, ensure it has 'using System;' at the top
                 if (file.FileName.Equals("RuntimeConfig.cs", StringComparison.OrdinalIgnoreCase))
@@ -1245,7 +1434,8 @@ namespace Pulsar.Runtime.Rules
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
-            builder.AppendLine(@"
+            builder.AppendLine(
+                @"
 using System;
 using System.Text.Json;
 using System.IO;
@@ -1268,14 +1458,15 @@ namespace Pulsar.Runtime.Rules
             return config;
         }
     }
-}");
+}"
+            );
 
             return new GeneratedFileInfo
             {
                 FileName = "ConfigurationLoader.cs",
                 FilePath = Path.Combine("Generated", "ConfigurationLoader.cs"),
                 Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules"
+                Namespace = "Pulsar.Runtime.Rules",
             };
         }
 
@@ -1283,7 +1474,8 @@ namespace Pulsar.Runtime.Rules
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
-            builder.AppendLine(@"
+            builder.AppendLine(
+                @"
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -1439,14 +1631,15 @@ namespace Pulsar.Runtime.Rules
             _redis?.Dispose();
         }
     }
-}");
+}"
+            );
 
             return new GeneratedFileInfo
             {
                 FileName = "RedisService.cs",
                 FilePath = Path.Combine("Generated", "RedisService.cs"),
                 Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules"
+                Namespace = "Pulsar.Runtime.Rules",
             };
         }
     }

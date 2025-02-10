@@ -3,15 +3,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
-using System.Threading;
+using Pulsar.Runtime.Buffers;
+using Pulsar.Runtime.Rules;
+using Pulsar.Runtime.Services;
 using Serilog;
 using Serilog.Events;
 using Serilog.Sinks.File;
-using Pulsar.Runtime.Services;
-using Pulsar.Runtime.Rules;
-using Pulsar.Runtime.Buffers;
 
 namespace Pulsar.Runtime
 {
@@ -24,8 +24,10 @@ namespace Pulsar.Runtime
 
             try
             {
-                logger.Information("Starting Pulsar Runtime v{Version}",
-                    typeof(Program).Assembly.GetName().Version);
+                logger.Information(
+                    "Starting Pulsar Runtime v{Version}",
+                    typeof(Program).Assembly.GetName().Version
+                );
 
                 using var redis = new RedisService(config.RedisConnectionString, logger);
                 using var bufferManager = new RingBufferManager(config.BufferCapacity);
@@ -39,7 +41,8 @@ namespace Pulsar.Runtime
                     config.RequiredSensors,
                     coordinator,
                     config.CycleTime ?? TimeSpan.FromMilliseconds(100),
-                    config.BufferCapacity);
+                    config.BufferCapacity
+                );
 
                 // Setup graceful shutdown
                 var cts = new CancellationTokenSource();
@@ -50,9 +53,11 @@ namespace Pulsar.Runtime
                     cts.Cancel();
                 };
 
-                logger.Information("Starting orchestrator with {SensorCount} sensors, {CycleTime}ms cycle time",
+                logger.Information(
+                    "Starting orchestrator with {SensorCount} sensors, {CycleTime}ms cycle time",
                     config.RequiredSensors.Length,
-                    config.CycleTime?.TotalMilliseconds ?? 100);
+                    config.CycleTime?.TotalMilliseconds ?? 100
+                );
 
                 await orchestrator.StartAsync();
 
@@ -82,14 +87,20 @@ namespace Pulsar.Runtime
             }
         }
 
-
-        internal static RuntimeConfig LoadConfiguration(string[] args, bool requireSensors = true, string? configPath = null)
+        internal static RuntimeConfig LoadConfiguration(
+            string[] args,
+            bool requireSensors = true,
+            string? configPath = null
+        )
         {
             var config = new RuntimeConfig();
-            Debug.WriteLine($"Initial config - RedisConnectionString: {config.RedisConnectionString}");
+            Debug.WriteLine(
+                $"Initial config - RedisConnectionString: {config.RedisConnectionString}"
+            );
 
             // First load from appsettings.json if it exists
-            var configFile = configPath ?? Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+            var configFile =
+                configPath ?? Path.Combine(AppContext.BaseDirectory, "appsettings.json");
             Debug.WriteLine($"Looking for config file at: {configFile}");
 
             if (File.Exists(configFile))
@@ -100,12 +111,16 @@ namespace Pulsar.Runtime
                     Debug.WriteLine($"Read config file: {jsonString}");
 
                     var fileConfig = JsonConvert.DeserializeObject<RuntimeConfig>(jsonString);
-                    Debug.WriteLine($"Deserialized config - RedisConnectionString: {fileConfig?.RedisConnectionString}");
+                    Debug.WriteLine(
+                        $"Deserialized config - RedisConnectionString: {fileConfig?.RedisConnectionString}"
+                    );
 
                     if (fileConfig != null)
                     {
                         config = fileConfig;
-                        Debug.WriteLine($"Assigned config - RedisConnectionString: {config.RedisConnectionString}");
+                        Debug.WriteLine(
+                            $"Assigned config - RedisConnectionString: {config.RedisConnectionString}"
+                        );
                     }
                 }
                 catch (Exception ex)
@@ -128,7 +143,9 @@ namespace Pulsar.Runtime
                         if (i + 1 < args.Length)
                         {
                             config.RedisConnectionString = args[++i];
-                            Debug.WriteLine($"Set RedisConnectionString from args: {config.RedisConnectionString}");
+                            Debug.WriteLine(
+                                $"Set RedisConnectionString from args: {config.RedisConnectionString}"
+                            );
                         }
                         break;
                     case "--cycle":
@@ -141,12 +158,18 @@ namespace Pulsar.Runtime
                             }
                             catch (FormatException ex)
                             {
-                                throw new FormatException($"The string was not recognized as a valid TimeSpan: {args[i]}", ex);
+                                throw new FormatException(
+                                    $"The string was not recognized as a valid TimeSpan: {args[i]}",
+                                    ex
+                                );
                             }
                         }
                         break;
                     case "--log-level":
-                        if (i + 1 < args.Length && Enum.TryParse<LogEventLevel>(args[++i], true, out var level))
+                        if (
+                            i + 1 < args.Length
+                            && Enum.TryParse<LogEventLevel>(args[++i], true, out var level)
+                        )
                         {
                             config.LogLevel = level;
                             Debug.WriteLine($"Set LogLevel from args: {config.LogLevel}");
@@ -156,18 +179,27 @@ namespace Pulsar.Runtime
                         if (i + 1 < args.Length && int.TryParse(args[++i], out var capacity))
                         {
                             config.BufferCapacity = capacity;
-                            Debug.WriteLine($"Set BufferCapacity from args: {config.BufferCapacity}");
+                            Debug.WriteLine(
+                                $"Set BufferCapacity from args: {config.BufferCapacity}"
+                            );
                         }
                         break;
                 }
             }
 
-            if (requireSensors && (config.RequiredSensors == null || config.RequiredSensors.Length == 0))
+            if (
+                requireSensors
+                && (config.RequiredSensors == null || config.RequiredSensors.Length == 0)
+            )
             {
-                throw new ArgumentException("At least one sensor must be specified in the configuration.");
+                throw new ArgumentException(
+                    "At least one sensor must be specified in the configuration."
+                );
             }
 
-            Debug.WriteLine($"Final config - RedisConnectionString: {config.RedisConnectionString}");
+            Debug.WriteLine(
+                $"Final config - RedisConnectionString: {config.RedisConnectionString}"
+            );
             return config;
         }
 
@@ -184,13 +216,17 @@ namespace Pulsar.Runtime
                     config.LogFile,
                     rollOnFileSizeLimit: true,
                     fileSizeLimitBytes: 10_485_760, // 10MB
-                    retainedFileCountLimit: 7);
+                    retainedFileCountLimit: 7
+                );
             }
 
             return loggerConfig.CreateLogger();
         }
 
-        private static IRuleCoordinator LoadRuleCoordinator(ILogger logger, RingBufferManager bufferManager)
+        private static IRuleCoordinator LoadRuleCoordinator(
+            ILogger logger,
+            RingBufferManager bufferManager
+        )
         {
             // This is a placeholder that will be replaced by generated code
             return new DefaultRuleCoordinator(logger, bufferManager);
@@ -205,7 +241,10 @@ namespace Pulsar.Runtime
                 errors.Add("Redis connection string is required (--redis or appsettings.json)");
             }
 
-            if (requireSensors && (config.RequiredSensors == null || config.RequiredSensors.Length == 0))
+            if (
+                requireSensors
+                && (config.RequiredSensors == null || config.RequiredSensors.Length == 0)
+            )
             {
                 errors.Add("At least one sensor must be configured");
             }
@@ -222,8 +261,7 @@ namespace Pulsar.Runtime
 
             if (errors.Any())
             {
-                throw new ArgumentException(
-                    $"Invalid configuration:\n{string.Join("\n", errors)}");
+                throw new ArgumentException($"Invalid configuration:\n{string.Join("\n", errors)}");
             }
         }
 
@@ -236,7 +274,9 @@ namespace Pulsar.Runtime
             Console.WriteLine();
             Console.WriteLine("Options:");
             Console.WriteLine("  --redis <connection>   Redis connection string");
-            Console.WriteLine("  --cycle <ms>          Evaluation cycle time in milliseconds (default: 100)");
+            Console.WriteLine(
+                "  --cycle <ms>          Evaluation cycle time in milliseconds (default: 100)"
+            );
             Console.WriteLine("  --log-level <level>   Minimum log level (default: Information)");
             Console.WriteLine("  --capacity <size>     Ring buffer capacity (default: 100)");
             Console.WriteLine();
@@ -246,18 +286,29 @@ namespace Pulsar.Runtime
 
     public class TimeSpanConverter : JsonConverter<TimeSpan?>
     {
-        public override TimeSpan? ReadJson(JsonReader reader, Type objectType, TimeSpan? existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override TimeSpan? ReadJson(
+            JsonReader reader,
+            Type objectType,
+            TimeSpan? existingValue,
+            bool hasExistingValue,
+            JsonSerializer serializer
+        )
         {
             if (reader.TokenType == JsonToken.String)
             {
                 var value = reader.Value as string;
-                if (string.IsNullOrEmpty(value)) return null;
+                if (string.IsNullOrEmpty(value))
+                    return null;
                 return TimeSpan.Parse(value);
             }
             return null;
         }
 
-        public override void WriteJson(JsonWriter writer, TimeSpan? value, JsonSerializer serializer)
+        public override void WriteJson(
+            JsonWriter writer,
+            TimeSpan? value,
+            JsonSerializer serializer
+        )
         {
             if (value.HasValue)
                 writer.WriteValue(value.Value.ToString("c"));

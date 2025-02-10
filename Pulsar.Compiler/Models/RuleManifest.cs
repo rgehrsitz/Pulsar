@@ -2,9 +2,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.IO;
 
 namespace Pulsar.Compiler.Models
 {
@@ -34,7 +34,7 @@ namespace Pulsar.Compiler.Models
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             };
 
             var json = JsonSerializer.Serialize(this, options);
@@ -46,7 +46,7 @@ namespace Pulsar.Compiler.Models
             var json = File.ReadAllText(path);
             var options = new JsonSerializerOptions
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             };
 
             return JsonSerializer.Deserialize<RuleManifest>(json, options)
@@ -171,9 +171,7 @@ namespace Pulsar.Compiler.Models
         private readonly List<GeneratedFileInfo> _generatedFiles;
         private readonly Dictionary<string, RuleDefinition> _rulesByName;
 
-        public ManifestGenerator(
-            List<RuleDefinition> rules,
-            List<GeneratedFileInfo> generatedFiles)
+        public ManifestGenerator(List<RuleDefinition> rules, List<GeneratedFileInfo> generatedFiles)
         {
             _rules = rules;
             _generatedFiles = generatedFiles;
@@ -194,21 +192,21 @@ namespace Pulsar.Compiler.Models
                     FilePath = file.FilePath,
                     Content = file.Content,
                     Hash = ComputeHash(file.Content),
-                    ContainedRules = ExtractContainedRules(file.Content)
+                    ContainedRules = ExtractContainedRules(file.Content),
                 };
 
                 // Determine layer range for this file
                 if (fileInfo.ContainedRules.Any())
                 {
-                    var layers = fileInfo.ContainedRules
-                        .Select(r => ruleLayerMap[r])
+                    var layers = fileInfo
+                        .ContainedRules.Select(r => ruleLayerMap[r])
                         .OrderBy(l => l)
                         .ToList();
 
                     fileInfo.LayerRange = new RuleLayerRange
                     {
                         Start = layers.First(),
-                        End = layers.Last()
+                        End = layers.Last(),
                     };
                 }
 
@@ -227,7 +225,7 @@ namespace Pulsar.Compiler.Models
                     Dependencies = GetRuleDependencies(rule),
                     InputSensors = GetRuleInputs(rule),
                     OutputSensors = GetRuleOutputs(rule),
-                    UsesTemporalConditions = HasTemporalConditions(rule)
+                    UsesTemporalConditions = HasTemporalConditions(rule),
                 };
 
                 manifest.Rules[rule.Name] = metadata;
@@ -279,7 +277,8 @@ namespace Pulsar.Compiler.Models
             Dictionary<string, HashSet<string>> graph,
             Dictionary<string, int> layerMap,
             HashSet<string> visited,
-            HashSet<string> visiting)
+            HashSet<string> visiting
+        )
         {
             if (visiting.Contains(ruleName))
                 throw new InvalidOperationException($"Cycle detected involving rule '{ruleName}'");
@@ -351,7 +350,10 @@ namespace Pulsar.Compiler.Models
             return dependencies.ToList();
         }
 
-        private void AddConditionDependencies(ConditionDefinition condition, HashSet<string> dependencies)
+        private void AddConditionDependencies(
+            ConditionDefinition condition,
+            HashSet<string> dependencies
+        )
         {
             if (condition is ComparisonCondition comp)
             {
@@ -416,10 +418,7 @@ namespace Pulsar.Compiler.Models
 
         private List<string> GetRuleOutputs(RuleDefinition rule)
         {
-            return rule.Actions
-                .OfType<SetValueAction>()
-                .Select(a => a.Key)
-                .ToList();
+            return rule.Actions.OfType<SetValueAction>().Select(a => a.Key).ToList();
         }
 
         private bool HasTemporalConditions(RuleDefinition rule)

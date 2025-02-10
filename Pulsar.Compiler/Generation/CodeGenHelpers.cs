@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler.Generation.CodeGenHelpers.cs
+
 using System;
 
 namespace Pulsar.Compiler.Generation

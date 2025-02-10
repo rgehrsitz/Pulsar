@@ -1,3 +1,5 @@
+// File: Pulsar.Tests/RuntimeExecution/RuntimeExecutionTests.cs
+
 using System;
 using System.Collections.Generic;
 using Xunit;
@@ -31,6 +33,7 @@ namespace Pulsar.Tests.RuntimeExecution
 
             // Assert: Expect failure and detailed error message
             Assert.False(result.IsSuccess, "Expected the rule execution to fail.");
+            Assert.NotNull(result.Errors);
             Assert.NotEmpty(result.Errors);
             Assert.Contains("runtime error", result.Errors[0], StringComparison.OrdinalIgnoreCase);
         }
@@ -48,14 +51,14 @@ namespace Pulsar.Tests.RuntimeExecution
                 {
                     IsSuccess = false,
                     Errors = new List<string> { "Runtime error: Invalid rule execution." },
-                    Output = string.Empty
+                    Output = string.Empty,
                 };
             }
             return new ExecutionResult
             {
                 IsSuccess = true,
                 Errors = new List<string>(),
-                Output = "Execution complete"
+                Output = "Execution complete",
             };
         }
     }
@@ -63,7 +66,7 @@ namespace Pulsar.Tests.RuntimeExecution
     public class ExecutionResult
     {
         public bool IsSuccess { get; set; }
-        public List<string> Errors { get; set; }
-        public string Output { get; set; }
+        public List<string>? Errors { get; set; }
+        public string? Output { get; set; }
     }
 }

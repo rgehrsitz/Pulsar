@@ -1,14 +1,18 @@
+// File: Pulse.Compiler/Services/RedisService.cs
+
+using System.Collections.Concurrent;
 using NRedisStack;
 using NRedisStack.RedisStackCommands;
-using StackExchange.Redis;
-using System.Collections.Concurrent;
 using Serilog;
+using StackExchange.Redis;
 
 namespace Pulsar.Compiler.Services
 {
     public interface IRedisService
     {
-        Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(IEnumerable<string> sensorKeys);
+        Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(
+            IEnumerable<string> sensorKeys
+        );
         Task SetOutputValuesAsync(Dictionary<string, double> outputs);
     }
 
@@ -47,7 +51,9 @@ namespace Pulsar.Compiler.Services
             }
         }
 
-        public async Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(IEnumerable<string> sensorKeys)
+        public async Task<
+            Dictionary<string, (double Value, DateTime Timestamp)>
+        > GetSensorValuesAsync(IEnumerable<string> sensorKeys)
         {
             var result = new Dictionary<string, (double Value, DateTime Timestamp)>();
             var keyArray = sensorKeys.ToArray();
@@ -76,15 +82,19 @@ namespace Pulsar.Compiler.Services
 
                     if (valueEntry.Value.HasValue && timestampEntry.Value.HasValue)
                     {
-                        if (double.TryParse(valueEntry.Value.ToString(), out double value) &&
-                            long.TryParse(timestampEntry.Value.ToString(), out long ticksValue))
+                        if (
+                            double.TryParse(valueEntry.Value.ToString(), out double value)
+                            && long.TryParse(timestampEntry.Value.ToString(), out long ticksValue)
+                        )
                         {
                             DateTime timestamp = new DateTime(ticksValue, DateTimeKind.Utc);
                             result[keyArray[i]] = (value, timestamp);
                         }
                         else
                         {
-                            LogThrottledWarning($"Invalid value or timestamp format for sensor {keyArray[i]}");
+                            LogThrottledWarning(
+                                $"Invalid value or timestamp format for sensor {keyArray[i]}"
+                            );
                         }
                     }
                 }
@@ -104,7 +114,8 @@ namespace Pulsar.Compiler.Services
 
         public async Task SetOutputValuesAsync(Dictionary<string, double> outputs)
         {
-            if (!outputs.Any()) return;
+            if (!outputs.Any())
+                return;
 
             try
             {
@@ -116,10 +127,16 @@ namespace Pulsar.Compiler.Services
 
                 foreach (var kvp in outputs)
                 {
-                    tasks.Add(batch.HashSetAsync(kvp.Key, new HashEntry[] {
-                        new HashEntry("value", kvp.Value.ToString("G17")),
-                        new HashEntry("timestamp", timestamp)
-                    }));
+                    tasks.Add(
+                        batch.HashSetAsync(
+                            kvp.Key,
+                            new HashEntry[]
+                            {
+                                new HashEntry("value", kvp.Value.ToString("G17")),
+                                new HashEntry("timestamp", timestamp),
+                            }
+                        )
+                    );
                 }
 
                 batch.Execute();

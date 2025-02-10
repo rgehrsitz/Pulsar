@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/Models/CompilationResult.cs
+
 using System.Reflection;
 
 namespace Pulsar.Compiler.Models

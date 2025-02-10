@@ -1,3 +1,5 @@
+// File: Pullar.Compiler/Config/TemplateManager.cs
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,21 +26,29 @@ namespace Pulsar.Compiler.Config
             {
                 // Direct path from executable
                 Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TemplateDirectory),
-
                 // One level up (bin/Debug/net9.0)
                 Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", TemplateDirectory),
-
                 // Two levels up (bin/Debug)
                 Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", TemplateDirectory),
-
                 // Three levels up (bin)
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", TemplateDirectory),
-
+                Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    "..",
+                    "..",
+                    "..",
+                    TemplateDirectory
+                ),
                 // Four levels up (project root)
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", TemplateDirectory),
-
+                Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    TemplateDirectory
+                ),
                 // Relative to current directory
-                Path.Combine(Directory.GetCurrentDirectory(), TemplateDirectory)
+                Path.Combine(Directory.GetCurrentDirectory(), TemplateDirectory),
             };
 
             foreach (var path in possibleTemplatePaths)
@@ -52,7 +62,8 @@ namespace Pulsar.Compiler.Config
                 }
             }
 
-            var errorMessage = $"Template directory not found in any of the expected locations. Searched paths:\n{string.Join("\n", possibleTemplatePaths.Select(p => Path.GetFullPath(p)))}";
+            var errorMessage =
+                $"Template directory not found in any of the expected locations. Searched paths:\n{string.Join("\n", possibleTemplatePaths.Select(p => Path.GetFullPath(p)))}";
             _logger.LogError(errorMessage);
             throw new DirectoryNotFoundException(errorMessage);
         }
@@ -60,8 +71,14 @@ namespace Pulsar.Compiler.Config
         public void CopyTemplates(string outputPath, bool overwrite = true)
         {
             var templatePath = FindTemplatePath();
-            var templateFiles = Directory.GetFiles(templatePath)
-                .Where(f => _templateExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
+            var templateFiles = Directory
+                .GetFiles(templatePath)
+                .Where(f =>
+                    _templateExtensions.Contains(
+                        Path.GetExtension(f),
+                        StringComparer.OrdinalIgnoreCase
+                    )
+                );
 
             foreach (string file in templateFiles)
             {
@@ -92,8 +109,14 @@ namespace Pulsar.Compiler.Config
 
             try
             {
-                var filesToDelete = Directory.GetFiles(outputPath)
-                    .Where(f => _templateExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
+                var filesToDelete = Directory
+                    .GetFiles(outputPath)
+                    .Where(f =>
+                        _templateExtensions.Contains(
+                            Path.GetExtension(f),
+                            StringComparer.OrdinalIgnoreCase
+                        )
+                    );
 
                 foreach (var file in filesToDelete)
                 {
@@ -111,12 +134,7 @@ namespace Pulsar.Compiler.Config
 
         public bool ValidateTemplates(string templatePath)
         {
-            var requiredTemplates = new[]
-            {
-                "Program.cs",
-                "RuntimeConfig.cs",
-                "trimming.xml"
-            };
+            var requiredTemplates = new[] { "Program.cs", "RuntimeConfig.cs", "trimming.xml" };
 
             foreach (var template in requiredTemplates)
             {

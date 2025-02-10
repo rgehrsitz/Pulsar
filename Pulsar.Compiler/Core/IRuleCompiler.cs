@@ -1,3 +1,6 @@
+// File: Pulsar.Compiler/Core/IRuleCompiler.cs
+
+
 using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Core

@@ -2,8 +2,8 @@
 
 using System;
 using System.Collections.Generic;
-using Serilog;
 using Pulsar.Runtime.Buffers;
+using Serilog;
 
 namespace Pulsar.Runtime.Rules
 {
@@ -16,15 +16,21 @@ namespace Pulsar.Runtime.Rules
         public DefaultRuleCoordinator(ILogger logger, RingBufferManager bufferManager)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));
+            _bufferManager =
+                bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));
         }
 
-        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)
+        public void EvaluateRules(
+            Dictionary<string, double> inputs,
+            Dictionary<string, double> outputs
+        )
         {
             // Log warning only once to avoid flooding logs
             if (!_warnedNoRules)
             {
-                _logger.Warning("No rules loaded - using default coordinator. This message will only appear once.");
+                _logger.Warning(
+                    "No rules loaded - using default coordinator. This message will only appear once."
+                );
                 _warnedNoRules = true;
             }
 

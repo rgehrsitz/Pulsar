@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -9,11 +10,10 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
+using Pulsar.Compiler.Models;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
-using System.Diagnostics.Metrics;
-using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler
 {
@@ -21,9 +21,14 @@ namespace Pulsar.Compiler
     {
         // Prometheus metrics
         private static readonly Meter s_meter = new("Pulsar.Compiler");
-        private static readonly Counter<int> s_compilationAttempts = s_meter.CreateCounter<int>("pulsar_compilations_total");
-        private static readonly Counter<int> s_compilationErrors = s_meter.CreateCounter<int>("pulsar_compilation_errors_total");
-        private static readonly Histogram<double> s_compilationDuration = s_meter.CreateHistogram<double>("pulsar_compilation_duration_seconds");
+        private static readonly Counter<int> s_compilationAttempts = s_meter.CreateCounter<int>(
+            "pulsar_compilations_total"
+        );
+        private static readonly Counter<int> s_compilationErrors = s_meter.CreateCounter<int>(
+            "pulsar_compilation_errors_total"
+        );
+        private static readonly Histogram<double> s_compilationDuration =
+            s_meter.CreateHistogram<double>("pulsar_compilation_duration_seconds");
         public static ILogger s_logger;
 
         static RoslynCompiler()
@@ -40,7 +45,11 @@ namespace Pulsar.Compiler
             s_logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public static void CompileSource(List<GeneratedFileInfo> sourceFiles, string outputDllPath, bool debug = false)
+        public static void CompileSource(
+            List<GeneratedFileInfo> sourceFiles,
+            string outputDllPath,
+            bool debug = false
+        )
         {
             s_compilationAttempts.Add(1);
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -55,34 +64,47 @@ namespace Pulsar.Compiler
 
                 if (string.IsNullOrWhiteSpace(outputDllPath))
                 {
-                    throw new ArgumentException("Output DLL path not specified", nameof(outputDllPath));
+                    throw new ArgumentException(
+                        "Output DLL path not specified",
+                        nameof(outputDllPath)
+                    );
                 }
 
                 // Ensure output directory exists
                 EnsureOutputDirectory(outputDllPath);
 
                 // Create syntax trees from source files
-                var syntaxTrees = sourceFiles.Select(file =>
-                {
-                    try
+                var syntaxTrees = sourceFiles
+                    .Select(file =>
                     {
-                        var tree = CSharpSyntaxTree.ParseText(
-                            file.Content,
-                            path: file.FileName,
-                            options: debug ? new CSharpParseOptions(LanguageVersion.Latest, DocumentationMode.Parse) 
-                                        : CSharpParseOptions.Default
-                        );
+                        try
+                        {
+                            var tree = CSharpSyntaxTree.ParseText(
+                                file.Content,
+                                path: file.FileName,
+                                options: debug
+                                    ? new CSharpParseOptions(
+                                        LanguageVersion.Latest,
+                                        DocumentationMode.Parse
+                                    )
+                                    : CSharpParseOptions.Default
+                            );
 
-                        // Validate syntax
-                        ValidateSyntax(tree, file.FileName);
-                        return tree;
-                    }
-                    catch (Exception ex)
-                    {
-                        s_logger.Error(ex, "Error parsing source file {FileName}", file.FileName);
-                        throw;
-                    }
-                }).ToList();
+                            // Validate syntax
+                            ValidateSyntax(tree, file.FileName);
+                            return tree;
+                        }
+                        catch (Exception ex)
+                        {
+                            s_logger.Error(
+                                ex,
+                                "Error parsing source file {FileName}",
+                                file.FileName
+                            );
+                            throw;
+                        }
+                    })
+                    .ToList();
 
                 var compilation = CreateCompilation(syntaxTrees, outputDllPath, debug);
                 EmitAssembly(compilation, outputDllPath, debug);
@@ -90,8 +112,11 @@ namespace Pulsar.Compiler
                 sw.Stop();
                 s_compilationDuration.Record(sw.Elapsed.TotalSeconds);
 
-                s_logger.Information("Successfully compiled {FileCount} rule files to {OutputPath}",
-                    sourceFiles.Count, outputDllPath);
+                s_logger.Information(
+                    "Successfully compiled {FileCount} rule files to {OutputPath}",
+                    sourceFiles.Count,
+                    outputDllPath
+                );
             }
             catch (Exception ex)
             {
@@ -121,7 +146,8 @@ namespace Pulsar.Compiler
 
         private static void ValidateSyntax(SyntaxTree syntaxTree, string fileName)
         {
-            var diagnostics = syntaxTree.GetDiagnostics()
+            var diagnostics = syntaxTree
+                .GetDiagnostics()
                 .Where(d => d.Severity == DiagnosticSeverity.Error);
 
             if (diagnostics.Any())
@@ -136,17 +162,24 @@ namespace Pulsar.Compiler
         private static CSharpCompilation CreateCompilation(
             List<SyntaxTree> syntaxTrees,
             string outputPath,
-            bool debug)
+            bool debug
+        )
         {
             var assemblyName = Path.GetFileNameWithoutExtension(outputPath);
             var references = new List<MetadataReference>
             {
                 MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(Console).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(System.Collections.Generic.Dictionary<,>).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(System.Diagnostics.Debug).Assembly.Location),
+                MetadataReference.CreateFromFile(
+                    typeof(System.Collections.Generic.Dictionary<,>).Assembly.Location
+                ),
+                MetadataReference.CreateFromFile(
+                    typeof(System.Diagnostics.Debug).Assembly.Location
+                ),
                 MetadataReference.CreateFromFile(typeof(System.Linq.Enumerable).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(System.Runtime.CompilerServices.RuntimeHelpers).Assembly.Location)
+                MetadataReference.CreateFromFile(
+                    typeof(System.Runtime.CompilerServices.RuntimeHelpers).Assembly.Location
+                ),
             };
 
             // Add Pulsar.Runtime reference
@@ -154,15 +187,27 @@ namespace Pulsar.Compiler
             var rootDirectory = FindSolutionRoot(currentDirectory);
             if (rootDirectory != null)
             {
-                var pulsarRuntimePath = Path.Combine(rootDirectory, "Pulsar.Runtime", "bin", "Debug", "net9.0", "Pulsar.Runtime.dll");
+                var pulsarRuntimePath = Path.Combine(
+                    rootDirectory,
+                    "Pulsar.Runtime",
+                    "bin",
+                    "Debug",
+                    "net9.0",
+                    "Pulsar.Runtime.dll"
+                );
                 if (File.Exists(pulsarRuntimePath))
                 {
                     references.Add(MetadataReference.CreateFromFile(pulsarRuntimePath));
-                    s_logger.Information("Added reference to Pulsar.Runtime: {Path}", pulsarRuntimePath);
+                    s_logger.Information(
+                        "Added reference to Pulsar.Runtime: {Path}",
+                        pulsarRuntimePath
+                    );
                 }
                 else
                 {
-                    throw new FileNotFoundException($"Could not find Pulsar.Runtime.dll at {pulsarRuntimePath}. Please build the Pulsar.Runtime project first.");
+                    throw new FileNotFoundException(
+                        $"Could not find Pulsar.Runtime.dll at {pulsarRuntimePath}. Please build the Pulsar.Runtime project first."
+                    );
                 }
             }
             else
@@ -178,14 +223,16 @@ namespace Pulsar.Compiler
             );
 
             // Create syntax trees with proper encoding
-            var encodedTrees = syntaxTrees.Select(tree => 
-                CSharpSyntaxTree.ParseText(
-                    tree.GetText().ToString(),
-                    CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest),
-                    tree.FilePath ?? assemblyName,
-                    Encoding.UTF8
+            var encodedTrees = syntaxTrees
+                .Select(tree =>
+                    CSharpSyntaxTree.ParseText(
+                        tree.GetText().ToString(),
+                        CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Latest),
+                        tree.FilePath ?? assemblyName,
+                        Encoding.UTF8
+                    )
                 )
-            ).ToList();
+                .ToList();
 
             var compilation = CSharpCompilation.Create(
                 assemblyName,
@@ -200,12 +247,13 @@ namespace Pulsar.Compiler
         private static void EmitAssembly(
             CSharpCompilation compilation,
             string outputDllPath,
-            bool debug)
+            bool debug
+        )
         {
             var emitOptions = new EmitOptions(
-                debugInformationFormat: debug ? 
-                    DebugInformationFormat.PortablePdb :
-                    DebugInformationFormat.Embedded
+                debugInformationFormat: debug
+                    ? DebugInformationFormat.PortablePdb
+                    : DebugInformationFormat.Embedded
             );
 
             string? pdbPath = debug ? Path.ChangeExtension(outputDllPath, ".pdb") : null;
@@ -213,15 +261,12 @@ namespace Pulsar.Compiler
             try
             {
                 using (var dllStream = new FileStream(outputDllPath, FileMode.Create))
-                using (var pdbStream = pdbPath != null ? 
-                    new FileStream(pdbPath, FileMode.Create) :
-                    null)
+                using (
+                    var pdbStream =
+                        pdbPath != null ? new FileStream(pdbPath, FileMode.Create) : null
+                )
                 {
-                    var result = compilation.Emit(
-                        dllStream,
-                        pdbStream,
-                        options: emitOptions
-                    );
+                    var result = compilation.Emit(dllStream, pdbStream, options: emitOptions);
 
                     if (!result.Success)
                     {
@@ -231,10 +276,7 @@ namespace Pulsar.Compiler
             }
             catch (IOException ex)
             {
-                throw new CompilationException(
-                    $"Failed to write output files: {ex.Message}",
-                    ex
-                );
+                throw new CompilationException($"Failed to write output files: {ex.Message}", ex);
             }
         }
 
@@ -243,12 +285,17 @@ namespace Pulsar.Compiler
             // Log all diagnostics for debugging
             foreach (var diagnostic in result.Diagnostics)
             {
-                s_logger.Debug("Diagnostic: {Id} {Severity} {Message}", diagnostic.Id, diagnostic.Severity, diagnostic.GetMessage());
+                s_logger.Debug(
+                    "Diagnostic: {Id} {Severity} {Message}",
+                    diagnostic.Id,
+                    diagnostic.Severity,
+                    diagnostic.GetMessage()
+                );
             }
 
             // Filter only errors (can expand if necessary)
-            var errors = result.Diagnostics
-                .Where(d => d.Severity == DiagnosticSeverity.Error) // Include other severities if needed
+            var errors = result
+                .Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error) // Include other severities if needed
                 .Select(FormatDiagnostic)
                 .ToList();
 
@@ -299,15 +346,13 @@ namespace Pulsar.Compiler
                 "System.Math.dll",
                 "System.Threading.dll",
                 "System.IO.dll",
-
                 // Diagnostics & Monitoring
                 "System.Diagnostics.Debug.dll",
                 "System.Diagnostics.DiagnosticSource.dll",
                 "System.Diagnostics.Metrics.dll",
-
                 // Redis Dependencies
                 "StackExchange.Redis.dll",
-                "NRedisStack.dll"
+                "NRedisStack.dll",
             };
 
             var addedAssemblies = new HashSet<string>(); // To track added assembly names
@@ -334,20 +379,34 @@ namespace Pulsar.Compiler
             var rootDirectory = FindSolutionRoot(currentDirectory);
             if (rootDirectory == null)
             {
-                throw new InvalidOperationException("Unable to locate the solution root directory.");
+                throw new InvalidOperationException(
+                    "Unable to locate the solution root directory."
+                );
             }
 
-            var pulsarRuntimePath = Path.Combine(rootDirectory, "Pulsar.Runtime", "bin", "Debug", "net9.0", "Pulsar.Runtime.dll");
+            var pulsarRuntimePath = Path.Combine(
+                rootDirectory,
+                "Pulsar.Runtime",
+                "bin",
+                "Debug",
+                "net9.0",
+                "Pulsar.Runtime.dll"
+            );
 
             if (File.Exists(pulsarRuntimePath))
             {
                 references.Add(MetadataReference.CreateFromFile(pulsarRuntimePath));
-                s_logger.Information("Added reference to Pulsar.Runtime: {Path}", pulsarRuntimePath);
+                s_logger.Information(
+                    "Added reference to Pulsar.Runtime: {Path}",
+                    pulsarRuntimePath
+                );
             }
             else
             {
                 s_logger.Error("Pulsar.Runtime.dll not found at {Path}", pulsarRuntimePath);
-                throw new FileNotFoundException($"Pulsar.Runtime.dll not found at {pulsarRuntimePath}");
+                throw new FileNotFoundException(
+                    $"Pulsar.Runtime.dll not found at {pulsarRuntimePath}"
+                );
             }
 
             if (!references.Any())
@@ -379,7 +438,7 @@ namespace Pulsar.Compiler
                 "NRedisStack",
                 "StackExchange.Redis",
                 "Serilog",
-                "prometheus-net"
+                "prometheus-net",
             };
 
             var references = new List<MetadataReference>();
@@ -393,10 +452,13 @@ namespace Pulsar.Compiler
             {
                 try
                 {
-                    var packagePath = Directory.GetDirectories(nugetPath, package + "*").FirstOrDefault();
+                    var packagePath = Directory
+                        .GetDirectories(nugetPath, package + "*")
+                        .FirstOrDefault();
                     if (packagePath != null)
                     {
-                        var dllPath = Directory.GetFiles(packagePath, $"{package}.dll", SearchOption.AllDirectories)
+                        var dllPath = Directory
+                            .GetFiles(packagePath, $"{package}.dll", SearchOption.AllDirectories)
                             .FirstOrDefault();
 
                         if (dllPath != null)
@@ -413,17 +475,18 @@ namespace Pulsar.Compiler
             }
             return references;
         }
-
     }
 
     public class CompilationException : Exception
     {
-        public CompilationException(string message) : base(message)
+        public CompilationException(string message)
+            : base(message)
         {
             RoslynCompiler.s_logger.Error("Compilation Exception: {Message}", message);
         }
 
-        public CompilationException(string message, Exception inner) : base(message, inner)
+        public CompilationException(string message, Exception inner)
+            : base(message, inner)
         {
             RoslynCompiler.s_logger.Error(inner, "Compilation Exception: {Message}", message);
         }

@@ -26,7 +26,7 @@ namespace Pulsar.Compiler.Parsers
                 .WithNamingConvention(UnderscoredNamingConvention.Instance)
                 .WithNodeDeserializer(new YamlNodeDeserializer())
                 .IgnoreUnmatchedProperties()
-                .WithDuplicateKeyChecking()  // Add this to catch duplicate keys
+                .WithDuplicateKeyChecking() // Add this to catch duplicate keys
                 .Build();
         }
 
@@ -40,7 +40,8 @@ namespace Pulsar.Compiler.Parsers
                 Type expectedType,
                 Func<IParser, Type, object?> nestedObjectDeserializer,
                 out object? value,
-                ObjectDeserializer rootDeserializer)
+                ObjectDeserializer rootDeserializer
+            )
             {
                 value = null;
 
@@ -56,7 +57,9 @@ namespace Pulsar.Compiler.Parsers
                     if (_recursionDepth > MaxRecursionDepth)
                     {
                         Debug.WriteLine($"Recursion depth exceeded at type: {expectedType.Name}");
-                        throw new InvalidOperationException($"YAML structure is too deeply nested (depth > {MaxRecursionDepth}). Check for circular references in your rules.");
+                        throw new InvalidOperationException(
+                            $"YAML structure is too deeply nested (depth > {MaxRecursionDepth}). Check for circular references in your rules."
+                        );
                     }
 
                     // Deserialize the rule
@@ -67,7 +70,7 @@ namespace Pulsar.Compiler.Parsers
                         var start = parser.Current?.Start;
                         if (start.HasValue)
                         {
-                            rule.LineNumber = (int)start.Value.Line;  // Cast long to int
+                            rule.LineNumber = (int)start.Value.Line; // Cast long to int
                             rule.OriginalText = parser.Current?.ToString();
                         }
                         return true;
@@ -82,7 +85,11 @@ namespace Pulsar.Compiler.Parsers
             }
         }
 
-        public List<RuleDefinition> ParseRules(string yamlContent, List<string> validSensors, string fileName = "")
+        public List<RuleDefinition> ParseRules(
+            string yamlContent,
+            List<string> validSensors,
+            string fileName = ""
+        )
         {
             try
             {
@@ -99,7 +106,9 @@ namespace Pulsar.Compiler.Parsers
                 // Validate that rules are not empty
                 if (root?.Rules == null || !root.Rules.Any())
                 {
-                    throw new InvalidOperationException("The YAML file is invalid: no rules found.");
+                    throw new InvalidOperationException(
+                        "The YAML file is invalid: no rules found."
+                    );
                 }
 
                 if (root?.Rules?.Any() == true)
@@ -149,8 +158,8 @@ namespace Pulsar.Compiler.Parsers
                         {
                             FileName = _currentFile,
                             LineNumber = rule.LineNumber,
-                            OriginalText = rule.OriginalText ?? string.Empty
-                        }
+                            OriginalText = rule.OriginalText ?? string.Empty,
+                        },
                     };
 
                     ruleDefinitions.Add(ruleDefinition);
@@ -160,7 +169,10 @@ namespace Pulsar.Compiler.Parsers
             }
             catch (YamlDotNet.Core.YamlException ex)
             {
-                throw new InvalidOperationException($"Error parsing YAML in {fileName}: {ex.Message}", ex);
+                throw new InvalidOperationException(
+                    $"Error parsing YAML in {fileName}: {ex.Message}",
+                    ex
+                );
             }
         }
 
@@ -172,11 +184,17 @@ namespace Pulsar.Compiler.Parsers
             }
 
             // Validate that rule has at least one condition
-            if (rule.Conditions == null ||
-                ((rule.Conditions.All == null || rule.Conditions.All.Count == 0) &&
-                 (rule.Conditions.Any == null || rule.Conditions.Any.Count == 0)))
+            if (
+                rule.Conditions == null
+                || (
+                    (rule.Conditions.All == null || rule.Conditions.All.Count == 0)
+                    && (rule.Conditions.Any == null || rule.Conditions.Any.Count == 0)
+                )
+            )
             {
-                throw new ValidationException($"Rule '{rule.Name}' must have at least one condition");
+                throw new ValidationException(
+                    $"Rule '{rule.Name}' must have at least one condition"
+                );
             }
 
             ValidateSensors(rule, validSensors.ToList());
@@ -184,12 +202,27 @@ namespace Pulsar.Compiler.Parsers
 
         private void ValidateSensors(Rule rule, List<string> validSensors)
         {
-            Log.Information("[DslParser] Validating sensors for rule: {RuleName}. Valid sensors provided: {ValidSensors}", rule.Name, String.Join(", ", validSensors));
-            var conditionSensors = rule.Conditions?.All != null ? GetSensorsFromConditions(rule.Conditions.All).ToList() : new List<string>();
-            Log.Information("[DslParser] Sensors from conditions: {ConditionSensors}", String.Join(", ", conditionSensors));  // Fixed: string.join -> String.Join
-            var actionKeys = rule.Actions != null ?
-                rule.Actions.Select(a => a.SetValue?.Key).Where(k => k != null).Select(k => k!).ToList()
-                : new List<string>();   // Changed to explicitly check for null
+            Log.Information(
+                "[DslParser] Validating sensors for rule: {RuleName}. Valid sensors provided: {ValidSensors}",
+                rule.Name,
+                String.Join(", ", validSensors)
+            );
+            var conditionSensors =
+                rule.Conditions?.All != null
+                    ? GetSensorsFromConditions(rule.Conditions.All).ToList()
+                    : new List<string>();
+            Log.Information(
+                "[DslParser] Sensors from conditions: {ConditionSensors}",
+                String.Join(", ", conditionSensors)
+            ); // Fixed: string.join -> String.Join
+            var actionKeys =
+                rule.Actions != null
+                    ? rule
+                        .Actions.Select(a => a.SetValue?.Key)
+                        .Where(k => k != null)
+                        .Select(k => k!)
+                        .ToList()
+                    : new List<string>(); // Changed to explicitly check for null
             Log.Information("[DslParser] Action keys: {ActionKeys}", String.Join(", ", actionKeys));
 
             Debug.WriteLine($"\nValidating rule: {rule.Name}");
@@ -398,11 +431,11 @@ namespace Pulsar.Compiler.Parsers
                     {
                         Debug.WriteLine($"Found SendMessage action");
                         return new SendMessageAction
-                        {
-                            Type = ActionType.SendMessage,
-                            Channel = actionItem.SendMessage.Channel,
-                            Message = actionItem.SendMessage.Message,
-                        } as ActionDefinition;
+                            {
+                                Type = ActionType.SendMessage,
+                                Channel = actionItem.SendMessage.Channel,
+                                Message = actionItem.SendMessage.Message,
+                            } as ActionDefinition;
                     }
 
                     Debug.WriteLine($"No valid action type found");

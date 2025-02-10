@@ -1,3 +1,5 @@
+// File: Pulse.Compiler/Core/AOTRuleCompiler.cs
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -14,20 +16,29 @@ namespace Pulsar.Compiler.Core
         {
             // Step 1: Dependency Analysis
             var analyzer = new DependencyAnalyzer();
-            List<RuleDefinition> orderedRules = analyzer.AnalyzeDependencies(new List<RuleDefinition>(rules));
+            List<RuleDefinition> orderedRules = analyzer.AnalyzeDependencies(
+                new List<RuleDefinition>(rules)
+            );
 
-            Console.WriteLine($"[AOTRuleCompiler] Received {rules.Length} rules, ordered into {orderedRules.Count} rules after dependency analysis.");
+            Console.WriteLine(
+                $"[AOTRuleCompiler] Received {rules.Length} rules, ordered into {orderedRules.Count} rules after dependency analysis."
+            );
 
             // Step 2: Source Generation
             // Use provided BuildConfig from options
-            BuildConfig buildConfig = options.BuildConfig ?? new BuildConfig
-            {
-                OutputPath = "Generated",
-                Target = "win-x64",
-                ProjectName = "Pulsar.Compiler",
-                TargetFramework = "net9.0"
-            };
-            List<GeneratedFileInfo> generatedFiles = CodeGenerator.GenerateCSharp(orderedRules, buildConfig);
+            BuildConfig buildConfig =
+                options.BuildConfig
+                ?? new BuildConfig
+                {
+                    OutputPath = "Generated",
+                    Target = "win-x64",
+                    ProjectName = "Pulsar.Compiler",
+                    TargetFramework = "net9.0",
+                };
+            List<GeneratedFileInfo> generatedFiles = CodeGenerator.GenerateCSharp(
+                orderedRules,
+                buildConfig
+            );
 
             Console.WriteLine($"[AOTRuleCompiler] Generated {generatedFiles.Count} files.");
 
@@ -47,7 +58,7 @@ namespace Pulsar.Compiler.Core
                 Success = true,
                 Errors = new string[0],
                 GeneratedFiles = writtenFilePaths.ToArray(),
-                Assembly = null
+                Assembly = null,
             };
         }
     }

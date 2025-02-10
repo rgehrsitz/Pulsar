@@ -1,5 +1,7 @@
-using Pulsar.Runtime.Rules;
+// File: Pulsar.Compiler/Config/Templates/ProjectTemplate/Program.cs
+
 using Pulsar.Runtime.Buffers;
+using Pulsar.Runtime.Rules;
 using Serilog;
 
 namespace Pulsar.Runtime;
@@ -26,7 +28,10 @@ public static class RuleExecutor
     //     }
     // }
 
-    public static void ProcessInputs(Dictionary<string, double> inputs, Dictionary<string, double> outputs)
+    public static void ProcessInputs(
+        Dictionary<string, double> inputs,
+        Dictionary<string, double> outputs
+    )
     {
         try
         {

@@ -1,3 +1,5 @@
+// File: Pulsar.Tests/Compilation/CompilationTests.cs
+
 using System;
 using System.Collections.Generic;
 using Xunit;
@@ -33,6 +35,7 @@ namespace Pulsar.Tests.Compilation
 
             // Assert: Validate that compilation fails and produces detailed errors
             Assert.False(result.IsSuccess, "Expected compilation to fail with invalid rules.");
+            Assert.NotNull(result.Errors);
             Assert.NotEmpty(result.Errors);
         }
     }
@@ -50,10 +53,10 @@ namespace Pulsar.Tests.Compilation
                     IsSuccess = false,
                     Errors = new List<string> { "No rules provided." },
                     SourceFiles = new List<string>(),
-                    SourceMap = string.Empty
+                    SourceMap = string.Empty,
                 };
             }
-            
+
             // If the rule contains the word "invalid", simulate a compilation error
             if (rules[0].Contains("invalid"))
             {
@@ -62,17 +65,17 @@ namespace Pulsar.Tests.Compilation
                     IsSuccess = false,
                     Errors = new List<string> { "Compilation error: Invalid rule." },
                     SourceFiles = new List<string>(),
-                    SourceMap = string.Empty
+                    SourceMap = string.Empty,
                 };
             }
-            
+
             // Otherwise, simulate successful compilation
             return new CompilationResult
             {
                 IsSuccess = true,
                 Errors = new List<string>(),
                 SourceFiles = new List<string> { "GeneratedRule.cs" },
-                SourceMap = "Source map info"
+                SourceMap = "Source map info",
             };
         }
     }
@@ -80,8 +83,8 @@ namespace Pulsar.Tests.Compilation
     public class CompilationResult
     {
         public bool IsSuccess { get; set; }
-        public List<string> Errors { get; set; }
-        public List<string> SourceFiles { get; set; }
-        public string SourceMap { get; set; }
+        public List<string>? Errors { get; set; }
+        public List<string>? SourceFiles { get; set; }
+        public string? SourceMap { get; set; }
     }
 }

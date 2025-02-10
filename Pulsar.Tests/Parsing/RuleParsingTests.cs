@@ -1,3 +1,5 @@
+// File: Pulsar.Tests/Parsing/RuleParsingTests.cs
+
 using System;
 using System.Collections.Generic;
 using Xunit;
@@ -32,6 +34,7 @@ namespace Pulsar.Tests.Parsing
 
             // Assert: Validate that errors are detailed
             Assert.False(result.IsValid, "Expected rule parsing result to be invalid.");
+            Assert.NotNull(result.Errors);
             Assert.NotEmpty(result.Errors);
         }
 
@@ -62,7 +65,7 @@ namespace Pulsar.Tests.Parsing
                 {
                     IsValid = false,
                     Errors = new List<string> { "Error: Invalid rule." },
-                    Metadata = string.Empty
+                    Metadata = string.Empty,
                 };
             }
             else if (ruleContent.Contains("complex"))
@@ -71,7 +74,7 @@ namespace Pulsar.Tests.Parsing
                 {
                     IsValid = true,
                     Errors = new List<string>(),
-                    Metadata = "contains nested conditions"
+                    Metadata = "contains nested conditions",
                 };
             }
             else
@@ -80,7 +83,7 @@ namespace Pulsar.Tests.Parsing
                 {
                     IsValid = true,
                     Errors = new List<string>(),
-                    Metadata = "complete metadata"
+                    Metadata = "complete metadata",
                 };
             }
         }
@@ -89,7 +92,7 @@ namespace Pulsar.Tests.Parsing
     public class RuleParseResult
     {
         public bool IsValid { get; set; }
-        public List<string> Errors { get; set; }
-        public string Metadata { get; set; }
+        public List<string>? Errors { get; set; }
+        public string? Metadata { get; set; }
     }
 }

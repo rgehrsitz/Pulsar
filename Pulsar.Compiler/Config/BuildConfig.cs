@@ -1,4 +1,4 @@
-// File: Pulsar.Compiler/Build/BuildConfig.cs
+// File: Pulsar.Compiler/Config/BuildConfig.cs
 
 using System;
 using System.Collections.Generic;
@@ -37,7 +37,8 @@ namespace Pulsar.Compiler.Config
         public string[] Errors { get; set; } = Array.Empty<string>();
         public string[] Warnings { get; set; } = Array.Empty<string>();
         public string[] GeneratedFiles { get; set; } = Array.Empty<string>();
-        public Dictionary<string, RuleMetrics> RuleMetrics { get; set; } = new Dictionary<string, RuleMetrics>();
+        public Dictionary<string, RuleMetrics> RuleMetrics { get; set; } =
+            new Dictionary<string, RuleMetrics>();
         public RuleManifest Manifest { get; set; } = new RuleManifest();
 
         public BuildResult(bool success = true)
@@ -109,7 +110,7 @@ namespace Pulsar.Compiler.Config
             Information,
             Warning,
             Error,
-            Fatal
+            Fatal,
         }
     }
 }

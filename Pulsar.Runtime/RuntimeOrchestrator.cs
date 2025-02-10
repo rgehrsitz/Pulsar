@@ -2,17 +2,21 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Diagnostics.CodeAnalysis;
-using Serilog;
-using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Buffers;
 using Pulsar.Runtime.Rules;
+using Pulsar.Runtime.Services;
+using Serilog;
 
 namespace Pulsar.Runtime
 {
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Types preserved in trimming.xml")]
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Types preserved in trimming.xml"
+    )]
     public class RuntimeOrchestrator : IDisposable
     {
         private readonly IRedisService _redis;
@@ -35,12 +39,15 @@ namespace Pulsar.Runtime
             string[] requiredSensors,
             IRuleCoordinator ruleCoordinator,
             TimeSpan? cycleTime = null,
-            int bufferCapacity = 100)
+            int bufferCapacity = 100
+        )
         {
             _redis = redis ?? throw new ArgumentNullException(nameof(redis));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _requiredSensors = requiredSensors ?? throw new ArgumentNullException(nameof(requiredSensors));
-            _ruleCoordinator = ruleCoordinator ?? throw new ArgumentNullException(nameof(ruleCoordinator));
+            _requiredSensors =
+                requiredSensors ?? throw new ArgumentNullException(nameof(requiredSensors));
+            _ruleCoordinator =
+                ruleCoordinator ?? throw new ArgumentNullException(nameof(ruleCoordinator));
 
             _cycleTime = cycleTime ?? TimeSpan.FromMilliseconds(100);
             _timer = new PeriodicTimer(_cycleTime);
@@ -51,7 +58,8 @@ namespace Pulsar.Runtime
                 "Runtime orchestrator initialized with {SensorCount} sensors, {CycleTime}ms cycle time, and {BufferCapacity} buffer capacity",
                 requiredSensors.Length,
                 _cycleTime.TotalMilliseconds,
-                bufferCapacity);
+                bufferCapacity
+            );
         }
 
         public async Task StartAsync()
@@ -83,7 +91,10 @@ namespace Pulsar.Runtime
                     }
                     catch (TimeoutException ex)
                     {
-                        _logger.Warning(ex, "Redis timeout during execution cycle. Skipping this cycle.");
+                        _logger.Warning(
+                            ex,
+                            "Redis timeout during execution cycle. Skipping this cycle."
+                        );
                     }
                     catch (Exception ex)
                     {
@@ -117,10 +128,7 @@ namespace Pulsar.Runtime
                 var sensorData = await _redis.GetSensorValuesAsync(_requiredSensors);
 
                 // Convert to format needed for rules evaluation while preserving timestamps
-                var inputs = sensorData.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => kvp.Value.Value
-                );
+                var inputs = sensorData.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Value);
 
                 // Update ring buffers with timestamps from Redis
                 _bufferManager.UpdateBuffers(inputs);
@@ -139,12 +147,16 @@ namespace Pulsar.Runtime
 
                 // Check cycle time
                 var cycleTime = DateTime.UtcNow - cycleStart;
-                if (cycleTime > _cycleTime && DateTime.UtcNow - _lastWarningTime > TimeSpan.FromMinutes(1))
+                if (
+                    cycleTime > _cycleTime
+                    && DateTime.UtcNow - _lastWarningTime > TimeSpan.FromMinutes(1)
+                )
                 {
                     _logger.Warning(
                         "Cycle time ({ActualMs}ms) exceeded target ({TargetMs}ms)",
                         cycleTime.TotalMilliseconds,
-                        _cycleTime.TotalMilliseconds);
+                        _cycleTime.TotalMilliseconds
+                    );
                     _lastWarningTime = DateTime.UtcNow;
                 }
             }
@@ -157,7 +169,8 @@ namespace Pulsar.Runtime
 
         public void Dispose()
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
 
             _timer.Dispose();
             _cts.Dispose();

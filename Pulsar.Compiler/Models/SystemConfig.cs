@@ -13,7 +13,7 @@ namespace Pulsar.Compiler.Models
         public List<string> ValidSensors { get; set; } = new();
 
         [YamlMember(Alias = "cycleTime")]
-        public int CycleTime { get; set; } = 100;  // Default 100ms
+        public int CycleTime { get; set; } = 100; // Default 100ms
 
         [YamlMember(Alias = "redisConnection")]
         public string RedisConnection { get; set; } = "localhost:6379";

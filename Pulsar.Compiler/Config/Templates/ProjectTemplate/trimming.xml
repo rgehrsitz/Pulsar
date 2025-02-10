@@ -1,4 +1,4 @@
-<!-- File: Pulsar.Runtime/Build/Templates/ProjectTemplates/trimming.xml -->
+<!-- File: Pulsar.Runtime/Config/Templates/ProjectTemplates/trimming.xml -->
 <linker>
   <assembly fullname="GeneratedRuntime">
     <!-- Preserve all rule types -->

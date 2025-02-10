@@ -1,6 +1,5 @@
 // File: Pulsar.Compiler/Program.cs
 
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -11,7 +10,7 @@ using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
-
+using Serilog;
 
 namespace Pulsar.Compiler;
 
@@ -109,7 +108,10 @@ public class Program
             var systemConfig = await LoadSystemConfig(
                 options.GetValueOrDefault("config", "system_config.yaml")
             );
-            logger.Information("System configuration loaded. Valid sensors: {ValidSensors}", string.Join(", ", systemConfig.ValidSensors));
+            logger.Information(
+                "System configuration loaded. Valid sensors: {ValidSensors}",
+                string.Join(", ", systemConfig.ValidSensors)
+            );
 
             // Use the new CompilationPipeline instead of BuildTimeOrchestrator.
             var compilerOptions = new Models.CompilerOptions
@@ -321,7 +323,9 @@ public class Program
             Namespace = "Pulsar.Runtime.Rules",
             GroupParallelRules = options.GetValueOrDefault("parallel") == "true",
             OptimizeOutput = options.GetValueOrDefault("aot") == "true",
-            ComplexityThreshold = int.Parse(options.GetValueOrDefault("complexity-threshold", "100"))
+            ComplexityThreshold = int.Parse(
+                options.GetValueOrDefault("complexity-threshold", "100")
+            ),
         };
     }
 
@@ -331,7 +335,8 @@ public class Program
         {
             // Try looking in the parent directory
             string parentPath = Path.Combine(
-                Directory.GetParent(Directory.GetCurrentDirectory()).FullName,
+                Directory.GetParent(Directory.GetCurrentDirectory())?.FullName
+                    ?? throw new InvalidOperationException("Parent directory not found"),
                 configPath
             );
             if (File.Exists(parentPath))

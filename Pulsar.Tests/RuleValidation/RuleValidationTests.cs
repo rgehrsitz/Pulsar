@@ -1,3 +1,5 @@
+// File: Pulsar.Tests/RuleValidation/RuleValidationTests.cs
+
 using System;
 using System.Collections.Generic;
 using Xunit;
@@ -17,8 +19,13 @@ namespace Pulsar.Tests.RuleValidation
 
             // Assert: Expect validation to fail with detailed errors
             Assert.False(result.IsValid, "Validation should fail for incomplete rules.");
+            Assert.NotNull(result.Errors);
             Assert.NotEmpty(result.Errors);
-            Assert.Contains("missing mandatory", result.Errors[0], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(
+                "missing mandatory",
+                result.Errors[0],
+                StringComparison.OrdinalIgnoreCase
+            );
         }
 
         [Fact]
@@ -35,7 +42,7 @@ namespace Pulsar.Tests.RuleValidation
             Assert.False(string.IsNullOrEmpty(result.Metadata));
         }
     }
-    
+
     // Stub implementation for rule validation for testing purposes
     public static class RuleValidator
     {
@@ -48,14 +55,14 @@ namespace Pulsar.Tests.RuleValidation
                 {
                     IsValid = false,
                     Errors = new List<string> { "Error: missing mandatory fields." },
-                    Metadata = ""
+                    Metadata = "",
                 };
             }
             return new ValidationResult
             {
                 IsValid = true,
                 Errors = new List<string>(),
-                Metadata = "extracted metadata"
+                Metadata = "extracted metadata",
             };
         }
     }
@@ -63,7 +70,7 @@ namespace Pulsar.Tests.RuleValidation
     public class ValidationResult
     {
         public bool IsValid { get; set; }
-        public List<string> Errors { get; set; }
-        public string Metadata { get; set; }
+        public List<string>? Errors { get; set; }
+        public string? Metadata { get; set; }
     }
 }

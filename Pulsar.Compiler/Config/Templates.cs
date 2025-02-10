@@ -1,4 +1,4 @@
-// File: Pulsar.Compiler/Build/Templates.cs
+// File: Pulsar.Compiler/Config/Templates.cs
 
 using System.Reflection;
 using System.Text;
@@ -15,7 +15,9 @@ internal static class Templates
         using var stream = assembly.GetManifestResourceStream(resourceName);
         if (stream == null)
         {
-            throw new InvalidOperationException($"Template '{templateName}' not found in assembly {assembly.FullName}. Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}");
+            throw new InvalidOperationException(
+                $"Template '{templateName}' not found in assembly {assembly.FullName}. Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}"
+            );
         }
 
         using var reader = new StreamReader(stream, Encoding.UTF8);
