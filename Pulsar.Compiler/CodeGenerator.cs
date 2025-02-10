@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
+using Pulsar.Compiler.Config;
 using Serilog; // Added missing using directive for ILogger
 
 namespace Pulsar.Compiler.Generation
@@ -22,49 +23,44 @@ namespace Pulsar.Compiler.Generation
 
     public class CodeGenerator
     {
-        public static List<GeneratedFileInfo> GenerateCSharp(
-            List<RuleDefinition> rules,
-            RuleGroupingConfig? config = null)
+        public static List<GeneratedFileInfo> GenerateCSharp(List<RuleDefinition> rules, BuildConfig? config = null)
         {
-            // Use default configuration if not provided
-            config ??= new RuleGroupingConfig();
-
-            if (rules == null || !rules.Any())
+            // Supply defaults for required members if config is null
+            config ??= new BuildConfig
             {
-                return new List<GeneratedFileInfo>
-            {
-                GenerateEmptyCompiledRules()
+                OutputPath = "Generated",
+                Target = "win-x64",
+                ProjectName = "Pulsar.Compiler",
+                TargetFramework = "net9.0"
             };
-            }
 
+            var files = config.StandaloneExecutable
+                ? GenerateStandaloneProgram(rules, config)
+                : GenerateRuleFiles(rules, config);  // Use the existing method for non-standalone
+
+            files = ApplyPostGenerationFixups(files);
+
+            return files;
+        }
+
+        private static List<GeneratedFileInfo> GenerateStandaloneProgram(List<RuleDefinition> rules, BuildConfig config)
+        {
             var files = new List<GeneratedFileInfo>();
 
-            // Add interface file
-            files.Add(GenerateInterfaceFile());
+            // Generate standard rule code first
+            files.AddRange(GenerateRuleFiles(rules, config));
 
-            // Analyze dependencies and create layer mapping
-            var layerMap = AssignLayers(rules);
-            var rulesByLayer = GetRulesByLayer(rules, layerMap);
+            // Add the Program.cs with Main entry point
+            files.Add(GenerateProgramClass(config));
 
-            // Split rules into groups based on configuration
-            var groups = SplitRulesIntoGroups(rules, layerMap, config);
+            // Add embedded configuration
+            files.Add(GenerateEmbeddedConfig(config));
 
-            // Generate group implementation files
-            foreach (var (groupIndex, groupRules) in groups)
-            {
-                var groupFile = GenerateGroupImplementation(groupIndex, groupRules, layerMap);
+            // Add runtime configuration
+            files.Add(GenerateRuntimeConfig());
 
-                // Add source tracking comments for rules in this group
-                AddSourceTrackingComments(groupFile, groupRules);
-
-                files.Add(groupFile);
-            }
-
-            // Generate coordinator to manage groups
-            files.Add(GenerateRuleCoordinator(groups, layerMap));
-
-            // Generate metadata file with source tracking
-            files.Add(GenerateMetadataFile(rules, layerMap));
+            files.Add(GenerateConfigurationLoader());
+            files.Add(GenerateRuntimeProjectFile(config));
 
             return files;
         }
@@ -574,8 +570,13 @@ namespace Pulsar.Compiler.Generation
             };
         }
 
-        private static string GenerateCondition(ConditionGroup conditions, bool isPartOfOr = false)
+        private static string GenerateCondition(ConditionGroup? conditions, bool isPartOfOr = false)
         {
+            if (conditions == null || (!conditions.All?.Any() ?? true) && (!conditions.Any?.Any() ?? true))
+            {
+                return string.Empty;
+            }
+
             var parts = new List<string>();
 
             if (conditions.All?.Any() == true)
@@ -716,6 +717,13 @@ namespace Pulsar.Compiler.Generation
                 }
             }
 
+            Log.Information("[CodeGenerator] RuleGroupingConfig: MaxRulesPerFile = {MaxRulesPerFile}, GroupParallelRules = {GroupParallelRules}", config.MaxRulesPerFile, config.GroupParallelRules);
+            Log.Information("[CodeGenerator] Total rule groups generated: {GroupCount}", groups.Count);
+            foreach (var kvp in groups)
+            {
+                Log.Information("[CodeGenerator] Group {GroupIndex} has {RuleCount} rules.", kvp.Key, kvp.Value.Count);
+            }
+
             return groups;
         }
 
@@ -807,27 +815,48 @@ namespace Pulsar.Compiler.Generation
         }
 
         private static GeneratedFileInfo GenerateRuleCoordinator(
-            Dictionary<int, List<RuleDefinition>> groups,
-            Dictionary<string, int> layerMap)
+                    Dictionary<int, List<RuleDefinition>> groups,
+                    Dictionary<string, int> layerMap)
         {
             var builder = new StringBuilder();
             builder.AppendLine(GenerateFileHeader());
             builder.AppendLine(GenerateCommonUsings());
+            builder.AppendLine();
+            builder.AppendLine("using System.Diagnostics.CodeAnalysis;");
+            builder.AppendLine("using System.Diagnostics.Metrics;");
+            builder.AppendLine();
             builder.AppendLine("namespace Pulsar.Runtime.Rules");
             builder.AppendLine("{");
 
-            // Generate concrete coordinator class instead of partial
+            // Generate concrete coordinator class with AOT compatibility
+            builder.AppendLine("    [UnconditionalSuppressMessage(\"Trimming\", \"IL2026\", Justification = \"Types preserved in trimming.xml\")]");
+            builder.AppendLine("    [UnconditionalSuppressMessage(\"Trimming\", \"IL2074\", Justification = \"Required interfaces preserved\")]");
             builder.AppendLine("    public class RuleCoordinator : IRuleCoordinator");
             builder.AppendLine("    {");
+
+            // Add performance metrics
+            builder.AppendLine("        private static readonly Meter s_meter = new(\"Pulsar.Runtime\");");
+            builder.AppendLine("        private static readonly Counter<int> s_evaluationCount = s_meter.CreateCounter<int>(\"rule_evaluations_total\");");
+            builder.AppendLine("        private static readonly Histogram<double> s_evaluationDuration = s_meter.CreateHistogram<double>(\"rule_evaluation_duration_seconds\");");
+            builder.AppendLine();
 
             // Fields for logger and each rule group
             builder.AppendLine("        private readonly ILogger _logger;");
             builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
 
-            // Add fields for each group
-            foreach (var groupIndex in groups.Keys)
+            // Add fields for each group with source tracking comments
+            foreach (var group in groups.OrderBy(g => g.Key))
             {
-                builder.AppendLine($"        private readonly RuleGroup{groupIndex} _group{groupIndex};");
+                builder.AppendLine();
+                builder.AppendLine($"        // Rules for Group {group.Key}:");
+                foreach (var rule in group.Value)
+                {
+                    if (rule.SourceInfo != null)
+                    {
+                        builder.AppendLine($"        // - {rule.Name} from {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}");
+                    }
+                }
+                builder.AppendLine($"        private readonly RuleGroup{group.Key} _group{group.Key};");
             }
 
             builder.AppendLine();
@@ -837,33 +866,68 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("        {");
             builder.AppendLine("            _logger = logger ?? throw new ArgumentNullException(nameof(logger));");
             builder.AppendLine("            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));");
+            builder.AppendLine();
 
-            // Initialize each group
-            foreach (var groupIndex in groups.Keys)
+            // Initialize each group with proper error handling
+            foreach (var groupIndex in groups.Keys.OrderBy(k => k))
             {
-                builder.AppendLine($"            _group{groupIndex} = new RuleGroup{groupIndex}(logger, bufferManager);");
+                builder.AppendLine($"            try");
+                builder.AppendLine("            {");
+                builder.AppendLine($"                _group{groupIndex} = new RuleGroup{groupIndex}(logger, bufferManager);");
+                builder.AppendLine("            }");
+                builder.AppendLine("            catch (Exception ex)");
+                builder.AppendLine("            {");
+                builder.AppendLine($"                _logger.Error(ex, \"Failed to initialize rule group {groupIndex}\");");
+                builder.AppendLine("                throw;");
+                builder.AppendLine("            }");
             }
             builder.AppendLine("        }");
             builder.AppendLine();
 
-            // Evaluate method
-            builder.AppendLine("        public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)");
+            // EvaluateRules implementation from IRuleCoordinator
+            builder.AppendLine("        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)");
             builder.AppendLine("        {");
             builder.AppendLine("            try");
             builder.AppendLine("            {");
+            builder.AppendLine("                var startTime = DateTime.UtcNow;");
             builder.AppendLine("                _logger.Debug(\"Starting rule evaluation\");");
+            builder.AppendLine();
+            builder.AppendLine("                s_evaluationCount.Add(1);");
+            builder.AppendLine();
 
-            // Call groups in order based on their layer ranges
+            // Call groups in dependency order with error handling
             var orderedGroups = groups
                 .OrderBy(g => g.Value.Min(r => layerMap[r.Name]))
-                .Select(g => g.Key);
+                .Select(g => g.Key)
+                .ToList();
 
             foreach (var groupIndex in orderedGroups)
             {
-                builder.AppendLine($"                _group{groupIndex}.EvaluateGroup(inputs, outputs, bufferManager);");
+                var groupRules = groups[groupIndex];
+                builder.AppendLine($"                // Layer {layerMap[groupRules[0].Name]} rules:");
+                foreach (var rule in groupRules)
+                {
+                    builder.AppendLine($"                // - {rule.Name}");
+                }
+                builder.AppendLine();
+
+                builder.AppendLine($"                try");
+                builder.AppendLine("                {");
+                builder.AppendLine($"                    _group{groupIndex}.EvaluateGroup(inputs, outputs, _bufferManager);");
+                builder.AppendLine("                }");
+                builder.AppendLine("                catch (Exception ex)");
+                builder.AppendLine("                {");
+                builder.AppendLine($"                    _logger.Error(ex, \"Error evaluating rule group {groupIndex}\");");
+                builder.AppendLine("                    throw;");
+                builder.AppendLine("                }");
+                builder.AppendLine();
             }
 
-            builder.AppendLine("                _logger.Debug(\"Completed rule evaluation\");");
+            // Record performance metrics
+            builder.AppendLine("                var duration = DateTime.UtcNow - startTime;");
+            builder.AppendLine("                s_evaluationDuration.Record(duration.TotalSeconds);");
+            builder.AppendLine();
+            builder.AppendLine("                _logger.Debug(\"Completed rule evaluation in {Duration}ms\", duration.TotalMilliseconds);");
             builder.AppendLine("            }");
             builder.AppendLine("            catch (Exception ex)");
             builder.AppendLine("            {");
@@ -871,12 +935,516 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("                throw;");
             builder.AppendLine("            }");
             builder.AppendLine("        }");
+
+            // Optional: Add debugging helper methods
+            builder.AppendLine();
+            builder.AppendLine("#if DEBUG");
+            builder.AppendLine("        public IEnumerable<string> GetRuleNames()");
+            builder.AppendLine("        {");
+            builder.AppendLine("            return new[]");
+            builder.AppendLine("            {");
+            foreach (var group in groups)
+            {
+                foreach (var rule in group.Value)
+                {
+                    builder.AppendLine($"                \"{rule.Name}\",");
+                }
+            }
+            builder.AppendLine("            };");
+            builder.AppendLine("        }");
+            builder.AppendLine("#endif");
+
             builder.AppendLine("    }");
             builder.AppendLine("}");
 
             return new GeneratedFileInfo
             {
                 FileName = "RuleCoordinator.cs",
+                Content = builder.ToString(),
+                Namespace = "Pulsar.Runtime.Rules",
+                LayerRange = new RuleLayerRange
+                {
+                    Start = orderedGroups.First(),
+                    End = orderedGroups.Last()
+                }
+            };
+
+        }
+
+        private static GeneratedFileInfo GenerateProgramClass(BuildConfig config)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine(GenerateFileHeader());
+            builder.AppendLine(GenerateCommonUsings());
+            builder.AppendLine(@"
+using System.Threading;
+using StackExchange.Redis;
+using Pulsar.Runtime;
+using Pulsar.Runtime.Services;
+
+namespace Pulsar.Runtime.Rules
+{
+    public class Program
+    {
+        public static async Task<int> Main(string[] args)
+        {
+            var config = ConfigurationLoader.LoadConfiguration(args);
+            var logger = CreateLogger(config);
+
+            try
+            {
+                logger.Information(""Starting Pulsar Runtime v{Version}"",
+                    typeof(Program).Assembly.GetName().Version);
+
+                using var redis = new RedisService(config.RedisConnectionString, logger);
+                using var bufferManager = new RingBufferManager(config.BufferCapacity);
+
+                using var orchestrator = new RuntimeOrchestrator(
+                    redis,
+                    logger,
+                    EmbeddedConfig.ValidSensors.ToArray(),
+                    LoadRuleCoordinator(config, logger, bufferManager),
+                    null);
+
+                // Setup graceful shutdown
+                var cts = new CancellationTokenSource();
+                Console.CancelKeyPress += (s, e) =>
+                {
+                    logger.Information(""Shutdown requested, stopping gracefully..."");
+                    e.Cancel = true;
+                    cts.Cancel();
+                };
+
+                logger.Information(""Starting orchestrator with {SensorCount} sensors, {CycleTime}ms cycle time"",
+                    EmbeddedConfig.ValidSensors.Length,
+                    EmbeddedConfig.CycleTime);
+
+                await orchestrator.StartAsync();
+
+                // Wait for cancellation
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Normal shutdown
+                }
+
+                logger.Information(""Shutting down..."");
+                await orchestrator.StopAsync();
+
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                logger.Fatal(ex, ""Fatal error during runtime execution"");
+                return 1;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
+        }
+
+        private static ILogger CreateLogger(RuntimeConfig config)
+        {
+            var loggerConfig = new LoggerConfiguration()
+                .MinimumLevel.Is(config.LogLevel)
+                .WriteTo.Console();
+
+            if (!string.IsNullOrEmpty(config.LogFile))
+            {
+                loggerConfig.WriteTo.File(config.LogFile);
+            }
+
+            return loggerConfig.CreateLogger();
+        }
+
+        private static IRuleCoordinator LoadRuleCoordinator(RuntimeConfig config, ILogger logger, RingBufferManager bufferManager)
+        {
+            return new RuleCoordinator(logger, bufferManager);
+        }
+    }
+}");
+
+            return new GeneratedFileInfo
+            {
+                FileName = "Program.cs",
+                FilePath = Path.Combine("Generated", "Program.cs"),
+                Content = builder.ToString(),
+                Namespace = "Pulsar.Runtime.Rules"
+            };
+        }
+
+        private static GeneratedFileInfo GenerateEmbeddedConfig(BuildConfig config)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine(GenerateFileHeader());
+            builder.AppendLine(@"
+namespace Pulsar.Runtime.Rules
+{
+    internal static class EmbeddedConfig
+    {");
+
+            builder.AppendLine($"        public static readonly string RedisConnectionString = \"{config.RedisConnection}\";");
+            builder.AppendLine($"        public static readonly int CycleTime = {config.CycleTime};");
+            builder.AppendLine($"        public static readonly int BufferCapacity = {config.BufferCapacity};");
+            builder.AppendLine($"        public static readonly string[] ValidSensors = new string[] {{");
+            foreach (var sensor in config.AdditionalUsings)
+            {
+                builder.AppendLine($"            \"{sensor}\",");
+            }
+            builder.AppendLine("        };");
+            builder.AppendLine(@"    }
+}");
+
+            return new GeneratedFileInfo
+            {
+                FileName = "EmbeddedConfig.cs",
+                FilePath = Path.Combine("Generated", "EmbeddedConfig.cs"),
+                Content = builder.ToString(),
+                Namespace = "Pulsar.Runtime.Rules"
+            };
+        }
+
+        private static GeneratedFileInfo GenerateRuntimeConfig()
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine(GenerateFileHeader());
+            builder.AppendLine(@"
+using Serilog.Events;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Pulsar.Runtime.Rules
+{
+    public class RuntimeConfig
+    {
+        private string _redisConnectionString = ""localhost:6379"";
+
+        [JsonPropertyName(""RedisConnectionString"")]
+        public string RedisConnectionString
+        {
+            get => _redisConnectionString;
+            set => _redisConnectionString = string.IsNullOrEmpty(value) ? ""localhost:6379"" : value;
+        }
+
+        [JsonPropertyName(""CycleTime"")]
+        [JsonConverter(typeof(TimeSpanConverter))]
+        public TimeSpan? CycleTime { get; set; }
+
+        [JsonPropertyName(""LogLevel"")]
+        public LogEventLevel LogLevel { get; set; } = LogEventLevel.Information;
+
+        [JsonPropertyName(""BufferCapacity"")]
+        public int BufferCapacity { get; set; } = 100;
+
+        [JsonPropertyName(""LogFile"")]
+        public string? LogFile { get; set; }
+
+        [JsonPropertyName(""RequiredSensors"")]
+        public string[] RequiredSensors { get; set; } = Array.Empty<string>();
+    }
+}");
+
+            return new GeneratedFileInfo
+            {
+                FileName = "RuntimeConfig.cs",
+                FilePath = Path.Combine("Generated", "RuntimeConfig.cs"),
+                Content = builder.ToString(),
+                Namespace = "Pulsar.Runtime.Rules"
+            };
+        }
+
+        private static List<GeneratedFileInfo> GenerateRuleFiles(List<RuleDefinition> rules, BuildConfig config)
+        {
+            var files = new List<GeneratedFileInfo>();
+
+            // Get layer assignments for rules
+            var layerMap = AssignLayers(rules);
+            var rulesByLayer = GetRulesByLayer(rules, layerMap);
+
+            // Generate interface file
+            files.Add(GenerateInterfaceFile());
+
+            // Generate rule group implementations
+            var groups = SplitRulesIntoGroups(rules, layerMap, new RuleGroupingConfig
+            {
+                MaxRulesPerFile = config.MaxRulesPerFile,
+                MaxLinesPerFile = config.MaxLinesPerFile,
+                GroupParallelRules = config.GroupParallelRules
+            });
+
+            foreach (var group in groups)
+            {
+                files.Add(GenerateGroupImplementation(group.Key, group.Value, layerMap));
+            }
+
+            // Generate coordinator
+            files.Add(GenerateRuleCoordinator(groups, layerMap));
+
+            // Generate metadata
+            files.Add(GenerateMetadataFile(rules, layerMap));
+
+            files.Add(GenerateRuntimeProjectFile(config));
+
+            files = ApplyPostGenerationFixups(files);
+
+            return files;
+        }
+
+        private static GeneratedFileInfo GenerateRuntimeProjectFile(BuildConfig config)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
+            builder.AppendLine("  <PropertyGroup>");
+            builder.AppendLine("    <OutputType>Exe</OutputType>");
+            builder.AppendLine("    <TargetFramework>net9.0</TargetFramework>");
+            builder.AppendLine("    <Nullable>enable</Nullable>");
+            builder.AppendLine("  </PropertyGroup>");
+            builder.AppendLine("  <ItemGroup>");
+            builder.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"4.0.0\" />");
+            builder.AppendLine("    <PackageReference Include=\"Prometheus.Client\" Version=\"4.1.0\" />");
+            builder.AppendLine("    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.8.16\" />");
+            builder.AppendLine("  </ItemGroup>");
+            builder.AppendLine("  <ItemGroup>");
+            builder.AppendLine("    <ProjectReference Include=\"../../Pulsar.Runtime/Pulsar.Runtime.csproj\" />");
+            builder.AppendLine("  </ItemGroup>");
+            builder.AppendLine("</Project>");
+
+            return new GeneratedFileInfo
+            {
+                FileName = "Runtime.csproj",
+                FilePath = "Runtime.csproj",
+                Content = builder.ToString(),
+                Namespace = ""
+            };
+        }
+
+        private static List<GeneratedFileInfo> ApplyPostGenerationFixups(List<GeneratedFileInfo> files)
+        {
+            foreach (var file in files)
+            {
+                // Replace 'using Pulsar.Runtime.Common;' with 'using Pulsar.Runtime;'
+                file.Content = file.Content.Replace("using Pulsar.Runtime.Common;", "using Pulsar.Runtime;");
+
+                // For RuntimeConfig.cs, ensure it has 'using System;' at the top
+                if (file.FileName.Equals("RuntimeConfig.cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!file.Content.Contains("using System;"))
+                    {
+                        file.Content = "using System;" + Environment.NewLine + file.Content;
+                    }
+                }
+            }
+            return files;
+        }
+
+        private static GeneratedFileInfo GenerateConfigurationLoader()
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine(GenerateFileHeader());
+            builder.AppendLine(@"
+using System;
+using System.Text.Json;
+using System.IO;
+using Serilog;
+
+namespace Pulsar.Runtime.Rules
+{
+    internal static class ConfigurationLoader
+    {
+        internal static RuntimeConfig LoadConfiguration(string[] args, bool requireSensors = true, string? configPath = null)
+        {
+            var config = new RuntimeConfig();
+
+            if (configPath != null && File.Exists(configPath))
+            {
+                var jsonContent = File.ReadAllText(configPath);
+                config = JsonSerializer.Deserialize<RuntimeConfig>(jsonContent) ?? new RuntimeConfig();
+            }
+
+            return config;
+        }
+    }
+}");
+
+            return new GeneratedFileInfo
+            {
+                FileName = "ConfigurationLoader.cs",
+                FilePath = Path.Combine("Generated", "ConfigurationLoader.cs"),
+                Content = builder.ToString(),
+                Namespace = "Pulsar.Runtime.Rules"
+            };
+        }
+
+        private static GeneratedFileInfo GenerateRedisService()
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine(GenerateFileHeader());
+            builder.AppendLine(@"
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Serilog;
+using StackExchange.Redis;
+using Pulsar.Runtime.Rules;
+
+namespace Pulsar.Runtime.Rules
+{
+    public class RedisService : IRedisService, IDisposable
+    {
+        private readonly ConnectionMultiplexer _redis;
+        private readonly IDatabase _db;
+        private readonly ILogger _logger;
+        private readonly SemaphoreSlim _connectionLock = new(1, 1);
+        private readonly ConcurrentDictionary<string, DateTime> _lastErrorTime = new();
+        private readonly TimeSpan _errorThrottleWindow = TimeSpan.FromSeconds(60);
+
+        public RedisService(string connectionString, ILogger logger)
+        {
+            _logger = logger;
+
+            try
+            {
+                var options = ConfigurationOptions.Parse(connectionString);
+                options.AbortOnConnectFail = false;
+                _redis = ConnectionMultiplexer.Connect(options);
+                _db = _redis.GetDatabase();
+
+                _redis.ConnectionFailed += (sender, e) =>
+                    _logger.Error(""Redis connection failed: {@Error}"", e.Exception);
+                _redis.ConnectionRestored += (sender, e) =>
+                    _logger.Information(""Redis connection restored"");
+
+                _logger.Information(""Redis connection initialized"");
+            }
+            catch (Exception ex)
+            {
+                _logger.Fatal(ex, ""Failed to initialize Redis connection"");
+                throw;
+            }
+        }
+
+        public async Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(IEnumerable<string> sensorKeys)
+        {
+            var result = new Dictionary<string, (double Value, DateTime Timestamp)>();
+            var keyArray = sensorKeys.ToArray();
+
+            try
+            {
+                await _connectionLock.WaitAsync();
+
+                var batch = _db.CreateBatch();
+                var tasks = new List<Task<HashEntry[]>>();
+
+                foreach (var key in keyArray)
+                {
+                    tasks.Add(batch.HashGetAllAsync(key));
+                }
+
+                batch.Execute();
+                await Task.WhenAll(tasks);
+
+                for (int i = 0; i < keyArray.Length; i++)
+                {
+                    var hashValues = tasks[i].Result;
+
+                    var valueEntry = hashValues.FirstOrDefault(he => he.Name == ""value"");
+                    var timestampEntry = hashValues.FirstOrDefault(he => he.Name == ""timestamp"");
+
+                    if (valueEntry.Value.HasValue && timestampEntry.Value.HasValue)
+                    {
+                        if (double.TryParse(valueEntry.Value.ToString(), out double value) &&
+                            long.TryParse(timestampEntry.Value.ToString(), out long ticksValue))
+                        {
+                            DateTime timestamp = new DateTime(ticksValue, DateTimeKind.Utc);
+                            result[keyArray[i]] = (value, timestamp);
+                        }
+                        else
+                        {
+                            LogThrottledWarning($""Invalid value or timestamp format for sensor {keyArray[i]}"");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, ""Error fetching sensor values from Redis"");
+                throw;
+            }
+            finally
+            {
+                _connectionLock.Release();
+            }
+
+            return result;
+        }
+
+        public async Task SetOutputValuesAsync(Dictionary<string, double> outputs)
+        {
+            if (!outputs.Any()) return;
+
+            try
+            {
+                await _connectionLock.WaitAsync();
+
+                var batch = _db.CreateBatch();
+                var tasks = new List<Task>();
+                var timestamp = DateTime.UtcNow.Ticks;
+
+                foreach (var kvp in outputs)
+                {
+                    tasks.Add(batch.HashSetAsync(kvp.Key, new HashEntry[] {
+                        new HashEntry(""value"", kvp.Value.ToString(""G17"")),
+                        new HashEntry(""timestamp"", timestamp)
+                    }));
+                }
+
+                batch.Execute();
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, ""Error writing output values to Redis"");
+                throw;
+            }
+            finally
+            {
+                _connectionLock.Release();
+            }
+        }
+
+        private void LogThrottledWarning(string message)
+        {
+            if (_lastErrorTime.TryGetValue(message, out var lastTime))
+            {
+                if (DateTime.UtcNow - lastTime < _errorThrottleWindow)
+                {
+                    return;
+                }
+            }
+
+            _lastErrorTime.AddOrUpdate(message, DateTime.UtcNow, (_, _) => DateTime.UtcNow);
+            _logger.Warning(message);
+        }
+
+        public void Dispose()
+        {
+            _connectionLock.Dispose();
+            _redis?.Dispose();
+        }
+    }
+}");
+
+            return new GeneratedFileInfo
+            {
+                FileName = "RedisService.cs",
+                FilePath = Path.Combine("Generated", "RedisService.cs"),
                 Content = builder.ToString(),
                 Namespace = "Pulsar.Runtime.Rules"
             };

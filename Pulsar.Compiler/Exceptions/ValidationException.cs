@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/Exceptions/ValidationException.cs
+
 using System;
 
 namespace Pulsar.Compiler.Exceptions

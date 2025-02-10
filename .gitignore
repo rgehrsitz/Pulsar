@@ -73,3 +73,8 @@ Pulsar.Compiler/obj/project.assets.json
 Pulsar.Compiler/obj/project.assets.json
 log.*
 *.trx
+
+# Log files
+log*.txt
+
+# Auto generated files from Pulsar.Compiler

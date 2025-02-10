@@ -1,11 +1,25 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<?xml version="1.0" encoding="utf-8" ?>
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
+    <PublishAot>true</PublishAot>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <TrimMode>full</TrimMode>
   </PropertyGroup>
+
+  <!-- Add trimming roots to preserve required types -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Pulsar.Runtime" />
+    <TrimmerRootAssembly Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <!-- Configure trimming -->
+  <ItemGroup>
+    <TrimmerRootDescriptor Include="trimming.xml" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -13,5 +27,22 @@
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
   </ItemGroup>
+
+  <!-- Include generated source files -->
+  <ItemGroup>
+    <Compile Include="Generated/**/*.cs">
+      <Link>Generated/%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Compile>
+  </ItemGroup>
+
+    <!-- Include template files as embedded resources -->
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\**\*" />
+  </ItemGroup>
+
+  <!-- Ensure Generated directory exists -->
+  <Target Name="EnsureGeneratedDirectoryExists" BeforeTargets="CoreCompile">
+    <MakeDir Directories="Generated" />
+  </Target>
 
 </Project>

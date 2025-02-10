@@ -1,4 +1,5 @@
 // File: Pulsar.Runtime/Services/RedisService.cs
+
 using NRedisStack;
 using NRedisStack.RedisStackCommands;
 using StackExchange.Redis;

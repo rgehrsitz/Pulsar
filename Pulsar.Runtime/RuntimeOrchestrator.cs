@@ -4,13 +4,15 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 using Serilog;
 using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Buffers;
-using Pulsar.Runtime.Rules;  // Ensure this namespace is correct
+using Pulsar.Runtime.Rules;
 
 namespace Pulsar.Runtime
 {
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Types preserved in trimming.xml")]
     public class RuntimeOrchestrator : IDisposable
     {
         private readonly IRedisService _redis;
@@ -21,9 +23,8 @@ namespace Pulsar.Runtime
         private readonly PeriodicTimer _timer;
         private readonly TimeSpan _cycleTime;
         private readonly RingBufferManager _bufferManager;
+        private readonly IRuleCoordinator _ruleCoordinator;
 
-        // Make nullable to resolve initialization warning
-        private IRuleCoordinator? _ruleCoordinator;
         private bool _disposed;
         private DateTime _lastWarningTime = DateTime.MinValue;
         private Task? _executionTask;
@@ -32,13 +33,14 @@ namespace Pulsar.Runtime
             IRedisService redis,
             ILogger logger,
             string[] requiredSensors,
+            IRuleCoordinator ruleCoordinator,
             TimeSpan? cycleTime = null,
             int bufferCapacity = 100)
         {
-            // Existing constructor logic
             _redis = redis ?? throw new ArgumentNullException(nameof(redis));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _requiredSensors = requiredSensors ?? throw new ArgumentNullException(nameof(requiredSensors));
+            _ruleCoordinator = ruleCoordinator ?? throw new ArgumentNullException(nameof(ruleCoordinator));
 
             _cycleTime = cycleTime ?? TimeSpan.FromMilliseconds(100);
             _timer = new PeriodicTimer(_cycleTime);
@@ -52,26 +54,8 @@ namespace Pulsar.Runtime
                 bufferCapacity);
         }
 
-        public void LoadRules(IRuleCoordinator ruleCoordinator)
-        {
-            if (ruleCoordinator == null)
-                throw new ArgumentNullException(nameof(ruleCoordinator));
-
-            lock (_rulesLock)
-            {
-                _ruleCoordinator = ruleCoordinator;
-            }
-
-            _logger.Information("Rules loaded successfully");
-        }
-
         public async Task StartAsync()
         {
-            if (_ruleCoordinator == null)
-            {
-                throw new InvalidOperationException("Rules must be loaded before starting");
-            }
-
             _executionTask = ExecutionLoop();
             _logger.Information("Runtime execution started");
             await Task.CompletedTask;
@@ -144,8 +128,7 @@ namespace Pulsar.Runtime
                 // Execute rules with access to both current values and buffer manager
                 lock (_rulesLock)
                 {
-                    // Change from Evaluate to EvaluateRules to match IRuleCoordinator
-                    _ruleCoordinator?.EvaluateRules(inputs, outputs);
+                    _ruleCoordinator.EvaluateRules(inputs, outputs);
                 }
 
                 // Write outputs with current timestamp
@@ -167,9 +150,8 @@ namespace Pulsar.Runtime
             }
             catch (Exception ex)
             {
-                // Ensure we're logging the error with the specific message expected by the test
                 _logger.Error(ex, "Error during execution cycle");
-                throw; // Re-throw to maintain original behavior
+                throw;
             }
         }
 
@@ -185,7 +167,7 @@ namespace Pulsar.Runtime
                 disposableRedis.Dispose();
             }
 
-            _bufferManager.Clear();  // Clear all ring buffers
+            _bufferManager.Clear();
             _disposed = true;
         }
     }

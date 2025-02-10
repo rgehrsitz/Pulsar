@@ -8,8 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Generated\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Pulsar.Runtime\Pulsar.Runtime.csproj" />
-</ItemGroup>
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.12.6" />
@@ -20,6 +24,11 @@
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <PackageReference Include="Microsoft.Build" Version="17.12.6" />
+  </ItemGroup>
+
+    <!-- Include template files as embedded resources -->
+  <ItemGroup>
+    <EmbeddedResource Include="Build\Templates\**\*" />
   </ItemGroup>
 
 </Project>

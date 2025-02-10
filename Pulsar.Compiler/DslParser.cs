@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using Pulsar.Compiler.Exceptions;
 using Pulsar.Compiler.Models;
+using Serilog;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -25,12 +26,13 @@ namespace Pulsar.Compiler.Parsers
                 .WithNamingConvention(UnderscoredNamingConvention.Instance)
                 .WithNodeDeserializer(new YamlNodeDeserializer())
                 .IgnoreUnmatchedProperties()
+                .WithDuplicateKeyChecking()  // Add this to catch duplicate keys
                 .Build();
         }
 
         private class YamlNodeDeserializer : INodeDeserializer
         {
-            private int _recursionDepth = 0;
+            private static int _recursionDepth = 0;
             private const int MaxRecursionDepth = 100;
 
             public bool Deserialize(
@@ -42,14 +44,8 @@ namespace Pulsar.Compiler.Parsers
             {
                 value = null;
 
-                // Prevent stack overflow with recursion depth check
-                if (_recursionDepth > MaxRecursionDepth)
-                {
-                    throw new InvalidOperationException($"Maximum recursion depth of {MaxRecursionDepth} exceeded during YAML deserialization");
-                }
-
-                // Use the default deserializer for most types
-                if (expectedType != typeof(Rule))
+                // Only handle the top-level Rule; for nested calls, defer to default deserialization.
+                if (expectedType != typeof(Rule) || _recursionDepth > 0)
                 {
                     return false;
                 }
@@ -57,27 +53,25 @@ namespace Pulsar.Compiler.Parsers
                 try
                 {
                     _recursionDepth++;
-                    // For Rule type, use the nested deserializer since we need parser context
+                    if (_recursionDepth > MaxRecursionDepth)
+                    {
+                        Debug.WriteLine($"Recursion depth exceeded at type: {expectedType.Name}");
+                        throw new InvalidOperationException($"YAML structure is too deeply nested (depth > {MaxRecursionDepth}). Check for circular references in your rules.");
+                    }
+
+                    // Deserialize the rule
                     value = nestedObjectDeserializer(parser, expectedType);
 
                     if (value is Rule rule)
                     {
-                        // Store start mark before moving parser
                         var start = parser.Current?.Start;
-
-                        // Mark is a struct, so we need to handle the nullable Mark? properly
                         if (start.HasValue)
                         {
-                            rule.LineNumber = (int)start.Value.Line;
-                            rule.OriginalText = start.Value.ToString();
+                            rule.LineNumber = (int)start.Value.Line;  // Cast long to int
+                            rule.OriginalText = parser.Current?.ToString();
                         }
                         return true;
                     }
-                }
-                catch (YamlException)
-                {
-                    // If we get a YAML exception, return false to let other deserializers try
-                    return false;
                 }
                 finally
                 {
@@ -90,71 +84,84 @@ namespace Pulsar.Compiler.Parsers
 
         public List<RuleDefinition> ParseRules(string yamlContent, List<string> validSensors, string fileName = "")
         {
-            _currentFile = fileName;
-            var root = _deserializer.Deserialize<RuleRoot>(yamlContent);
-            Debug.WriteLine($"\nParsed YAML root: Rules count = {root?.Rules?.Count ?? 0}");
-
-            // Validate that rules are not empty
-            if (root?.Rules == null || !root.Rules.Any())
+            try
             {
-                throw new InvalidOperationException("The YAML file is invalid: no rules found.");
-            }
+                _currentFile = fileName;
+                var root = _deserializer.Deserialize<RuleRoot>(yamlContent);
 
-            if (root?.Rules?.Any() == true)
-            {
-                var firstRule = root.Rules.First();
-                Debug.WriteLine(
-                    $"First rule: Name = {firstRule.Name}, Actions count = {firstRule.Actions?.Count ?? 0}"
-                );
-            }
-
-            var ruleDefinitions = new List<RuleDefinition>();
-
-            if (root?.Rules == null)
-            {
-                return ruleDefinitions;
-            }
-
-            foreach (var rule in root.Rules)
-            {
-                Debug.WriteLine($"\nProcessing rule: {rule.Name}");
-
-                // Validate sensors and keys
-                ValidateRule(rule, validSensors);
-
-                // Show actions debug info
-                if (rule.Actions != null)
+                if (root?.Rules == null || !root.Rules.Any())
                 {
-                    foreach (var action in rule.Actions)
-                    {
-                        if (action?.SetValue != null)
-                        {
-                            Debug.WriteLine(
-                                $"SetValue action found - Key: {action.SetValue.Key}, Value: {action.SetValue.Value}, Expression: {action.SetValue.ValueExpression}"
-                            );
-                        }
-                    }
+                    throw new InvalidOperationException($"No rules found in file: {fileName}");
                 }
 
-                // Convert to RuleDefinition
-                var ruleDefinition = new RuleDefinition
+                Debug.WriteLine($"\nParsed YAML root: Rules count = {root?.Rules?.Count ?? 0}");
+
+                // Validate that rules are not empty
+                if (root?.Rules == null || !root.Rules.Any())
                 {
-                    Name = rule.Name,
-                    Description = rule.Description,
-                    Conditions = ConvertConditions(rule.Conditions),
-                    Actions = ConvertActions(rule.Actions ?? new List<ActionListItem>()),
-                    SourceInfo = new SourceInfo
+                    throw new InvalidOperationException("The YAML file is invalid: no rules found.");
+                }
+
+                if (root?.Rules?.Any() == true)
+                {
+                    var firstRule = root.Rules.First();
+                    Debug.WriteLine(
+                        $"First rule: Name = {firstRule.Name}, Actions count = {firstRule.Actions?.Count ?? 0}"
+                    );
+                }
+
+                var ruleDefinitions = new List<RuleDefinition>();
+
+                if (root?.Rules == null)
+                {
+                    return ruleDefinitions;
+                }
+
+                foreach (var rule in root.Rules)
+                {
+                    Debug.WriteLine($"\nProcessing rule: {rule.Name}");
+
+                    // Validate sensors and keys
+                    ValidateRule(rule, validSensors);
+
+                    // Show actions debug info
+                    if (rule.Actions != null)
                     {
-                        FileName = _currentFile,
-                        LineNumber = rule.LineNumber,
-                        OriginalText = rule.OriginalText ?? string.Empty
+                        foreach (var action in rule.Actions)
+                        {
+                            if (action?.SetValue != null)
+                            {
+                                Debug.WriteLine(
+                                    $"SetValue action found - Key: {action.SetValue.Key}, Value: {action.SetValue.Value}, Expression: {action.SetValue.ValueExpression}"
+                                );
+                            }
+                        }
                     }
-                };
 
-                ruleDefinitions.Add(ruleDefinition);
+                    // Convert to RuleDefinition
+                    var ruleDefinition = new RuleDefinition
+                    {
+                        Name = rule.Name,
+                        Description = rule.Description,
+                        Conditions = ConvertConditions(rule.Conditions),
+                        Actions = ConvertActions(rule.Actions ?? new List<ActionListItem>()),
+                        SourceInfo = new SourceInfo
+                        {
+                            FileName = _currentFile,
+                            LineNumber = rule.LineNumber,
+                            OriginalText = rule.OriginalText ?? string.Empty
+                        }
+                    };
+
+                    ruleDefinitions.Add(ruleDefinition);
+                }
+
+                return ruleDefinitions;
             }
-
-            return ruleDefinitions;
+            catch (YamlDotNet.Core.YamlException ex)
+            {
+                throw new InvalidOperationException($"Error parsing YAML in {fileName}: {ex.Message}", ex);
+            }
         }
 
         private void ValidateRule(Rule rule, IEnumerable<string> validSensors)
@@ -177,10 +184,18 @@ namespace Pulsar.Compiler.Parsers
 
         private void ValidateSensors(Rule rule, List<string> validSensors)
         {
-            var allSensors = new List<string>();
+            Log.Information("[DslParser] Validating sensors for rule: {RuleName}. Valid sensors provided: {ValidSensors}", rule.Name, String.Join(", ", validSensors));
+            var conditionSensors = rule.Conditions?.All != null ? GetSensorsFromConditions(rule.Conditions.All).ToList() : new List<string>();
+            Log.Information("[DslParser] Sensors from conditions: {ConditionSensors}", String.Join(", ", conditionSensors));  // Fixed: string.join -> String.Join
+            var actionKeys = rule.Actions != null ?
+                rule.Actions.Select(a => a.SetValue?.Key).Where(k => k != null).Select(k => k!).ToList()
+                : new List<string>();   // Changed to explicitly check for null
+            Log.Information("[DslParser] Action keys: {ActionKeys}", String.Join(", ", actionKeys));
 
             Debug.WriteLine($"\nValidating rule: {rule.Name}");
-            Debug.WriteLine($"Valid sensors list: {string.Join(", ", validSensors)}");
+            Debug.WriteLine($"Valid sensors list: {String.Join(", ", validSensors)}");
+
+            var allSensors = new List<string>();
 
             // Collect sensors from conditions
             if (rule.Conditions?.All != null)
@@ -239,12 +254,12 @@ namespace Pulsar.Compiler.Parsers
                 foreach (var actionItem in rule.Actions)
                 {
                     Debug.WriteLine("Processing action:");
-                    if (actionItem?.SetValue != null)
+                    if (actionItem != null && actionItem.SetValue != null)
                     {
                         Debug.WriteLine($"Adding SetValue key: {actionItem.SetValue.Key}");
                         allSensors.Add(actionItem.SetValue.Key);
                     }
-                    if (actionItem.SendMessage != null)
+                    if (actionItem != null && actionItem.SendMessage != null)
                     {
                         Debug.WriteLine($"SendMessage channel: {actionItem.SendMessage.Channel}");
                         // Do we need to validate the channel?
@@ -252,18 +267,18 @@ namespace Pulsar.Compiler.Parsers
                 }
             }
 
-            Debug.WriteLine($"All collected sensors: {string.Join(", ", allSensors)}");
+            Debug.WriteLine($"All collected sensors: {String.Join(", ", allSensors)}");
 
             // Validate sensors against the valid list
             var invalidSensors = allSensors
                 .Where(sensor => !validSensors.Contains(sensor))
                 .ToList();
 
-            Debug.WriteLine($"Invalid sensors found: {string.Join(", ", invalidSensors)}");
+            Debug.WriteLine($"Invalid sensors found: {String.Join(", ", invalidSensors)}");
 
             if (invalidSensors.Any())
                 throw new InvalidOperationException(
-                    $"Invalid sensors or keys found: {string.Join(", ", invalidSensors)}"
+                    $"Invalid sensors or keys found: {String.Join(", ", invalidSensors)}"
                 );
         }
 
@@ -363,7 +378,7 @@ namespace Pulsar.Compiler.Parsers
                 {
                     Debug.WriteLine($"Processing action item");
 
-                    if (actionItem?.SetValue != null)
+                    if (actionItem != null && actionItem.SetValue != null)
                     {
                         Debug.WriteLine($"Found SetValue action");
                         var setValueAction = new SetValueAction
@@ -379,7 +394,7 @@ namespace Pulsar.Compiler.Parsers
                         return setValueAction as ActionDefinition;
                     }
 
-                    if (actionItem?.SendMessage != null)
+                    if (actionItem != null && actionItem.SendMessage != null)
                     {
                         Debug.WriteLine($"Found SendMessage action");
                         return new SendMessageAction
