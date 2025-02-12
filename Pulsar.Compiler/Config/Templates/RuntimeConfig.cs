@@ -3,6 +3,7 @@
 using System;
 using Serilog.Events;
 using System.Text.Json;
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace Pulsar.Runtime.Rules

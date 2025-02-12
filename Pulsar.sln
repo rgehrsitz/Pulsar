@@ -5,8 +5,6 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pulsar.Compiler", "Pulsar.Compiler\Pulsar.Compiler.csproj", "{2BADB51B-61BD-4303-9A71-4B7097E6594F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pulsar.Runtime", "Pulsar.Runtime\Pulsar.Runtime.csproj", "{F6AE7A45-6E2D-44C8-8FDF-82CD6F5B7C5B}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pulsar.Tests", "Pulsar.Tests\Pulsar.Tests.csproj", "{B4F7F82C-7547-4EB8-A30A-17FF40F70DAA}"
 EndProject
 Global
