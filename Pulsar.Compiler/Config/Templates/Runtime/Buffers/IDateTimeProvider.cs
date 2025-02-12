@@ -1,4 +1,4 @@
-// File: Pulsar.Runtime/Buffers/IDateTimeProvider.cs
+// File: Pulsar.Compiler/Config/Templates/Runtime/Buffers/IDateTimeProvider.cs
 
 namespace Pulsar.Runtime.Buffers
 {

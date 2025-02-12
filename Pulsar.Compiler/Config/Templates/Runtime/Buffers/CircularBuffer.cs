@@ -1,4 +1,4 @@
-// File: Pulsar.Runtime/Buffers/CircularBuffer.cs
+// File: Pulsar.Compiler/Config/Templates/Runtime/Buffers/CircularBuffer.cs
 
 using System.Collections.Concurrent;
 using System.Diagnostics;

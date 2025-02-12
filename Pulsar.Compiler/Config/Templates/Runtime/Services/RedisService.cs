@@ -1,4 +1,4 @@
-// File: Pulsar.Compiler/Config/Templates/RedisService.cs
+// File: Pulsar.Compiler/Config/Templates/Runtime/Services/RedisService.cs
 
 using System.Collections.Concurrent;
 using NRedisStack;

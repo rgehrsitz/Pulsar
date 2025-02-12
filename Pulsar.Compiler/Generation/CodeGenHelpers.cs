@@ -1,4 +1,4 @@
-// File: Pulsar.Compiler.Generation.CodeGenHelpers.cs
+// File: Pulsar.Compiler/Generation/CodeGenHelpers.cs
 
 using System;
 
