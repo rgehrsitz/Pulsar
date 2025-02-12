@@ -49,7 +49,7 @@ namespace Pulsar.Runtime.Rules
 
     public class ProgramTemplate
     {
-        public static async Task<int> Main(string[] args)
+        public static async Task<int> Run(string[] args)
         {
             var config = ConfigurationLoader.LoadConfiguration(args);
             var logger = CreateLogger(config);

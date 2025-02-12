@@ -24,7 +24,7 @@
 
     <!-- Include template files as embedded resources -->
   <ItemGroup>
-    <EmbeddedResource Include="Build\Templates\**\*" />
+    <EmbeddedResource Include="Config\Templates\**\*" />
   </ItemGroup>
 
 </Project>

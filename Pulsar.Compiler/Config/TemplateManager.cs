@@ -48,7 +48,11 @@ namespace Pulsar.Compiler.Config
                     var content = File.ReadAllText(templateFile);
 
                     // Ensure directory exists for output file
-                    Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
+                    var dirPath = Path.GetDirectoryName(outputFilePath);
+                    if (dirPath != null)
+                    {
+                        Directory.CreateDirectory(dirPath);
+                    }
 
                     files.Add(
                         new GeneratedFileInfo
@@ -60,14 +64,14 @@ namespace Pulsar.Compiler.Config
                         }
                     );
 
-                    _logger.Debug("Added template file: {FileName}", relativePath);
+                    _logger.LogDebug("Added template file: {FileName}", relativePath);
                 }
 
                 return files;
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Error copying template files");
+                _logger.LogError(ex, "Error copying template files");
                 throw;
             }
         }

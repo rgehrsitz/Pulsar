@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Pulsar.Compiler.Config;
 
-internal static class Templates
+internal static class TemplateProvider
 {
     public static string GetTemplate(string templateName)
     {
