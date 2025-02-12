@@ -6,16 +6,17 @@ using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Config
 {
     public class TemplateManager
     {
-        private readonly ILogger _logger;
+        private readonly Microsoft.Extensions.Logging.ILogger _logger;
         private const string TemplateDirectory = "Config/Templates";
         private readonly string[] _templateExtensions = { ".cs", ".xml", ".csproj", ".json" };
 
-        public TemplateManager(ILogger logger)
+        public TemplateManager(Microsoft.Extensions.Logging.ILogger logger)
         {
             _logger = logger;
         }

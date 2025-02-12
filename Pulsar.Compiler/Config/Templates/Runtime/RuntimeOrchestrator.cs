@@ -1,23 +1,27 @@
-// File: Pulsar.Runtime/RuntimeOrchestrator.cs
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 using Pulsar.Runtime.Buffers;
-using Pulsar.Runtime.Rules;
 using Pulsar.Runtime.Services;
 using Serilog;
 
-namespace Pulsar.Runtime
+namespace Pulsar.Runtime.Rules
 {
+    public interface IRuntimeOrchestrator
+    {
+        Task StartAsync();
+        Task StopAsync();
+    }
+
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2026",
         Justification = "Types preserved in trimming.xml"
     )]
-    public class RuntimeOrchestrator : IDisposable
+    public class RuntimeOrchestrator : IRuntimeOrchestrator, IDisposable
     {
         private readonly IRedisService _redis;
         private readonly ILogger _logger;
@@ -44,10 +48,8 @@ namespace Pulsar.Runtime
         {
             _redis = redis ?? throw new ArgumentNullException(nameof(redis));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _requiredSensors =
-                requiredSensors ?? throw new ArgumentNullException(nameof(requiredSensors));
-            _ruleCoordinator =
-                ruleCoordinator ?? throw new ArgumentNullException(nameof(ruleCoordinator));
+            _requiredSensors = requiredSensors ?? throw new ArgumentNullException(nameof(requiredSensors));
+            _ruleCoordinator = ruleCoordinator ?? throw new ArgumentNullException(nameof(ruleCoordinator));
 
             _cycleTime = cycleTime ?? TimeSpan.FromMilliseconds(100);
             _timer = new PeriodicTimer(_cycleTime);
@@ -147,10 +149,7 @@ namespace Pulsar.Runtime
 
                 // Check cycle time
                 var cycleTime = DateTime.UtcNow - cycleStart;
-                if (
-                    cycleTime > _cycleTime
-                    && DateTime.UtcNow - _lastWarningTime > TimeSpan.FromMinutes(1)
-                )
+                if (cycleTime > _cycleTime && DateTime.UtcNow - _lastWarningTime > TimeSpan.FromMinutes(1))
                 {
                     _logger.Warning(
                         "Cycle time ({ActualMs}ms) exceeded target ({TargetMs}ms)",

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using Pulsar.Runtime.Buffers;
 using Serilog;
+using Pulsar.Compiler.Config.Templates.Interfaces;
 
 namespace Pulsar.Runtime.Rules
 {

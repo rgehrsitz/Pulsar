@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Pulsar.Compiler\Pulsar.Compiler.csproj" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="NRedisStack" Version="0.13.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />

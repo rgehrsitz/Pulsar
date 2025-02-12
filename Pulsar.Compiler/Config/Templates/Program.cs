@@ -2,20 +2,52 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Serilog;
-using Prometheus;
-using Pulsar.Runtime.Buffers;
-
 using System.Threading;
+using System.Threading.Tasks;
 using StackExchange.Redis;
-using Pulsar.Runtime.Rules;
-using Pulsar.Runtime.Rules.Services;
+using Pulsar.Runtime.Services;
+using Pulsar.Runtime.Buffers;
+using Serilog;
+using Pulsar.Compiler.Config.Templates.Interfaces;
 
 namespace Pulsar.Runtime.Rules
 {
-    public class Program
+    public interface IRuleCoordinator
+    {
+        void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs);
+        void ProcessInputs(Dictionary<string, string> inputs);
+        Dictionary<string, string> GetOutputs();
+    }
+
+    internal class TemplateRuleCoordinator : IRuleCoordinator
+    {
+        private readonly ILogger _logger;
+        private readonly RingBufferManager _bufferManager;
+
+        public TemplateRuleCoordinator(ILogger logger, RingBufferManager bufferManager)
+        {
+            _logger = logger;
+            _bufferManager = bufferManager;
+        }
+
+        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)
+        {
+            // Template implementation - no processing needed
+        }
+
+        public void ProcessInputs(Dictionary<string, string> inputs)
+        {
+            // Template implementation - no processing needed
+        }
+
+        public Dictionary<string, string> GetOutputs()
+        {
+            // Template implementation - return empty outputs
+            return new Dictionary<string, string>();
+        }
+    }
+
+    public class ProgramTemplate
     {
         public static async Task<int> Main(string[] args)
         {
@@ -25,16 +57,16 @@ namespace Pulsar.Runtime.Rules
             try
             {
                 logger.Information("Starting Pulsar Runtime v{Version}",
-                    typeof(Program).Assembly.GetName().Version);
+                    typeof(ProgramTemplate).Assembly.GetName().Version);
 
-                using var redis = new RedisService(config.RedisConnectionString, logger);
+                using var redis = new Pulsar.Runtime.Services.RedisService(config.RedisConnectionString, logger);
                 using var bufferManager = new RingBufferManager(config.BufferCapacity);
 
                 using var orchestrator = new RuntimeOrchestrator(
                     redis,
                     logger,
                     EmbeddedConfig.ValidSensors.ToArray(),
-                    LoadRuleCoordinator(config, logger, bufferManager),
+                    new TemplateRuleCoordinator(logger, bufferManager),
                     null);
 
                 // Setup graceful shutdown
@@ -94,7 +126,14 @@ namespace Pulsar.Runtime.Rules
 
         private static IRuleCoordinator LoadRuleCoordinator(RuntimeConfig config, ILogger logger, RingBufferManager bufferManager)
         {
-            return new RuleCoordinator(logger, bufferManager);
+            // For template purposes, return an empty coordinator
+            return new TemplateRuleCoordinator(logger, bufferManager);
         }
+    }
+
+    internal static class EmbeddedConfig
+    {
+        public static string[] ValidSensors { get; } = new string[0];
+        public static int CycleTime { get; } = 100;
     }
 }

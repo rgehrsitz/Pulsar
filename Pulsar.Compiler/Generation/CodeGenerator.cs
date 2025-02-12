@@ -23,7 +23,7 @@ namespace Pulsar.Compiler.Generation
     {
         private static readonly ILogger _logger = Log.ForContext<CodeGenerator>();
 
-        public static List<GeneratedFileInfo> GenerateCSharp(
+        public static List<Pulsar.Compiler.Models.GeneratedFileInfo> GenerateCSharp(
             List<RuleDefinition> rules,
             BuildConfig? config = null)
         {
@@ -35,12 +35,12 @@ namespace Pulsar.Compiler.Generation
                 TargetFramework = "net9.0",
             };
 
-            var files = new List<GeneratedFileInfo>();
+            var files = new List<Pulsar.Compiler.Models.GeneratedFileInfo>();
 
             try
             {
                 // Copy template files first
-                var templateManager = new TemplateManager(_logger);
+                var templateManager = new TemplateManager(new SerilogAdapter(_logger));
                 files.AddRange(templateManager.CopyTemplateFiles(config.OutputPath));
 
                 // Get layer assignments for rules
@@ -72,7 +72,7 @@ namespace Pulsar.Compiler.Generation
                 files.Add(GenerateEmbeddedConfig(config));
 
                 // Generate metadata
-                files.Add(GenerateMetadataFile(rules, layerMap));
+                files.Add(GenerateMetadataFile(rules, layerMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString())));
 
                 files = ApplyPostGenerationFixups(files);
 
@@ -287,13 +287,13 @@ namespace Pulsar.Compiler.Generation
 
         // Continuing CodeGenerator.cs...
 
-        private static GeneratedFileInfo GenerateGroupImplementation(
+        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateGroupImplementation(
             int groupIndex,
             List<RuleDefinition> rules,
             Dictionary<string, int> layerMap)
         {
             var builder = new StringBuilder();
-            builder.AppendLine(GenerateFileHeader());
+            builder.AppendLine(CodeGenerator.GenerateFileHeader());
             builder.AppendLine(GenerateCommonUsings());
             builder.AppendLine("namespace Pulsar.Runtime.Rules");
             builder.AppendLine("{");
@@ -378,7 +378,7 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("    }");
             builder.AppendLine("}");
 
-            return new GeneratedFileInfo
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
             {
                 FileName = $"RuleGroup{groupIndex}.cs",
                 Content = builder.ToString(),
@@ -391,12 +391,12 @@ namespace Pulsar.Compiler.Generation
             };
         }
 
-        private static GeneratedFileInfo GenerateRuleCoordinator(
+        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateRuleCoordinator(
             Dictionary<int, List<RuleDefinition>> groups,
             Dictionary<string, int> layerMap)
         {
             var builder = new StringBuilder();
-            builder.AppendLine(GenerateFileHeader());
+            builder.AppendLine(CodeGenerator.GenerateFileHeader());
             builder.AppendLine(GenerateCommonUsings());
             builder.AppendLine();
             builder.AppendLine("using System.Diagnostics.CodeAnalysis;");
@@ -438,11 +438,9 @@ namespace Pulsar.Compiler.Generation
                 builder.AppendLine($"        // Rules for Group {group.Key}:");
                 foreach (var rule in group.Value)
                 {
-                    if (rule.SourceInfo != null)
+                    if (rule != null)
                     {
-                        builder.AppendLine(
-                            $"        // - {rule.Name} from {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}"
-                        );
+                        builder.AppendLine($"        // - {rule.Name}");
                     }
                 }
                 builder.AppendLine(
@@ -553,7 +551,7 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("    }");
             builder.AppendLine("}");
 
-            return new GeneratedFileInfo
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
             {
                 FileName = "RuleCoordinator.cs",
                 Content = builder.ToString(),
@@ -566,9 +564,9 @@ namespace Pulsar.Compiler.Generation
             };
         }
 
-        private static GeneratedFileInfo GenerateMetadataFile(
+        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateMetadataFile(
             List<RuleDefinition> rules,
-            Dictionary<string, int> layerMap)
+            Dictionary<string, string> layerMap)
         {
             var metadata = new RuleManifest
             {
@@ -582,11 +580,11 @@ namespace Pulsar.Compiler.Generation
                 {
                     SourceFile = rule.SourceInfo?.FileName ?? "unknown",
                     SourceLineNumber = rule.SourceInfo?.LineNumber ?? 0,
-                    Layer = layerMap[rule.Name],
+                    Layer = int.Parse(layerMap[rule.Name].ToString()),
                     Description = rule.Description,
                     Dependencies = GetDependencies(rule, rules.ToDictionary(
                         r => r.Name,
-                        r => r.Actions.OfType<SetValueAction>().Select(a => a.Key).ToList()
+                        r => string.Join(",", r.Actions.OfType<SetValueAction>().Select(a => a.Key))
                     )),
                     InputSensors = GetInputSensors(rule),
                     OutputSensors = GetOutputSensors(rule),
@@ -599,7 +597,7 @@ namespace Pulsar.Compiler.Generation
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true }
             );
 
-            return new GeneratedFileInfo
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
             {
                 FileName = "rules.manifest.json",
                 Content = json,
@@ -836,6 +834,54 @@ namespace Pulsar.Compiler.Generation
                 }
 
                 builder.AppendLine($"{indent}outputs[\"{action.Key}\"] = {valueAssignment};");
+            }
+        }
+
+        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateEmbeddedConfig(Pulsar.Compiler.Config.BuildConfig config)
+        {
+            string content = "// Embedded config for Pulsar Compiler" + Environment.NewLine;
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
+            {
+                FileName = System.IO.Path.Combine(config.OutputPath, "EmbeddedConfig.cs"),
+                Content = content
+            };
+        }
+
+        private static List<Pulsar.Compiler.Models.GeneratedFileInfo> ApplyPostGenerationFixups(List<Pulsar.Compiler.Models.GeneratedFileInfo> files)
+        {
+            // Currently no post-generation fixups needed.
+            return files;
+        }
+
+        private static string GenerateFileHeader()
+        {
+            return "// Generated by Pulsar AOT Compiler";
+        }
+
+        public class SerilogAdapter : Microsoft.Extensions.Logging.ILogger
+        {
+            private readonly Serilog.ILogger _logger;
+            public SerilogAdapter(Serilog.ILogger logger)
+            {
+                _logger = logger;
+            }
+
+            public IDisposable BeginScope<TState>(TState state)
+            {
+                return new LogScope();
+            }
+
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                _logger.Information(formatter(state, exception));
+            }
+
+            private class LogScope : IDisposable
+            {
+                public void Dispose() { }
             }
         }
     }
