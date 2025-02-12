@@ -6,7 +6,7 @@ using NRedisStack.RedisStackCommands;
 using Serilog;
 using StackExchange.Redis;
 
-namespace Pulsar.Runtime.Services;
+namespace Pulsar.Runtime.Rules.Services;
 
 public interface IRedisService
 {

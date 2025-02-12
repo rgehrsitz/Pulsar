@@ -1,116 +1,38 @@
-// File: Pullar.Compiler/Config/TemplateManager.cs
+// File: Pulsar.Compiler/Config/TemplateManager.cs
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace Pulsar.Compiler.Config
 {
     public class TemplateManager
     {
-        private readonly ILogger<TemplateManager> _logger;
-        private const string TemplateDirectory = "Build/Templates/ProjectTemplate";
+        private readonly ILogger _logger;
+        private const string TemplateDirectory = "Config/Templates";
         private readonly string[] _templateExtensions = { ".cs", ".xml", ".csproj", ".json" };
 
-        public TemplateManager(ILogger<TemplateManager> logger)
+        public TemplateManager(ILogger logger)
         {
             _logger = logger;
         }
 
-        public string FindTemplatePath()
+        public List<GeneratedFileInfo> CopyTemplateFiles(string outputPath)
         {
-            // Try multiple possible locations for the template directory
-            string[] possibleTemplatePaths = new[]
-            {
-                // Direct path from executable
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, TemplateDirectory),
-                // One level up (bin/Debug/net9.0)
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", TemplateDirectory),
-                // Two levels up (bin/Debug)
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", TemplateDirectory),
-                // Three levels up (bin)
-                Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory,
-                    "..",
-                    "..",
-                    "..",
-                    TemplateDirectory
-                ),
-                // Four levels up (project root)
-                Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory,
-                    "..",
-                    "..",
-                    "..",
-                    "..",
-                    TemplateDirectory
-                ),
-                // Relative to current directory
-                Path.Combine(Directory.GetCurrentDirectory(), TemplateDirectory),
-            };
-
-            foreach (var path in possibleTemplatePaths)
-            {
-                var normalizedPath = Path.GetFullPath(path);
-                _logger.LogDebug("Checking template path: {Path}", normalizedPath);
-                if (Directory.Exists(normalizedPath))
-                {
-                    _logger.LogInformation("Found template directory at: {Path}", normalizedPath);
-                    return normalizedPath;
-                }
-            }
-
-            var errorMessage =
-                $"Template directory not found in any of the expected locations. Searched paths:\n{string.Join("\n", possibleTemplatePaths.Select(p => Path.GetFullPath(p)))}";
-            _logger.LogError(errorMessage);
-            throw new DirectoryNotFoundException(errorMessage);
-        }
-
-        public void CopyTemplates(string outputPath, bool overwrite = true)
-        {
+            var files = new List<GeneratedFileInfo>();
             var templatePath = FindTemplatePath();
-            var templateFiles = Directory
-                .GetFiles(templatePath)
-                .Where(f =>
-                    _templateExtensions.Contains(
-                        Path.GetExtension(f),
-                        StringComparer.OrdinalIgnoreCase
-                    )
-                );
-
-            foreach (string file in templateFiles)
-            {
-                string fileName = Path.GetFileName(file);
-                string destFile = Path.Combine(outputPath, fileName);
-
-                try
-                {
-                    File.Copy(file, destFile, overwrite);
-                    _logger.LogDebug("Copied template file: {FileName}", fileName);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to copy template file {FileName}", fileName);
-                    throw;
-                }
-            }
-        }
-
-        public void CleanOutputDirectory(string outputPath)
-        {
-            if (!Directory.Exists(outputPath))
-            {
-                Directory.CreateDirectory(outputPath);
-                _logger.LogDebug("Created output directory: {Path}", outputPath);
-                return;
-            }
 
             try
             {
-                var filesToDelete = Directory
-                    .GetFiles(outputPath)
+                // Create output directory if it doesn't exist
+                Directory.CreateDirectory(outputPath);
+
+                // Get all template files
+                var templateFiles = Directory
+                    .GetFiles(templatePath, "*.*", SearchOption.AllDirectories)
                     .Where(f =>
                         _templateExtensions.Contains(
                             Path.GetExtension(f),
@@ -118,35 +40,67 @@ namespace Pulsar.Compiler.Config
                         )
                     );
 
-                foreach (var file in filesToDelete)
+                foreach (var templateFile in templateFiles)
                 {
-                    File.Delete(file);
-                    _logger.LogDebug("Deleted file: {File}", file);
+                    var relativePath = Path.GetRelativePath(templatePath, templateFile);
+                    var outputFilePath = Path.Combine(outputPath, relativePath);
+                    var content = File.ReadAllText(templateFile);
+
+                    // Ensure directory exists for output file
+                    Directory.CreateDirectory(Path.GetDirectoryName(outputFilePath));
+
+                    files.Add(
+                        new GeneratedFileInfo
+                        {
+                            FileName = Path.GetFileName(templateFile),
+                            FilePath = outputFilePath,
+                            Content = content,
+                            Namespace = "Pulsar.Runtime.Rules"
+                        }
+                    );
+
+                    _logger.Debug("Added template file: {FileName}", relativePath);
                 }
+
+                return files;
             }
             catch (Exception ex)
             {
-                var errorMessage = $"Failed to clean output directory: {ex.Message}";
-                _logger.LogError(ex, errorMessage);
-                throw new InvalidOperationException(errorMessage, ex);
+                _logger.Error(ex, "Error copying template files");
+                throw;
             }
         }
 
-        public bool ValidateTemplates(string templatePath)
+        private string FindTemplatePath()
         {
-            var requiredTemplates = new[] { "Program.cs", "RuntimeConfig.cs", "trimming.xml" };
+            var assembly = typeof(TemplateManager).Assembly;
+            var assemblyLocation = Path.GetDirectoryName(assembly.Location);
 
-            foreach (var template in requiredTemplates)
+            if (assemblyLocation == null)
             {
-                var templateFile = Path.Combine(templatePath, template);
-                if (!File.Exists(templateFile))
-                {
-                    _logger.LogError("Required template file not found: {Template}", template);
-                    return false;
-                }
+                throw new InvalidOperationException("Could not determine assembly location");
             }
 
-            return true;
+            var templatePath = Path.Combine(assemblyLocation, TemplateDirectory);
+
+            if (!Directory.Exists(templatePath))
+            {
+                // Try looking in project directory
+                templatePath = Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    "Pulsar.Compiler",
+                    TemplateDirectory
+                );
+            }
+
+            if (!Directory.Exists(templatePath))
+            {
+                throw new DirectoryNotFoundException(
+                    $"Template directory not found at: {templatePath}"
+                );
+            }
+
+            return templatePath;
         }
     }
 }

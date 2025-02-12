@@ -7,13 +7,11 @@ using System.Threading.Tasks;
 using Serilog;
 using Prometheus;
 using Pulsar.Runtime.Buffers;
-using Pulsar.Runtime;
-
 
 using System.Threading;
 using StackExchange.Redis;
-using Pulsar.Runtime;
-using Pulsar.Runtime.Services;
+using Pulsar.Runtime.Rules;
+using Pulsar.Runtime.Rules.Services;
 
 namespace Pulsar.Runtime.Rules
 {
