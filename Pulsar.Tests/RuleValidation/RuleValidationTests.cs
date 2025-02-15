@@ -4,11 +4,20 @@ using System;
 using System.Collections.Generic;
 using Xunit;
 using Pulsar.Tests.TestUtilities; // Updated namespace
+using Pulsar.Compiler.Models;
+using Serilog;
 
 namespace Pulsar.Tests.RuleValidation
 {
     public class RuleValidationTests
     {
+        private readonly ILogger _logger;
+
+        public RuleValidationTests()
+        {
+            _logger = LoggingConfig.GetLogger();
+        }
+
         [Fact]
         public void DetailedErrorProduced_ForMissingMandatoryFields()
         {
@@ -41,6 +50,51 @@ namespace Pulsar.Tests.RuleValidation
             // Assert: Expect validation to succeed and metadata to be extracted
             Assert.True(result.IsValid, "Validation should succeed for a complete rule.");
             Assert.False(string.IsNullOrEmpty(result.Metadata));
+        }
+
+        [Fact]
+        public void Validation_ValidRule_Succeeds()
+        {
+            _logger.Debug("Running ValidRule validation test");
+            
+            // Arrange
+            var rule = new RuleDefinition
+            {
+                Name = "TestRule",
+                Description = "A valid test rule",
+                Conditions = new ConditionGroup(),
+                Actions = new List<ActionDefinition>
+                {
+                    new SetValueAction { Key = "output", Value = 1.0 }
+                }
+            };
+
+            // Act
+            var result = TestUtilities.RuleValidator.Validate(rule);
+
+            // Assert
+            Assert.True(result.IsValid);
+            Assert.Empty(result.Errors);
+            
+            _logger.Debug("Valid rule validation test completed successfully");
+        }
+
+        [Fact]
+        public void Validation_EmptyRule_Fails()
+        {
+            _logger.Debug("Running EmptyRule validation test");
+            
+            // Arrange
+            var rule = new RuleDefinition();
+
+            // Act
+            var result = TestUtilities.RuleValidator.Validate(rule);
+
+            // Assert
+            Assert.False(result.IsValid);
+            Assert.NotEmpty(result.Errors);
+            
+            _logger.Debug("Empty rule validation test completed successfully");
         }
     }
 }

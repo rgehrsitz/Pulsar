@@ -5,30 +5,46 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Pulsar.Compiler.Models;
+using Serilog;
 
 namespace Pulsar.Compiler.Analysis
 {
     public class DependencyAnalyzer
     {
-        // Maintained from original implementation
+        private readonly ILogger _logger;
         private Dictionary<string, RuleDefinition> _outputs = new();
+
+        public DependencyAnalyzer()
+        {
+            _logger = LoggingConfig.GetLogger();
+        }
 
         public List<RuleDefinition> AnalyzeDependencies(List<RuleDefinition> rules)
         {
-            // Clear previous outputs to ensure clean state
-            _outputs.Clear();
+            try
+            {
+                _logger.Debug("Starting dependency analysis for {Count} rules", rules.Count);
+                
+                var graph = BuildDependencyGraph(rules);
+                _logger.Debug("Dependency graph built with {Count} nodes", graph.Count);
 
-            // Build dependency graph
-            var graph = BuildDependencyGraph(rules);
+                var sortedRules = TopologicalSort(graph);
+                _logger.Debug("Rules sorted in topological order");
 
-            // Perform topological sort
-            return TopologicalSort(graph);
+                return sortedRules;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error analyzing rule dependencies");
+                throw;
+            }
         }
 
         private Dictionary<RuleDefinition, List<RuleDefinition>> BuildDependencyGraph(
             List<RuleDefinition> rules
         )
         {
+            _logger.Debug("Building dependency graph");
             var graph = new Dictionary<RuleDefinition, List<RuleDefinition>>();
 
             // Collect outputs from each rule
@@ -70,6 +86,7 @@ namespace Pulsar.Compiler.Analysis
 
         private List<string> GetDependencies(RuleDefinition rule)
         {
+            _logger.Debug("Getting dependencies for rule: {RuleName}", rule.Name);
             var dependencies = new List<string>();
 
             // Collect dependencies from conditions
@@ -110,6 +127,7 @@ namespace Pulsar.Compiler.Analysis
 
         private void ExtractSensorsFromExpression(string expression, List<string> dependencies)
         {
+            _logger.Debug("Extracting sensors from expression: {Expression}", expression);
             if (string.IsNullOrWhiteSpace(expression))
                 return;
 
@@ -152,6 +170,7 @@ namespace Pulsar.Compiler.Analysis
             Dictionary<RuleDefinition, List<RuleDefinition>> graph
         )
         {
+            _logger.Debug("Performing topological sort on {Count} nodes", graph.Count);
             var sorted = new List<RuleDefinition>();
             var visited = new HashSet<RuleDefinition>();
             var visiting = new HashSet<RuleDefinition>();
@@ -202,14 +221,15 @@ namespace Pulsar.Compiler.Analysis
             List<RuleDefinition> sorted
         )
         {
-            Debug.WriteLine($"Visiting {rule.Name}");
-
             if (visiting.Contains(rule))
             {
+                _logger.Error("Cyclic dependency detected involving rule {RuleName}", rule.Name);
                 throw new InvalidOperationException(
                     $"Cycle detected involving rule '{rule.Name}'!"
                 );
             }
+
+            Debug.WriteLine($"Visiting {rule.Name}");
 
             if (!visited.Contains(rule))
             {

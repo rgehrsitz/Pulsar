@@ -3,15 +3,25 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
-using Pulsar.Tests.TestUtilities; // Updated namespace
+using Pulsar.Tests.TestUtilities;
+using Serilog;
 
 namespace Pulsar.Tests.RuntimeExecution
 {
     public class RuntimeExecutionTests
     {
+        private readonly ILogger _logger;
+
+        public RuntimeExecutionTests()
+        {
+            _logger = LoggingConfig.GetLogger();
+        }
+
         [Fact]
         public void RuntimeExecution_ExecutesValidRuleSuccessfully()
         {
+            _logger.Debug("Starting valid rule execution test");
+
             // Arrange: Provide a valid rule input for execution
             string ruleContent = "// valid rule execution script";
 
@@ -21,11 +31,15 @@ namespace Pulsar.Tests.RuntimeExecution
             // Assert: Expect successful execution with expected output
             Assert.True(result.IsSuccess, "Expected the rule to execute successfully.");
             Assert.Equal("Execution complete", result.Output);
+
+            _logger.Debug("Valid rule execution test completed successfully");
         }
 
         [Fact]
         public void RuntimeExecution_FailsForInvalidRule()
         {
+            _logger.Debug("Starting invalid rule execution test");
+
             // Arrange: Provide an invalid rule input that should fail during execution
             string ruleContent = "// invalid rule that fails at runtime";
 
@@ -37,6 +51,8 @@ namespace Pulsar.Tests.RuntimeExecution
             Assert.NotNull(result.Errors);
             Assert.NotEmpty(result.Errors);
             Assert.Contains("runtime error", result.Errors[0], StringComparison.OrdinalIgnoreCase);
+
+            _logger.Debug("Invalid rule execution test completed successfully");
         }
     }
 }

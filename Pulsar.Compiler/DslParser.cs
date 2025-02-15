@@ -17,6 +17,7 @@ namespace Pulsar.Compiler.Parsers
 {
     public class DslParser
     {
+        private readonly ILogger _logger = LoggingConfig.GetLogger();
         private readonly IDeserializer _deserializer;
         private string _currentFile = string.Empty;
 
@@ -28,6 +29,7 @@ namespace Pulsar.Compiler.Parsers
                 .IgnoreUnmatchedProperties()
                 .WithDuplicateKeyChecking() // Add this to catch duplicate keys
                 .Build();
+            _logger.Debug("DslParser initialized");
         }
 
         private class YamlNodeDeserializer : INodeDeserializer
@@ -248,7 +250,7 @@ namespace Pulsar.Compiler.Parsers
                     }
                     else if (condition.ConditionDetails.Type == "expression")
                     {
-                        Debug.WriteLine(
+                        _logger.Debug(
                             $"Expression condition: {condition.ConditionDetails.Expression}"
                         );
                         // We might need to parse the expression to extract sensors
@@ -273,7 +275,7 @@ namespace Pulsar.Compiler.Parsers
                     }
                     else if (condition.ConditionDetails.Type == "expression")
                     {
-                        Debug.WriteLine(
+                        _logger.Debug(
                             $"Expression condition: {condition.ConditionDetails.Expression}"
                         );
                         // We might need to parse the expression to extract sensors

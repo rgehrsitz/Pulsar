@@ -5,11 +5,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Serilog;
 
 namespace Pulsar.Compiler.Models
 {
     public class RuleManifest
     {
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+
         [JsonPropertyName("schemaVersion")]
         public string SchemaVersion { get; set; } = "1.0";
 
@@ -31,26 +34,47 @@ namespace Pulsar.Compiler.Models
 
         public void SaveToFile(string path)
         {
-            var options = new JsonSerializerOptions
+            try
             {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            };
+                _logger.Debug("Saving rule manifest to {Path}", path);
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                };
 
-            var json = JsonSerializer.Serialize(this, options);
-            File.WriteAllText(path, json);
+                var json = JsonSerializer.Serialize(this, options);
+                File.WriteAllText(path, json);
+                _logger.Information("Successfully saved manifest with {Count} rules", Rules.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to save rule manifest to {Path}", path);
+                throw;
+            }
         }
 
         public static RuleManifest LoadFromFile(string path)
         {
-            var json = File.ReadAllText(path);
-            var options = new JsonSerializerOptions
+            try
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            };
+                _logger.Debug("Loading rule manifest from {Path}", path);
+                var json = File.ReadAllText(path);
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                };
 
-            return JsonSerializer.Deserialize<RuleManifest>(json, options)
-                ?? throw new InvalidOperationException("Failed to deserialize manifest");
+                var manifest = JsonSerializer.Deserialize<RuleManifest>(json, options)
+                    ?? throw new InvalidOperationException("Failed to deserialize manifest");
+                _logger.Information("Successfully loaded manifest with {Count} rules", manifest.Rules.Count);
+                return manifest;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to load rule manifest from {Path}", path);
+                throw;
+            }
         }
     }
 

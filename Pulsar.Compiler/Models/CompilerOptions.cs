@@ -1,26 +1,55 @@
 // File: Pulsar.Compiler/Models/CompilerOptions.cs
 
+using System;
+using System.Collections.Generic;
 using Pulsar.Compiler.Config;
+using Serilog;
 
 namespace Pulsar.Compiler.Models
 {
     public class CompilerOptions
     {
-        /// <summary>
-        /// Build configuration to be used during compilation.
-        /// </summary>
-        public BuildConfig BuildConfig { get; set; } =
-            new BuildConfig
-            {
-                OutputPath = "Generated",
-                Target = "win-x64",
-                ProjectName = "Pulsar.Compiler",
-                TargetFramework = "net9.0",
-            };
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
-        /// <summary>
-        /// Optional list of valid sensors for rule validation.
-        /// </summary>
-        public string[] ValidSensors { get; set; } = new string[0];
+        public BuildConfig BuildConfig { get; set; } = new BuildConfig();
+        public List<string> ValidSensors { get; set; } = new();
+        public bool StrictMode { get; set; }
+
+        public void Validate()
+        {
+            try
+            {
+                _logger.Debug("Validating compiler options");
+
+                if (BuildConfig == null)
+                {
+                    _logger.Error("BuildConfig is required but was null");
+                    throw new ArgumentNullException(nameof(BuildConfig));
+                }
+
+                if (string.IsNullOrEmpty(BuildConfig.OutputPath))
+                {
+                    _logger.Error("BuildConfig.OutputPath is required but was empty");
+                    throw new ArgumentException("OutputPath is required", nameof(BuildConfig.OutputPath));
+                }
+
+                _logger.Debug("Compiler options validation successful");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Compiler options validation failed");
+                throw;
+            }
+        }
+
+        public void LogOptions()
+        {
+            _logger.Information(
+                "Compiler options: OutputPath={OutputPath}, StrictMode={StrictMode}, ValidSensors={SensorCount}",
+                BuildConfig.OutputPath,
+                StrictMode,
+                ValidSensors.Count
+            );
+        }
     }
 }

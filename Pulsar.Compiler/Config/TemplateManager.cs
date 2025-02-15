@@ -14,13 +14,13 @@ namespace Pulsar.Compiler.Config
 {
     public class TemplateManager
     {
-        private readonly Microsoft.Extensions.Logging.ILogger _logger;
+        private readonly Serilog.ILogger _logger;
         private const string TemplateDirectory = "Config/Templates";
         private readonly string[] _templateExtensions = { ".cs", ".xml", ".csproj", ".json" };
 
-        public TemplateManager(Microsoft.Extensions.Logging.ILogger logger)
+        public TemplateManager()
         {
-            _logger = logger;
+            _logger = LoggingConfig.GetLogger();
         }
 
         public List<GeneratedFileInfo> CopyTemplateFiles(string outputPath)
@@ -66,14 +66,14 @@ namespace Pulsar.Compiler.Config
                         }
                     );
 
-                    _logger.LogDebug("Added template file: {FileName}", relativePath);
+                    _logger.Debug("Added template file: {FileName}", relativePath);
                 }
 
                 return files;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error copying template files");
+                _logger.Error(ex, "Error copying template files");
                 throw;
             }
         }

@@ -1,25 +1,48 @@
 // File: Pulsar.Compiler/ConfigurationLoader.cs
 
 using System;
+using System.Text.Json;
+using System.IO;
+using Serilog;
 using Pulsar.Compiler;
 
 namespace Pulsar.Compiler
 {
     internal static class ConfigurationLoader
     {
-        // This method was copied from Pulsar.Runtime/Program.cs (line 86) and integrated into the Compiler as per the AOT plan.
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+
         internal static RuntimeConfig LoadConfiguration(
             string[] args,
             bool requireSensors = true,
             string? configPath = null
         )
         {
-            // Original implementation from Pulsar.Runtime/Program.cs line 86
-            // TODO: Adjust configuration loading logic to integrate with the new unified compilation strategy
-            // For now, this is a placeholder implementation.
-            throw new NotImplementedException(
-                "Configuration loading logic needs to be implemented based on the AOT plan."
-            );
+            try
+            {
+                _logger.Debug("Loading configuration from {Path}", configPath ?? "default location");
+                
+                var config = new RuntimeConfig();
+
+                if (configPath != null && File.Exists(configPath))
+                {
+                    _logger.Debug("Reading configuration file");
+                    var jsonContent = File.ReadAllText(configPath);
+                    config = JsonSerializer.Deserialize<RuntimeConfig>(jsonContent) ?? new RuntimeConfig();
+                    _logger.Information("Configuration loaded from {Path}", configPath);
+                }
+                else
+                {
+                    _logger.Warning("No configuration file found, using defaults");
+                }
+
+                return config;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error loading configuration");
+                throw;
+            }
         }
     }
 }

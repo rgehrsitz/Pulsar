@@ -29,21 +29,7 @@ namespace Pulsar.Compiler
         );
         private static readonly Histogram<double> s_compilationDuration =
             s_meter.CreateHistogram<double>("pulsar_compilation_duration_seconds");
-        public static ILogger s_logger;
-
-        static RoslynCompiler()
-        {
-            s_logger = new LoggerConfiguration()
-                .MinimumLevel.Debug()
-                .WriteTo.Console()
-                .WriteTo.File("logs.txt", rollingInterval: RollingInterval.Day)
-                .CreateLogger();
-        }
-
-        public static void SetLogger(ILogger logger)
-        {
-            s_logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
         public static void CompileSource(
             List<GeneratedFileInfo> sourceFiles,
@@ -96,7 +82,7 @@ namespace Pulsar.Compiler
                         }
                         catch (Exception ex)
                         {
-                            s_logger.Error(
+                            _logger.Error(
                                 ex,
                                 "Error parsing source file {FileName}",
                                 file.FileName
@@ -112,7 +98,7 @@ namespace Pulsar.Compiler
                 sw.Stop();
                 s_compilationDuration.Record(sw.Elapsed.TotalSeconds);
 
-                s_logger.Information(
+                _logger.Information(
                     "Successfully compiled {FileCount} rule files to {OutputPath}",
                     sourceFiles.Count,
                     outputDllPath
@@ -121,7 +107,7 @@ namespace Pulsar.Compiler
             catch (Exception ex)
             {
                 s_compilationErrors.Add(1);
-                s_logger.Error(ex, "Compilation failed for {OutputPath}", outputDllPath);
+                _logger.Error(ex, "Compilation failed for {OutputPath}", outputDllPath);
                 throw;
             }
         }
@@ -198,7 +184,7 @@ namespace Pulsar.Compiler
                 if (File.Exists(pulsarRuntimePath))
                 {
                     references.Add(MetadataReference.CreateFromFile(pulsarRuntimePath));
-                    s_logger.Information(
+                    _logger.Information(
                         "Added reference to Pulsar.Runtime: {Path}",
                         pulsarRuntimePath
                     );
@@ -285,7 +271,7 @@ namespace Pulsar.Compiler
             // Log all diagnostics for debugging
             foreach (var diagnostic in result.Diagnostics)
             {
-                s_logger.Debug(
+                _logger.Debug(
                     "Diagnostic: {Id} {Severity} {Message}",
                     diagnostic.Id,
                     diagnostic.Severity,
@@ -305,13 +291,13 @@ namespace Pulsar.Compiler
             foreach (var error in errors)
             {
                 errorMessage.AppendLine(error);
-                s_logger.Error("Compilation error: {Error}", error);
+                _logger.Error("Compilation error: {Error}", error);
             }
 
             if (errors.Count == 0)
             {
                 // If no errors are captured, add a fallback message
-                s_logger.Error("Compilation failed, but no error diagnostics were captured.");
+                _logger.Error("Compilation failed, but no error diagnostics were captured.");
                 errorMessage.AppendLine("No diagnostic errors were captured.");
             }
 
@@ -365,11 +351,11 @@ namespace Pulsar.Compiler
                     {
                         references.Add(MetadataReference.CreateFromFile(assemblyPath));
                         addedAssemblies.Add(fileName);
-                        s_logger.Debug("Added reference: {Assembly}", assemblyPath);
+                        _logger.Debug("Added reference: {Assembly}", assemblyPath);
                     }
                     catch (Exception ex)
                     {
-                        s_logger.Warning(ex, "Failed to load assembly {Assembly}", assemblyPath);
+                        _logger.Warning(ex, "Failed to load assembly {Assembly}", assemblyPath);
                     }
                 }
             }
@@ -396,14 +382,14 @@ namespace Pulsar.Compiler
             if (File.Exists(pulsarRuntimePath))
             {
                 references.Add(MetadataReference.CreateFromFile(pulsarRuntimePath));
-                s_logger.Information(
+                _logger.Information(
                     "Added reference to Pulsar.Runtime: {Path}",
                     pulsarRuntimePath
                 );
             }
             else
             {
-                s_logger.Error("Pulsar.Runtime.dll not found at {Path}", pulsarRuntimePath);
+                _logger.Error("Pulsar.Runtime.dll not found at {Path}", pulsarRuntimePath);
                 throw new FileNotFoundException(
                     $"Pulsar.Runtime.dll not found at {pulsarRuntimePath}"
                 );
@@ -464,13 +450,13 @@ namespace Pulsar.Compiler
                         if (dllPath != null)
                         {
                             references.Add(MetadataReference.CreateFromFile(dllPath));
-                            s_logger.Debug("Added NuGet reference: {Assembly}", dllPath);
+                            _logger.Debug("Added NuGet reference: {Assembly}", dllPath);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    s_logger.Warning(ex, "Failed to load NuGet package {Package}", package);
+                    _logger.Warning(ex, "Failed to load NuGet package {Package}", package);
                 }
             }
             return references;
@@ -482,13 +468,13 @@ namespace Pulsar.Compiler
         public CompilationException(string message)
             : base(message)
         {
-            RoslynCompiler.s_logger.Error("Compilation Exception: {Message}", message);
+            RoslynCompiler._logger.Error("Compilation Exception: {Message}", message);
         }
 
         public CompilationException(string message, Exception inner)
             : base(message, inner)
         {
-            RoslynCompiler.s_logger.Error(inner, "Compilation Exception: {Message}", message);
+            RoslynCompiler._logger.Error(inner, "Compilation Exception: {Message}", message);
         }
     }
 }

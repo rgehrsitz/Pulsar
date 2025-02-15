@@ -12,37 +12,31 @@ using Pulsar.Runtime;
 
 namespace Pulsar.Runtime.Rules
 {
-    public class RuleGroup0 : IRuleGroup
+    public class RuleGroup0 : ICompiledRules
     {
         private readonly ILogger _logger;
         private readonly RingBufferManager _bufferManager;
 
-        public RuleGroup0(ILogger logger, RingBufferManager bufferManager)
+        public RuleGroup0(RingBufferManager bufferManager)
         {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _logger = LoggingConfig.GetLogger();
             _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));
+            _logger.Debug("RuleGroup0 initialized with buffer manager");
         }
 
-        public void EvaluateGroup(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)
+        public void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)
         {
             try
             {
-                _logger.Debug("Evaluating rule group 0");
-                // Source: TestRules.yaml:15
-                // Rule: TestRule
-                // Description: A test rule for temperature conversion
-                _logger.Debug("Evaluating rule TestRule");
-                if (inputs["temperature_f"] == 100)
-                {
-                    outputs["temperature_c"] = 212;
-                }
+                _logger.Debug("Starting rule group 0 evaluation with {InputCount} inputs", inputs.Count);
+                // Generated rule evaluation logic will be placed here
+                _logger.Debug("Completed rule group 0 evaluation, generated {OutputCount} outputs", outputs.Count);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Error evaluating rule group 0");
                 throw;
             }
-            _logger.Debug("Completed rule group 0");
         }
     }
 }

@@ -1,7 +1,11 @@
 // File: Pulsar.Compiler/Config/Templates/Runtime/Buffers/CircularBuffer.cs
 
+using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using Serilog;
 
 namespace Pulsar.Runtime.Buffers;
 
@@ -25,6 +29,7 @@ public readonly struct TimestampedValue
 /// </summary>
 public class CircularBuffer
 {
+    private readonly ILogger _logger;
     private readonly TimestampedValue[] _buffer;
     private int _head;
     private int _count;
@@ -33,12 +38,14 @@ public class CircularBuffer
 
     public CircularBuffer(int capacity, IDateTimeProvider dateTimeProvider)
     {
+        _logger = LoggingConfig.GetLogger();
         if (capacity <= 0)
             throw new ArgumentException("Capacity must be positive", nameof(capacity));
         _buffer = new TimestampedValue[capacity];
         _head = 0;
         _count = 0;
         _dateTimeProvider = dateTimeProvider;
+        _logger.Debug("CircularBuffer created with capacity: {Capacity}", capacity);
     }
 
     public void Add(double value, DateTime timestamp)
@@ -320,6 +327,7 @@ public class CircularBuffer
 /// </summary>
 public class RingBufferManager : IDisposable
 {
+    private readonly ILogger _logger;
     public readonly ConcurrentDictionary<string, CircularBuffer> _buffers;
     private readonly int _capacity;
     private readonly IDateTimeProvider _dateTimeProvider;
@@ -327,16 +335,21 @@ public class RingBufferManager : IDisposable
 
     public RingBufferManager(int capacity = 100, IDateTimeProvider? dateTimeProvider = null)
     {
+        _logger = LoggingConfig.GetLogger();
         _capacity = capacity;
         _buffers = new ConcurrentDictionary<string, CircularBuffer>();
         _dateTimeProvider = dateTimeProvider ?? new SystemDateTimeProvider();
+        _logger.Debug("RingBufferManager initialized with capacity: {Capacity}", capacity);
     }
 
     public void UpdateBuffer(string sensor, double value, DateTime timestamp)
     {
         var buffer = _buffers.GetOrAdd(
             sensor,
-            _ => new CircularBuffer(_capacity, _dateTimeProvider)
+            _ => {
+                _logger.Debug("Creating new buffer for sensor: {Sensor}", sensor);
+                return new CircularBuffer(_capacity, _dateTimeProvider);
+            }
         );
         buffer.Add(value, timestamp);
     }
@@ -344,6 +357,7 @@ public class RingBufferManager : IDisposable
     public void UpdateBuffers(Dictionary<string, double> currentValues)
     {
         var timestamp = _dateTimeProvider.UtcNow;
+        _logger.Debug("Updating buffers with {Count} values at {Timestamp}", currentValues.Count, timestamp);
         foreach (var (sensor, value) in currentValues)
         {
             UpdateBuffer(sensor, value, timestamp);
@@ -374,6 +388,7 @@ public class RingBufferManager : IDisposable
 
     public void Clear()
     {
+        _logger.Debug("Clearing all buffers");
         _buffers.Clear();
     }
 
@@ -381,6 +396,7 @@ public class RingBufferManager : IDisposable
     {
         if (!_disposed)
         {
+            _logger.Debug("Disposing RingBufferManager");
             Clear();
             _disposed = true;
         }

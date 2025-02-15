@@ -41,7 +41,6 @@ namespace Pulsar.Runtime.Rules
 
         public RuntimeOrchestrator(
             IRedisService redis,
-            ILogger logger,
             string[] requiredSensors,
             IRuleCoordinator ruleCoordinator,
             TimeSpan? cycleTime = null,
@@ -49,7 +48,7 @@ namespace Pulsar.Runtime.Rules
         )
         {
             _redis = redis ?? throw new ArgumentNullException(nameof(redis));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _logger = LoggingConfig.GetLogger();
             _requiredSensors = requiredSensors ?? throw new ArgumentNullException(nameof(requiredSensors));
             _ruleCoordinator = ruleCoordinator ?? throw new ArgumentNullException(nameof(ruleCoordinator));
 

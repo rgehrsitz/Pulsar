@@ -1,6 +1,11 @@
 // File: Pulsar.Compiler/Generation/CodeGenHelpers.cs
 
 using System;
+using System.Text;
+using System.Collections.Generic;
+using System.Linq;
+using Pulsar.Compiler.Models;
+using Serilog;
 
 namespace Pulsar.Compiler.Generation
 {
@@ -9,6 +14,8 @@ namespace Pulsar.Compiler.Generation
     /// </summary>
     public static class CodeGenHelpers
     {
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+
         /// <summary>
         /// Generates a standard file header comment including the file name and UTC generation timestamp.
         /// </summary>
@@ -41,6 +48,84 @@ namespace Pulsar.Compiler.Generation
         {
             string comment = $"// Source: {sourceReference}\n";
             return comment + content;
+        }
+
+        public static string GenerateConditionCode(ConditionGroup conditions, string indent = "    ")
+        {
+            try
+            {
+                _logger.Debug("Generating condition code for {Count} conditions", conditions?.All?.Count ?? 0);
+                var builder = new StringBuilder();
+                
+                if (conditions?.All != null && conditions.All.Any())
+                {
+                    foreach (var condition in conditions.All)
+                    {
+                        builder.AppendLine($"{indent}{GenerateConditionExpression(condition)}");
+                    }
+                }
+
+                _logger.Debug("Successfully generated condition code");
+                return builder.ToString();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to generate condition code");
+                throw;
+            }
+        }
+
+        public static string GenerateActionCode(List<ActionDefinition> actions, string indent = "    ")
+        {
+            try
+            {
+                _logger.Debug("Generating action code for {Count} actions", actions?.Count ?? 0);
+                var builder = new StringBuilder();
+
+                if (actions != null)
+                {
+                    foreach (var action in actions)
+                    {
+                        builder.AppendLine($"{indent}{GenerateActionExpression(action)}");
+                    }
+                }
+
+                _logger.Debug("Successfully generated action code");
+                return builder.ToString();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to generate action code");
+                throw;
+            }
+        }
+
+        private static string GenerateConditionExpression(ConditionDefinition condition)
+        {
+            _logger.Debug("Generating expression for condition type: {Type}", condition.GetType().Name);
+            // ...existing code...
+        }
+
+        private static string GenerateActionExpression(ActionDefinition action)
+        {
+            _logger.Debug("Generating expression for action type: {Type}", action.GetType().Name);
+            // ...existing code...
+        }
+
+        public static string SanitizeIdentifier(string identifier)
+        {
+            try
+            {
+                _logger.Debug("Sanitizing identifier: {Identifier}", identifier);
+                var sanitized = string.Concat(identifier.Split(Path.GetInvalidFileNameChars()));
+                _logger.Debug("Sanitized result: {Result}", sanitized);
+                return sanitized;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to sanitize identifier: {Identifier}", identifier);
+                throw;
+            }
         }
     }
 }

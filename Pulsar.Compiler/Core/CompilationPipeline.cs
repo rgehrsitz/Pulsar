@@ -2,10 +2,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
-using Pulsar.Compiler.Core;
+using System.Linq;
+using Pulsar.Compiler.Analysis;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
+using Serilog;
 
 namespace Pulsar.Compiler.Core
 {
@@ -13,39 +14,83 @@ namespace Pulsar.Compiler.Core
     {
         private readonly IRuleCompiler _compiler;
         private readonly DslParser _parser;
+        private readonly ILogger _logger;
 
         public CompilationPipeline(IRuleCompiler compiler, DslParser parser)
         {
             _compiler = compiler;
             _parser = parser;
+            _logger = LoggingConfig.GetLogger();
         }
 
-        /// <summary>
-        /// Process rules from a given YAML file path using provided compiler options.
-        /// </summary>
-        /// <param name="rulesFilePath">Path to the YAML file that contains the rules.</param>
-        /// <param name="options">Compiler options.</param>
-        /// <returns>A CompilationResult that summarizes the outcome.</returns>
-        public CompilationResult ProcessRules(string rulesFilePath, CompilerOptions options)
+        public CompilationResult ProcessRules(string rulesPath, CompilerOptions options)
         {
-            if (!File.Exists(rulesFilePath))
+            try
             {
-                throw new FileNotFoundException($"Rules file not found at {rulesFilePath}");
+                _logger.Information("Starting rule compilation pipeline for {Path}", rulesPath);
+
+                var rules = LoadRulesFromPaths(rulesPath);
+                _logger.Information("Loaded {Count} rules from {Path}", rules.Count, rulesPath);
+
+                var result = _compiler.Compile(rules.ToArray(), options);
+                if (result.Success)
+                {
+                    _logger.Information("Successfully compiled {Count} rules", rules.Count);
+                }
+                else
+                {
+                    _logger.Error("Rule compilation failed with {Count} errors", result.Errors.Count);
+                }
+
+                return result;
             }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error in compilation pipeline");
+                return new CompilationResult { Success = false, Errors = new List<string> { ex.Message } };
+            }
+        }
 
-            // Read the YAML content
-            string yamlContent = File.ReadAllText(rulesFilePath);
+        private List<RuleDefinition> LoadRulesFromPaths(string rulesPath)
+        {
+            try
+            {
+                var rules = new List<RuleDefinition>();
 
-            // Parse the YAML to obtain rule definitions
-            // Pass the valid sensors from options
-            List<RuleDefinition> rules = _parser.ParseRules(
-                yamlContent,
-                options.ValidSensors.ToList(),
-                Path.GetFileName(rulesFilePath)
-            );
+                if (System.IO.Directory.Exists(rulesPath))
+                {
+                    _logger.Debug("Loading rules from directory: {Path}", rulesPath);
+                    var files = System.IO.Directory.GetFiles(rulesPath, "*.yaml", System.IO.SearchOption.AllDirectories);
+                    foreach (var file in files)
+                    {
+                        _logger.Debug("Processing rule file: {File}", file);
+                        var content = System.IO.File.ReadAllText(file);
+                        rules.AddRange(_parser.ParseRules(content, new List<string>(), file));
+                    }
+                }
+                else if (System.IO.File.Exists(rulesPath))
+                {
+                    _logger.Debug("Loading rules from file: {Path}", rulesPath);
+                    var content = System.IO.File.ReadAllText(rulesPath);
+                    rules.AddRange(_parser.ParseRules(content, new List<string>(), rulesPath));
+                }
+                else
+                {
+                    throw new System.IO.FileNotFoundException($"Rules path not found: {rulesPath}");
+                }
 
-            // Compile the rules using the provided compiler
-            return _compiler.Compile(rules.ToArray(), options);
+                if (!rules.Any())
+                {
+                    throw new InvalidOperationException("No rules found in the specified path(s)");
+                }
+
+                return rules;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error loading rules from {Path}", rulesPath);
+                throw;
+            }
         }
     }
 }

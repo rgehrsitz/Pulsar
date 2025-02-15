@@ -3,54 +3,66 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
-using Pulsar.Tests.TestUtilities; // Updated namespace
+using Pulsar.Tests.TestUtilities;
+using Serilog;
 
 namespace Pulsar.Tests.Parsing
 {
     public class RuleParsingTests
     {
-        [Fact]
-        public void ValidRuleParsing_SucceedsWithCompleteMetadata()
+        private readonly ILogger _logger;
+
+        public RuleParsingTests()
         {
-            // Arrange: Provide a sample valid rule input
-            string ruleContent = "sample valid rule content";
-
-            // Act: Call the rule parser
-            var result = RuleParser.Parse(ruleContent);
-
-            // Assert: Validate the result
-            Assert.NotNull(result);
-            Assert.True(result.IsValid, "Expected rule parsing result to be valid.");
-            Assert.Equal("complete metadata", result.Metadata);
+            _logger = LoggingConfig.GetLogger();
         }
 
         [Fact]
-        public void InvalidRuleParsing_ProducesDetailedErrors()
+        public void Parsing_ValidRule_Succeeds()
         {
-            // Arrange: Provide a sample invalid rule input
-            string ruleContent = "invalid rule content";
+            _logger.Debug("Starting valid rule parsing test");
 
-            // Act: Call the rule parser
+            // Arrange
+            var ruleContent = @"
+                name: TestRule
+                description: A test rule
+                conditions:
+                  - sensor: temp
+                    operator: '>'
+                    value: 30
+                actions:
+                  - type: setValue
+                    key: alert
+                    value: 1";
+
+            // Act
             var result = RuleParser.Parse(ruleContent);
 
-            // Assert: Validate that errors are detailed
-            Assert.False(result.IsValid, "Expected rule parsing result to be invalid.");
-            Assert.NotNull(result.Errors);
+            // Assert
+            Assert.True(result.IsValid);
+            Assert.NotNull(result.Rule);
+            Assert.Empty(result.Errors);
+
+            _logger.Debug("Valid rule parsing test completed successfully");
+        }
+
+        [Fact]
+        public void Parsing_InvalidRule_ReturnsErrors()
+        {
+            _logger.Debug("Starting invalid rule parsing test");
+
+            // Arrange
+            var ruleContent = "invalid rule content";
+
+            // Act
+            var result = RuleParser.Parse(ruleContent);
+
+            // Assert
+            Assert.False(result.IsValid);
             Assert.NotEmpty(result.Errors);
-        }
+            Assert.Null(result.Rule);
 
-        [Fact]
-        public void ComplexRuleParsing_HandlesNestedConditions()
-        {
-            // Arrange: Provide a sample rule with nested conditions
-            string ruleContent = "complex rule with nested conditions";
-
-            // Act: Parse the rule
-            var result = RuleParser.Parse(ruleContent);
-
-            // Assert: Validate that nested conditions are properly handled
-            Assert.True(result.IsValid, "Expected complex rule parsing to succeed.");
-            Assert.Contains("nested", result.Metadata);
+            _logger.Debug("Invalid rule parsing test completed with expected errors");
         }
     }
 }

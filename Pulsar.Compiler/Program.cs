@@ -16,47 +16,36 @@ namespace Pulsar.Compiler;
 
 public class Program
 {
+    private static readonly ILogger _logger = LoggingConfig.GetLogger();
+
     public static async Task<int> Main(string[] args)
     {
-        var logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.Console(
-                outputTemplate: "{Timestamp:HH:mm:ss} {Level:u3} {Message:lj}{NewLine}{Exception}"
-            )
-            .WriteTo.File(
-                "log.txt",
-                rollingInterval: RollingInterval.Day,
-                flushToDiskInterval: TimeSpan.Zero
-            )
-            .CreateLogger();
-
         try
         {
-            if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
-            {
-                PrintUsage(logger);
-                return 0;
-            }
-
-            var command = args[0].ToLower();
             var options = ParseArguments(args);
+            var command = options.GetValueOrDefault("command", "compile");
+
+            ValidateRequiredOptions(options);
 
             switch (command)
             {
-                case "generate":
-                    // Step 1: Generate buildable project
-                    return await GenerateBuildableProject(options, logger);
+                case "compile":
+                    return await CompileRules(options, _logger);
                 case "validate":
-                    return await ValidateRules(options, logger);
+                    return await ValidateRules(options, _logger);
+                case "init":
+                    return await InitializeProject(options, _logger);
+                case "generate":
+                    return await GenerateBuildableProject(options, _logger);
                 default:
-                    logger.Error("Unknown command: {Command}", command);
-                    PrintUsage(logger);
+                    _logger.Error("Unknown command: {Command}", command);
+                    PrintUsage(_logger);
                     return 1;
             }
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Unhandled exception occurred.");
+            _logger.Error(ex, "Unhandled exception occurred.");
             return 1;
         }
         finally

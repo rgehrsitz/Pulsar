@@ -25,9 +25,9 @@ public class RedisService : IRedisService, IDisposable
     private readonly ConcurrentDictionary<string, DateTime> _lastErrorTime = new();
     private readonly TimeSpan _errorThrottleWindow = TimeSpan.FromSeconds(60);
 
-    public RedisService(string connectionString, ILogger logger)
+    public RedisService(string connectionString)
     {
-        _logger = logger;
+        _logger = LoggingConfig.GetLogger();
 
         try
         {

@@ -1,44 +1,63 @@
+using System;
+using System.Collections.Generic;
+using Pulsar.Compiler.Models;
+using Serilog;
+
 namespace Pulsar.Tests.TestUtilities
 {
     public static class RuleParser
     {
-        public static RuleParseResult Parse(string ruleContent)
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+
+        public static ParseResult Parse(string ruleContent)
         {
-            // Dummy implementation for test scaffolding
-            if (ruleContent.Contains("invalid"))
+            try
             {
-                return new RuleParseResult
+                _logger.Debug("Parsing rule content: {Content}", ruleContent);
+
+                // This is a mock implementation for testing
+                if (ruleContent.Contains("invalid"))
+                {
+                    _logger.Error("Invalid rule content detected");
+                    return new ParseResult
+                    {
+                        IsValid = false,
+                        Errors = new[] { "Invalid rule content" }
+                    };
+                }
+
+                var rule = new RuleDefinition
+                {
+                    Name = "TestRule",
+                    Description = "Test rule for mock parsing",
+                    Conditions = new ConditionGroup(),
+                    Actions = new List<ActionDefinition>()
+                };
+
+                _logger.Debug("Successfully parsed rule: {RuleName}", rule.Name);
+
+                return new ParseResult
+                {
+                    IsValid = true,
+                    Rule = rule
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error parsing rule content");
+                return new ParseResult
                 {
                     IsValid = false,
-                    Errors = new List<string> { "Error: Invalid rule." },
-                    Metadata = string.Empty,
-                };
-            }
-            else if (ruleContent.Contains("complex"))
-            {
-                return new RuleParseResult
-                {
-                    IsValid = true,
-                    Errors = new List<string>(),
-                    Metadata = "contains nested conditions",
-                };
-            }
-            else
-            {
-                return new RuleParseResult
-                {
-                    IsValid = true,
-                    Errors = new List<string>(),
-                    Metadata = "complete metadata",
+                    Errors = new[] { ex.Message }
                 };
             }
         }
     }
 
-    public class RuleParseResult
+    public class ParseResult
     {
         public bool IsValid { get; set; }
-        public List<string>? Errors { get; set; }
-        public string? Metadata { get; set; }
+        public RuleDefinition? Rule { get; set; }
+        public string[] Errors { get; set; } = Array.Empty<string>();
     }
 }

@@ -21,7 +21,7 @@ namespace Pulsar.Compiler.Generation
 
     public class CodeGenerator
     {
-        private static readonly ILogger _logger = Log.ForContext<CodeGenerator>();
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
         public static List<Pulsar.Compiler.Models.GeneratedFileInfo> GenerateCSharp(
             List<RuleDefinition> rules,
@@ -861,9 +861,10 @@ namespace Pulsar.Compiler.Generation
         public class SerilogAdapter : Microsoft.Extensions.Logging.ILogger
         {
             private readonly Serilog.ILogger _logger;
+            
             public SerilogAdapter(Serilog.ILogger logger)
             {
-                _logger = logger;
+                _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             }
 
             public IDisposable BeginScope<TState>(TState state)
@@ -873,10 +874,25 @@ namespace Pulsar.Compiler.Generation
 
             public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
 
-            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
-                TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            public void Log<TState>(
+                Microsoft.Extensions.Logging.LogLevel logLevel,
+                Microsoft.Extensions.Logging.EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
             {
-                _logger.Information(formatter(state, exception));
+                var level = logLevel switch
+                {
+                    Microsoft.Extensions.Logging.LogLevel.Trace => LogEventLevel.Verbose,
+                    Microsoft.Extensions.Logging.LogLevel.Debug => LogEventLevel.Debug,
+                    Microsoft.Extensions.Logging.LogLevel.Information => LogEventLevel.Information,
+                    Microsoft.Extensions.Logging.LogLevel.Warning => LogEventLevel.Warning,
+                    Microsoft.Extensions.Logging.LogLevel.Error => LogEventLevel.Error,
+                    Microsoft.Extensions.Logging.LogLevel.Critical => LogEventLevel.Fatal,
+                    _ => LogEventLevel.Information
+                };
+
+                _logger.Write(level, exception, formatter(state, exception));
             }
 
             private class LogScope : IDisposable

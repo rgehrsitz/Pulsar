@@ -4,40 +4,94 @@ using System;
 using System.Collections.Generic;
 using Xunit;
 using Pulsar.Tests.TestUtilities; // Updated namespace
+using Pulsar.Compiler.Core;
+using Pulsar.Compiler.Models;
+using Serilog;
 
 namespace Pulsar.Tests.Compilation
 {
     public class CompilationTests
     {
-        [Fact]
-        public void Compilation_Succeeds_WithValidRules()
+        private readonly ILogger _logger;
+
+        public CompilationTests()
         {
-            // Arrange: Provide a sample valid rule input
-            string[] rules = new string[] { "valid rule content" };
-
-            // Act: Call the rule compiler
-            var result = RuleCompiler.Compile(rules);
-
-            // Assert: Validate that compilation succeeds
-            Assert.True(result.IsSuccess, "Expected compilation to succeed with valid rules.");
-            Assert.NotNull(result.SourceFiles);
-            Assert.NotEmpty(result.SourceFiles);
-            Assert.False(string.IsNullOrEmpty(result.SourceMap));
+            _logger = LoggingConfig.GetLogger();
         }
 
         [Fact]
-        public void Compilation_Fails_WithErrors()
+        public void Compilation_ValidRules_GeneratesValidOutput()
         {
-            // Arrange: Provide a sample invalid rule input
-            string[] rules = new string[] { "invalid rule content" };
+            _logger.Debug("Starting valid rules compilation test");
 
-            // Act: Compile the rules
-            var result = RuleCompiler.Compile(rules);
+            // Arrange
+            var rules = new[]
+            {
+                new RuleDefinition
+                {
+                    Name = "TestRule",
+                    Description = "Test rule for compilation",
+                    Conditions = new ConditionGroup(),
+                    Actions = new List<ActionDefinition>
+                    {
+                        new SetValueAction { Key = "output", Value = 1.0 }
+                    }
+                }
+            };
 
-            // Assert: Validate that compilation fails and produces detailed errors
-            Assert.False(result.IsSuccess, "Expected compilation to fail with invalid rules.");
+            var options = new CompilerOptions
+            {
+                BuildConfig = new Pulsar.Compiler.Config.BuildConfig
+                {
+                    OutputPath = "TestOutput",
+                    Debug = true
+                }
+            };
+
+            var compiler = new AOTRuleCompiler();
+
+            // Act
+            var result = compiler.Compile(rules, options);
+
+            // Assert
+            Assert.True(result.Success);
+            Assert.NotNull(result.GeneratedFiles);
+            Assert.NotEmpty(result.GeneratedFiles);
+
+            _logger.Debug("Valid rules compilation test completed successfully");
+        }
+
+        [Fact]
+        public void Compilation_InvalidRules_ReturnsErrors()
+        {
+            _logger.Debug("Starting invalid rules compilation test");
+
+            // Arrange
+            var rules = new[]
+            {
+                new RuleDefinition() // Empty rule with no name or actions
+            };
+
+            var options = new CompilerOptions
+            {
+                BuildConfig = new Pulsar.Compiler.Config.BuildConfig
+                {
+                    OutputPath = "TestOutput",
+                    Debug = true
+                }
+            };
+
+            var compiler = new AOTRuleCompiler();
+
+            // Act
+            var result = compiler.Compile(rules, options);
+
+            // Assert
+            Assert.False(result.Success);
             Assert.NotNull(result.Errors);
             Assert.NotEmpty(result.Errors);
+
+            _logger.Debug("Invalid rules compilation test completed with expected errors");
         }
     }
 }

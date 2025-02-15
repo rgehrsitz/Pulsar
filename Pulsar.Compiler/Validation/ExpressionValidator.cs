@@ -1,5 +1,3 @@
-// File: Pulsar.Compiler/Validation/ExpressionHelper.cs
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -8,31 +6,14 @@ using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Serilog;
 
 namespace Pulsar.Compiler.Validation
 {
-    public static class ExpressionHelper
+    public class ExpressionValidator
     {
-        // Predefined set of allowed mathematical functions
-        private static readonly HashSet<string> AllowedMathFunctions = new HashSet<string>
-        {
-            "Math.Abs",
-            "Math.Pow",
-            "Math.Sqrt",
-            "Math.Sin",
-            "Math.Cos",
-            "Math.Tan",
-            "Math.Log",
-            "Math.Exp",
-            "Math.Floor",
-            "Math.Ceiling",
-            "Math.Round",
-            "Math.Max",
-            "Math.Min",
-        };
-
-        // Predefined set of allowed operators
-        private static readonly HashSet<string> AllowedOperators = new HashSet<string>
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+        private static readonly HashSet<string> AllowedOperators = new()
         {
             "+",
             "-",
@@ -46,35 +27,108 @@ namespace Pulsar.Compiler.Validation
             "!=",
         };
 
-        /// <summary>
-        /// Validates a generated expression with comprehensive compile-time checks
-        /// </summary>
-        public static bool ValidateGeneratedExpression(string expression)
+        private static readonly HashSet<string> AllowedSpecialCharacters = new() { "(", ")" };
+
+        private static readonly HashSet<string> AllowedFunctions = new()
         {
-            if (string.IsNullOrWhiteSpace(expression))
-                return false;
+            "Math.Abs",
+            "Math.Min",
+            "Math.Max",
+            "Math.Round",
+            "Math.Pow",
+            "Math.Sqrt",
+            "Math.Sin",
+            "Math.Cos",
+            "Math.Tan",
+            "Math.Log",
+            "Math.Exp",
+            "Math.Floor",
+            "Math.Ceiling",
+            // Add other allowed functions as needed
+        };
 
-            try
-            {
-                // Comprehensive validation steps
-                ValidateSyntax(expression);
-                ValidateFunctions(expression);
-                ValidateOperators(expression);
-                ValidateIdentifiers(expression);
+        public static void ValidateExpression(string expression)
+        {
+            _logger.Debug($"Validating expression: {expression}");
 
-                return true;
-            }
-            catch (ExpressionValidationException ex)
+            // Remove all whitespace for consistent processing
+            expression = Regex.Replace(expression, @"\s+", "");
+            _logger.Debug($"Expression after whitespace removal: {expression}");
+
+            // Validate balanced parentheses
+            ValidateParentheses(expression);
+
+            // Split into tokens (operators, functions, variables, literals)
+            var tokens = TokenizeExpression(expression);
+
+            var tokenList = tokens.ToList();
+            _logger.Debug($"Tokens: {string.Join(", ", tokenList)}");
+
+            foreach (var token in tokenList)
             {
-                // Log detailed validation failure
-                Debug.WriteLine($"Expression Validation Failed: {ex.Message}");
-                return false;
+                _logger.Debug($"Processing token: {token}");
+                if (IsOperator(token))
+                {
+                    if (!AllowedOperators.Contains(token))
+                    {
+                        throw new ArgumentException($"Invalid operator in expression: {token}");
+                    }
+                }
+                else if (IsFunction(token))
+                {
+                    if (!AllowedFunctions.Contains(token))
+                    {
+                        throw new ArgumentException($"Invalid function in expression: {token}");
+                    }
+                }
+                else if (
+                    !IsValidIdentifier(token)
+                    && !IsNumeric(token)
+                    && !AllowedSpecialCharacters.Contains(token)
+                )
+                {
+                    throw new ArgumentException($"Invalid token in expression: {token}");
+                }
             }
         }
 
-        /// <summary>
-        /// Performs syntax validation using Roslyn
-        /// </summary>
+        private static void ValidateParentheses(string expression)
+        {
+            int count = 0;
+            foreach (char c in expression)
+            {
+                if (c == '(')
+                    count++;
+                if (c == ')')
+                    count--;
+                if (count < 0)
+                {
+                    throw new ArgumentException("Unmatched parentheses in expression");
+                }
+            }
+            if (count != 0)
+            {
+                throw new ArgumentException("Unmatched parentheses in expression");
+            }
+        }
+
+        private static IEnumerable<string> TokenizeExpression(string expression)
+        {
+            // Updated pattern to better handle decimals and function calls
+            var tokenPattern =
+                @"(?:Math\.[a-zA-Z][a-zA-Z0-9]*)|[a-zA-Z_][a-zA-Z0-9_]*|\d+\.\d+|\d+|[+\-*/><]=?|==|!=|\(|\)";
+            return Regex.Matches(expression, tokenPattern).Select(m => m.Value);
+        }
+
+        private static bool IsOperator(string token) => AllowedOperators.Contains(token);
+
+        private static bool IsFunction(string token) => token.Contains(".") && !IsNumeric(token); // Don't treat decimals as functions
+
+        private static bool IsValidIdentifier(string token) =>
+            Regex.IsMatch(token, @"^[a-zA-Z_][a-zA-Z0-9_]*$");
+
+        private static bool IsNumeric(string token) => double.TryParse(token, out _);
+
         private static void ValidateSyntax(string expression)
         {
             var code =
@@ -93,16 +147,13 @@ namespace Pulsar.Compiler.Validation
 
             if (diagnostics.Any())
             {
-                throw new ExpressionValidationException(
+                throw new ArgumentException(
                     "Syntax validation failed: "
                         + string.Join(", ", diagnostics.Select(d => d.GetMessage()))
                 );
             }
         }
 
-        /// <summary>
-        /// Validates function calls in the expression
-        /// </summary>
         private static void ValidateFunctions(string expression)
         {
             // Extract function calls
@@ -122,9 +173,9 @@ namespace Pulsar.Compiler.Validation
                     )
                 )
                 {
-                    if (!AllowedMathFunctions.Contains(fullFunctionName))
+                    if (!AllowedFunctions.Contains(fullFunctionName))
                     {
-                        throw new ExpressionValidationException(
+                        throw new ArgumentException(
                             $"Unauthorized function call: {fullFunctionName}"
                         );
                     }
@@ -132,9 +183,6 @@ namespace Pulsar.Compiler.Validation
             }
         }
 
-        /// <summary>
-        /// Validates operators in the expression
-        /// </summary>
         private static void ValidateOperators(string expression)
         {
             // Extract all operators
@@ -146,14 +194,11 @@ namespace Pulsar.Compiler.Validation
                 var op = match.Value;
                 if (!AllowedOperators.Contains(op))
                 {
-                    throw new ExpressionValidationException($"Unauthorized operator: {op}");
+                    throw new ArgumentException($"Unauthorized operator: {op}");
                 }
             }
         }
 
-        /// <summary>
-        /// Validates identifiers in the expression
-        /// </summary>
         private static void ValidateIdentifiers(string expression)
         {
             // Identify potential identifiers (sensors, variables)
@@ -167,7 +212,7 @@ namespace Pulsar.Compiler.Validation
                 // Exclude known keywords and math functions
                 if (
                     IsReservedKeyword(identifier)
-                    || AllowedMathFunctions.Any(f => f.EndsWith(identifier))
+                    || AllowedFunctions.Any(f => f.EndsWith(identifier))
                 )
                 {
                     continue;
@@ -178,9 +223,6 @@ namespace Pulsar.Compiler.Validation
             }
         }
 
-        /// <summary>
-        /// Checks if an identifier is a reserved keyword
-        /// </summary>
         private static bool IsReservedKeyword(string identifier)
         {
             string[] reservedKeywords =
@@ -200,44 +242,6 @@ namespace Pulsar.Compiler.Validation
             };
 
             return reservedKeywords.Contains(identifier);
-        }
-
-        /// <summary>
-        /// Custom exception for expression validation
-        /// </summary>
-        private class ExpressionValidationException : Exception
-        {
-            public ExpressionValidationException(string message)
-                : base(message) { }
-        }
-
-        /// <summary>
-        /// Extracts sensors from an expression
-        /// </summary>
-        public static List<string> ExtractSensors(string expression)
-        {
-            if (string.IsNullOrWhiteSpace(expression))
-                return new List<string>();
-
-            var sensors = new List<string>();
-            var identifierPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b";
-            var matches = Regex.Matches(expression, identifierPattern);
-
-            foreach (Match match in matches)
-            {
-                var identifier = match.Value;
-
-                // Exclude math functions, keywords, and known non-sensor identifiers
-                if (
-                    !IsReservedKeyword(identifier)
-                    && !AllowedMathFunctions.Any(f => f.EndsWith(identifier))
-                )
-                {
-                    sensors.Add(identifier);
-                }
-            }
-
-            return sensors.Distinct().ToList();
         }
     }
 }

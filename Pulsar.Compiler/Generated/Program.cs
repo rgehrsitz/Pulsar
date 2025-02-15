@@ -9,11 +9,8 @@ using Serilog;
 using Prometheus;
 using Pulsar.Runtime.Buffers;
 using Pulsar.Runtime;
-
-
 using System.Threading;
 using StackExchange.Redis;
-using Pulsar.Runtime;
 using Pulsar.Runtime.Services;
 
 namespace Pulsar.Runtime.Rules
@@ -23,22 +20,21 @@ namespace Pulsar.Runtime.Rules
         public static async Task<int> Main(string[] args)
         {
             var config = ConfigurationLoader.LoadConfiguration(args);
-            var logger = CreateLogger(config);
+            var logger = LoggingConfig.GetLogger();
 
             try
             {
                 logger.Information("Starting Pulsar Runtime v{Version}",
                     typeof(Program).Assembly.GetName().Version);
 
-                using var redis = new RedisService(config.RedisConnectionString, logger);
+                using var redis = new RedisService(config.RedisConnectionString);
                 using var bufferManager = new RingBufferManager(config.BufferCapacity);
 
                 using var orchestrator = new RuntimeOrchestrator(
                     redis,
-                    logger,
                     EmbeddedConfig.ValidSensors.ToArray(),
-                    LoadRuleCoordinator(config, logger, bufferManager),
-                    null);
+                    LoadRuleCoordinator(config, bufferManager),
+                    config.CycleTime);
 
                 // Setup graceful shutdown
                 var cts = new CancellationTokenSource();
@@ -51,7 +47,7 @@ namespace Pulsar.Runtime.Rules
 
                 logger.Information("Starting orchestrator with {SensorCount} sensors, {CycleTime}ms cycle time",
                     EmbeddedConfig.ValidSensors.Length,
-                    EmbeddedConfig.CycleTime);
+                    config.CycleTime?.TotalMilliseconds ?? 100);
 
                 await orchestrator.StartAsync();
 
@@ -81,23 +77,9 @@ namespace Pulsar.Runtime.Rules
             }
         }
 
-        private static ILogger CreateLogger(RuntimeConfig config)
+        private static IRuleCoordinator LoadRuleCoordinator(RuntimeConfig config, RingBufferManager bufferManager)
         {
-            var loggerConfig = new LoggerConfiguration()
-                .MinimumLevel.Is(config.LogLevel)
-                .WriteTo.Console();
-
-            if (!string.IsNullOrEmpty(config.LogFile))
-            {
-                loggerConfig.WriteTo.File(config.LogFile);
-            }
-
-            return loggerConfig.CreateLogger();
-        }
-
-        private static IRuleCoordinator LoadRuleCoordinator(RuntimeConfig config, ILogger logger, RingBufferManager bufferManager)
-        {
-            return new RuleCoordinator(logger, bufferManager);
+            return new RuleCoordinator(LoggingConfig.GetLogger(), bufferManager);
         }
     }
 }
