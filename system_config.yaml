@@ -1,3 +1,5 @@
+# File: Pulsar/system_config.yaml
+
 version: 1
 validSensors:
   - temperature_f
