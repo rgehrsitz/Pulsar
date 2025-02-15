@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
+using Pulsar.Tests.TestUtilities; // Updated namespace
 
 namespace Pulsar.Tests.Compilation
 {
@@ -38,53 +39,5 @@ namespace Pulsar.Tests.Compilation
             Assert.NotNull(result.Errors);
             Assert.NotEmpty(result.Errors);
         }
-    }
-
-    // Stub implementation for the rule compiler
-    public static class RuleCompiler
-    {
-        public static CompilationResult Compile(string[] rules)
-        {
-            // Dummy implementation for test scaffolding
-            if (rules == null || rules.Length == 0)
-            {
-                return new CompilationResult
-                {
-                    IsSuccess = false,
-                    Errors = new List<string> { "No rules provided." },
-                    SourceFiles = new List<string>(),
-                    SourceMap = string.Empty,
-                };
-            }
-
-            // If the rule contains the word "invalid", simulate a compilation error
-            if (rules[0].Contains("invalid"))
-            {
-                return new CompilationResult
-                {
-                    IsSuccess = false,
-                    Errors = new List<string> { "Compilation error: Invalid rule." },
-                    SourceFiles = new List<string>(),
-                    SourceMap = string.Empty,
-                };
-            }
-
-            // Otherwise, simulate successful compilation
-            return new CompilationResult
-            {
-                IsSuccess = true,
-                Errors = new List<string>(),
-                SourceFiles = new List<string> { "GeneratedRule.cs" },
-                SourceMap = "Source map info",
-            };
-        }
-    }
-
-    public class CompilationResult
-    {
-        public bool IsSuccess { get; set; }
-        public List<string>? Errors { get; set; }
-        public List<string>? SourceFiles { get; set; }
-        public string? SourceMap { get; set; }
     }
 }

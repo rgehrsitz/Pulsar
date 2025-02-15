@@ -22,7 +22,7 @@
     <PackageReference Include="Microsoft.Build" Version="17.12.6" />
   </ItemGroup>
 
-    <!-- Include template files as embedded resources -->
+  <!-- Include template files as embedded resources -->
   <ItemGroup>
     <EmbeddedResource Include="Config\Templates\**\*" />
   </ItemGroup>

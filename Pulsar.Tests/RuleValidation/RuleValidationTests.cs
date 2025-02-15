@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
+using Pulsar.Tests.TestUtilities; // Updated namespace
 
 namespace Pulsar.Tests.RuleValidation
 {
@@ -41,36 +42,5 @@ namespace Pulsar.Tests.RuleValidation
             Assert.True(result.IsValid, "Validation should succeed for a complete rule.");
             Assert.False(string.IsNullOrEmpty(result.Metadata));
         }
-    }
-
-    // Stub implementation for rule validation for testing purposes
-    public static class RuleValidator
-    {
-        public static ValidationResult Validate(string ruleContent)
-        {
-            // Simulated validation logic
-            if (ruleContent.Contains("missing mandatory"))
-            {
-                return new ValidationResult
-                {
-                    IsValid = false,
-                    Errors = new List<string> { "Error: missing mandatory fields." },
-                    Metadata = "",
-                };
-            }
-            return new ValidationResult
-            {
-                IsValid = true,
-                Errors = new List<string>(),
-                Metadata = "extracted metadata",
-            };
-        }
-    }
-
-    public class ValidationResult
-    {
-        public bool IsValid { get; set; }
-        public List<string>? Errors { get; set; }
-        public string? Metadata { get; set; }
     }
 }

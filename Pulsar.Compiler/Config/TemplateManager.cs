@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Pulsar.Compiler.Models;
@@ -45,7 +47,7 @@ namespace Pulsar.Compiler.Config
                 {
                     var relativePath = Path.GetRelativePath(templatePath, templateFile);
                     var outputFilePath = Path.Combine(outputPath, relativePath);
-                    var content = File.ReadAllText(templateFile);
+                    var content = GetTemplate(Path.GetFileName(templateFile));
 
                     // Ensure directory exists for output file
                     var dirPath = Path.GetDirectoryName(outputFilePath);
@@ -106,6 +108,23 @@ namespace Pulsar.Compiler.Config
             }
 
             return templatePath;
+        }
+
+        public static string GetTemplate(string templateName)
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = $"Pulsar.Compiler.Config.Templates.{templateName}";
+
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream == null)
+            {
+                throw new InvalidOperationException(
+                    $"Template '{templateName}' not found in assembly {assembly.FullName}. Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}"
+                );
+            }
+
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            return reader.ReadToEnd();
         }
     }
 }
