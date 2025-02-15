@@ -1,13 +1,10 @@
-// File: Pulsar.Compiler/ConfigurationLoader.cs
-
 using System;
 using System.Text.Json;
 using System.IO;
 using Serilog;
-using Pulsar.Compiler;
 using Pulsar.Runtime.Rules;
 
-namespace Pulsar.Compiler
+namespace Pulsar.Compiler.Config
 {
     internal static class ConfigurationLoader
     {
