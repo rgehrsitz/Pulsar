@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Serilog;
+using Pulsar.Compiler;
 
 namespace Pulsar.Tests.TestUtilities
 {
@@ -26,7 +27,7 @@ namespace Pulsar.Tests.TestUtilities
         )
         {
             _logger.Debug("Running cycle with logging. Rules: {RuleCount}", rules.Length);
-            
+
             var logs = new List<string>();
             logs.Add("Cycle Started");
             logs.Add($"Processing rules: {rules.Length}");

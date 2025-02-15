@@ -40,7 +40,9 @@ namespace Pulsar.Compiler.Config
                 {
                     _logger.Error("Build failed with errors: {@Errors}", compilationResult.Errors);
                     result.Success = false;
-                    result.Errors.AddRange(compilationResult.Errors);
+                    var errorsList = new List<string>(result.Errors);
+                    errorsList.AddRange(compilationResult.Errors);
+                    result.Errors = errorsList.ToArray();
                     return result;
                 }
 
@@ -53,7 +55,7 @@ namespace Pulsar.Compiler.Config
                 return new BuildResult 
                 {
                     Success = false,
-                    Errors = new List<string> { ex.Message }
+                    Errors = new List<string> { ex.Message }.ToArray()
                 };
             }
         }

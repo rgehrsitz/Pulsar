@@ -9,6 +9,8 @@ using System.Text.RegularExpressions;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Models;
 using Serilog;
+using Serilog.Events;
+using Microsoft.Extensions.Logging;
 
 namespace Pulsar.Compiler.Generation
 {
@@ -19,17 +21,29 @@ namespace Pulsar.Compiler.Generation
         public bool GroupParallelRules { get; set; } = true;
     }
 
-    public class CodeGenerator
+    public class CodeGenerator : IDisposable
     {
-        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+        private readonly Serilog.ILogger _logger;
 
-        public static List<Pulsar.Compiler.Models.GeneratedFileInfo> GenerateCSharp(
+        public CodeGenerator()
+        {
+            _logger = LoggingConfig.GetLogger();
+        }
+
+        public void Dispose()
+        {
+            // No unmanaged resources to dispose
+            GC.SuppressFinalize(this);
+        }
+
+        public List<Pulsar.Compiler.Models.GeneratedFileInfo> GenerateCSharp(
             List<RuleDefinition> rules,
             BuildConfig? config = null)
         {
             config ??= new BuildConfig
             {
                 OutputPath = "Generated",
+                RulesPath = "Rules",
                 Target = "win-x64",
                 ProjectName = "Pulsar.Compiler",
                 TargetFramework = "net9.0",
@@ -40,7 +54,7 @@ namespace Pulsar.Compiler.Generation
             try
             {
                 // Copy template files first
-                var templateManager = new TemplateManager(new SerilogAdapter(_logger));
+                var templateManager = new TemplateManager();
                 files.AddRange(templateManager.CopyTemplateFiles(config.OutputPath));
 
                 // Get layer assignments for rules
@@ -300,13 +314,13 @@ namespace Pulsar.Compiler.Generation
 
             builder.AppendLine($"    public class RuleGroup{groupIndex} : IRuleGroup");
             builder.AppendLine("    {");
-            builder.AppendLine("        private readonly ILogger _logger;");
+            builder.AppendLine("        private readonly Serilog.ILogger _logger;");
             builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
             builder.AppendLine();
 
             // Constructor
             builder.AppendLine(
-                $"        public RuleGroup{groupIndex}(ILogger logger, RingBufferManager bufferManager)"
+                $"        public RuleGroup{groupIndex}(Serilog.ILogger logger, RingBufferManager bufferManager)"
             );
             builder.AppendLine("        {");
             builder.AppendLine(
@@ -333,10 +347,10 @@ namespace Pulsar.Compiler.Generation
             foreach (var rule in rules.OrderBy(r => layerMap[r.Name]))
             {
                 // Add source tracking
-                if (rule.SourceInfo != null)
+                if (rule.SourceFile != null)
                 {
                     builder.AppendLine(
-                        $"                // Source: {rule.SourceInfo.FileName}:{rule.SourceInfo.LineNumber}"
+                        $"                // Source: {rule.SourceFile}:{rule.LineNumber}"
                     );
                 }
                 builder.AppendLine($"                // Rule: {rule.Name}");
@@ -428,7 +442,7 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine();
 
             // Fields
-            builder.AppendLine("        private readonly ILogger _logger;");
+            builder.AppendLine("        private readonly Serilog.ILogger _logger;");
             builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
 
             // Add fields for each group
@@ -452,7 +466,7 @@ namespace Pulsar.Compiler.Generation
 
             // Constructor
             builder.AppendLine(
-                "        public RuleCoordinator(ILogger logger, RingBufferManager bufferManager)"
+                "        public RuleCoordinator(Serilog.ILogger logger, RingBufferManager bufferManager)"
             );
             builder.AppendLine("        {");
             builder.AppendLine(
@@ -578,8 +592,8 @@ namespace Pulsar.Compiler.Generation
             {
                 metadata.Rules[rule.Name] = new RuleMetadata
                 {
-                    SourceFile = rule.SourceInfo?.FileName ?? "unknown",
-                    SourceLineNumber = rule.SourceInfo?.LineNumber ?? 0,
+                    SourceFile = rule.SourceFile,
+                    SourceLineNumber = rule.LineNumber,
                     Layer = int.Parse(layerMap[rule.Name].ToString()),
                     Description = rule.Description,
                     Dependencies = GetDependencies(rule, rules.ToDictionary(
@@ -872,24 +886,24 @@ namespace Pulsar.Compiler.Generation
                 return new LogScope();
             }
 
-            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public bool IsEnabled(LogLevel logLevel) => true;
 
             public void Log<TState>(
-                Microsoft.Extensions.Logging.LogLevel logLevel,
-                Microsoft.Extensions.Logging.EventId eventId,
+                LogLevel logLevel,
+                EventId eventId,
                 TState state,
                 Exception? exception,
                 Func<TState, Exception?, string> formatter)
             {
                 var level = logLevel switch
                 {
-                    Microsoft.Extensions.Logging.LogLevel.Trace => LogEventLevel.Verbose,
-                    Microsoft.Extensions.Logging.LogLevel.Debug => LogEventLevel.Debug,
-                    Microsoft.Extensions.Logging.LogLevel.Information => LogEventLevel.Information,
-                    Microsoft.Extensions.Logging.LogLevel.Warning => LogEventLevel.Warning,
-                    Microsoft.Extensions.Logging.LogLevel.Error => LogEventLevel.Error,
-                    Microsoft.Extensions.Logging.LogLevel.Critical => LogEventLevel.Fatal,
-                    _ => LogEventLevel.Information
+                    LogLevel.Trace => Serilog.Events.LogEventLevel.Verbose,
+                    LogLevel.Debug => Serilog.Events.LogEventLevel.Debug,
+                    LogLevel.Information => Serilog.Events.LogEventLevel.Information,
+                    LogLevel.Warning => Serilog.Events.LogEventLevel.Warning,
+                    LogLevel.Error => Serilog.Events.LogEventLevel.Error,
+                    LogLevel.Critical => Serilog.Events.LogEventLevel.Fatal,
+                    _ => Serilog.Events.LogEventLevel.Information
                 };
 
                 _logger.Write(level, exception, formatter(state, exception));

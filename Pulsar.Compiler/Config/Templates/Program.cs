@@ -9,6 +9,7 @@ using Pulsar.Runtime.Services;
 using Pulsar.Runtime.Buffers;
 using Serilog;
 using Pulsar.Compiler.Config.Templates.Interfaces;
+using Pulsar.Compiler;
 
 namespace Pulsar.Runtime.Rules
 {

@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/LoggingConfig.cs
+
 using System;
 using Serilog;
 using Serilog.Core;

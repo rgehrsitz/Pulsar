@@ -106,7 +106,7 @@ public class Program
             var compilerOptions = new Models.CompilerOptions
             {
                 BuildConfig = buildConfig,
-                ValidSensors = systemConfig.ValidSensors.ToArray(),
+                ValidSensors = systemConfig.ValidSensors.ToList(),
             };
             var pipeline = new Core.CompilationPipeline(
                 new Core.AOTRuleCompiler(),
@@ -263,7 +263,7 @@ public class Program
         var compilerOptions = new Models.CompilerOptions
         {
             BuildConfig = buildConfig,
-            ValidSensors = new string[0], // Optionally set valid sensors if available
+            ValidSensors = new List<string>(), // Optionally set valid sensors if available
         };
         var pipeline = new CompilationPipeline(new AOTRuleCompiler(), new DslParser());
         var result = pipeline.ProcessRules(options["rules"], compilerOptions);
@@ -306,6 +306,7 @@ public class Program
             Target = options.GetValueOrDefault("target", "win-x64"),
             ProjectName = options.GetValueOrDefault("project", "Pulsar.Compiler"),
             TargetFramework = options.GetValueOrDefault("targetframework", "net9.0"),
+            RulesPath = options.GetValueOrDefault("rules", "Rules"),
             MaxRulesPerFile = int.Parse(options.GetValueOrDefault("max-rules", "100")),
             GenerateDebugInfo = options.GetValueOrDefault("debug") == "true",
             StandaloneExecutable = true,

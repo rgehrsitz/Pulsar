@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Serilog;
+using Pulsar.Compiler.Config;
 
 namespace Pulsar.Compiler.Models
 {

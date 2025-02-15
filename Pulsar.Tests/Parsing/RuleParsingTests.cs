@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using Xunit;
 using Pulsar.Tests.TestUtilities;
 using Serilog;
+using Pulsar.Compiler;
 
 namespace Pulsar.Tests.Parsing
 {

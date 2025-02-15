@@ -3,9 +3,10 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
-using Pulsar.Tests.TestUtilities; // Updated namespace
+using Pulsar.Tests.TestUtilities; 
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Models;
+using Pulsar.Compiler;  
 using Serilog;
 
 namespace Pulsar.Tests.Compilation
@@ -44,7 +45,11 @@ namespace Pulsar.Tests.Compilation
                 BuildConfig = new Pulsar.Compiler.Config.BuildConfig
                 {
                     OutputPath = "TestOutput",
-                    Debug = true
+                    Target = "win-x64",
+                    ProjectName = "TestProject",
+                    TargetFramework = "net9.0",
+                    RulesPath = "TestRules",
+                    GenerateDebugInfo = true
                 }
             };
 
@@ -77,7 +82,11 @@ namespace Pulsar.Tests.Compilation
                 BuildConfig = new Pulsar.Compiler.Config.BuildConfig
                 {
                     OutputPath = "TestOutput",
-                    Debug = true
+                    Target = "win-x64",
+                    ProjectName = "TestProject",
+                    TargetFramework = "net9.0",
+                    RulesPath = "TestRules",
+                    GenerateDebugInfo = true
                 }
             };
 

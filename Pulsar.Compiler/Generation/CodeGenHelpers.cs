@@ -14,7 +14,7 @@ namespace Pulsar.Compiler.Generation
     /// </summary>
     public static class CodeGenHelpers
     {
-        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+        private static readonly Serilog.ILogger _logger = LoggingConfig.GetLogger();
 
         /// <summary>
         /// Generates a standard file header comment including the file name and UTC generation timestamp.
@@ -103,13 +103,17 @@ namespace Pulsar.Compiler.Generation
         private static string GenerateConditionExpression(ConditionDefinition condition)
         {
             _logger.Debug("Generating expression for condition type: {Type}", condition.GetType().Name);
-            // ...existing code...
+            
+            // Default implementation - should be overridden for specific condition types
+            throw new NotImplementedException($"Generation of condition type {condition.GetType().Name} is not implemented");
         }
 
         private static string GenerateActionExpression(ActionDefinition action)
         {
             _logger.Debug("Generating expression for action type: {Type}", action.GetType().Name);
-            // ...existing code...
+            
+            // Default implementation - should be overridden for specific action types
+            throw new NotImplementedException($"Generation of action type {action.GetType().Name} is not implemented");
         }
 
         public static string SanitizeIdentifier(string identifier)

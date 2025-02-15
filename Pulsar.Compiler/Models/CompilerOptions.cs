@@ -11,7 +11,14 @@ namespace Pulsar.Compiler.Models
     {
         private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
-        public BuildConfig BuildConfig { get; set; } = new BuildConfig();
+        public BuildConfig BuildConfig { get; set; } = new BuildConfig
+        {
+            OutputPath = "build",
+            Target = "library",
+            ProjectName = "PulsarRules",
+            TargetFramework = "net9.0",
+            RulesPath = "rules"
+        };
         public List<string> ValidSensors { get; set; } = new();
         public bool StrictMode { get; set; }
 

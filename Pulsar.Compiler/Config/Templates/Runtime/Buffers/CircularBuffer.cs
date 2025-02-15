@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Serilog;
+using Pulsar.Compiler;
 
 namespace Pulsar.Runtime.Buffers;
 

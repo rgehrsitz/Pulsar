@@ -5,6 +5,7 @@ using NRedisStack;
 using NRedisStack.RedisStackCommands;
 using Serilog;
 using StackExchange.Redis;
+using Pulsar.Compiler;
 
 namespace Pulsar.Runtime.Services;
 

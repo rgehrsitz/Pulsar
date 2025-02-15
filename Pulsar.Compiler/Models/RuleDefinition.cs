@@ -65,8 +65,6 @@ namespace Pulsar.Compiler.Models
 
     public class ConditionGroup : ConditionDefinition
     {
-        private static readonly ILogger _logger = LoggingConfig.GetLogger();
-
         public List<ConditionDefinition> All { get; set; } = new();
         public List<ConditionDefinition> Any { get; set; } = new();
         public ConditionGroup? Parent { get; private set; }
@@ -95,7 +93,17 @@ namespace Pulsar.Compiler.Models
             if ((All == null || All.Count == 0) && (Any == null || Any.Count == 0))
             {
                 _logger.Error("Condition group must have at least one condition in All or Any");
-                throw new ArgumentException("Condition group must have at least one condition");
+                throw new ArgumentException("Condition group must have at least one condition in All or Any");
+            }
+
+            foreach (var condition in All)
+            {
+                condition.Validate();
+            }
+
+            foreach (var condition in Any)
+            {
+                condition.Validate();
             }
         }
     }
@@ -174,6 +182,21 @@ namespace Pulsar.Compiler.Models
         public string Sensor { get; set; } = string.Empty;
         public double Threshold { get; set; }
         public int Duration { get; set; }
+
+        public override void Validate()
+        {
+            if (string.IsNullOrEmpty(Sensor))
+            {
+                _logger.Error("Sensor is required for threshold over time condition");
+                throw new ArgumentException("Sensor is required for threshold over time condition");
+            }
+
+            if (Duration <= 0)
+            {
+                _logger.Error("Duration must be greater than 0");
+                throw new ArgumentException("Duration must be greater than 0");
+            }
+        }
     }
 
     public abstract class ActionDefinition

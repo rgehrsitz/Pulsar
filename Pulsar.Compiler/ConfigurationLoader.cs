@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.IO;
 using Serilog;
 using Pulsar.Compiler;
+using Pulsar.Runtime.Rules;
 
 namespace Pulsar.Compiler
 {

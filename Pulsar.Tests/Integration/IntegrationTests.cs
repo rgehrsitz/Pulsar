@@ -4,8 +4,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using Pulsar.Tests.TestUtilities; // Updated namespace
+using Pulsar.Tests.TestUtilities;
 using Serilog;
+using Pulsar.Compiler;
+using Pulsar.Compiler.Core;
+using Pulsar.Compiler.Models;
+using Pulsar.Compiler.Config;
 
 namespace Pulsar.Tests.Integration
 {
@@ -38,10 +42,24 @@ namespace Pulsar.Tests.Integration
             }
 
             // Compile the rules using the stub compiler
-            var compileResult = RuleCompiler.Compile(ruleContents);
-            Assert.True(compileResult.IsSuccess, "Compilation should succeed with valid rules.");
-            Assert.NotNull(compileResult.SourceFiles);
-            Assert.NotEmpty(compileResult.SourceFiles);
+            var compiler = new AOTRuleCompiler();
+            var compileResult = compiler.Compile(
+                ruleContents.Select(r => new RuleDefinition()).ToArray(),
+                new CompilerOptions
+                {
+                    BuildConfig = new BuildConfig
+                    {
+                        OutputPath = "test-output",
+                        Target = "test-target",
+                        ProjectName = "test-project",
+                        TargetFramework = "net9.0",
+                        RulesPath = "test-rules"
+                    }
+                }
+            );
+            Assert.True(compileResult.Success, "Compilation should succeed with valid rules.");
+            Assert.NotNull(compileResult.GeneratedFiles);
+            Assert.NotEmpty(compileResult.GeneratedFiles);
 
             // Simulate runtime execution with a stub runtime engine
             var sensorInput = new Dictionary<string, string>
@@ -85,10 +103,24 @@ namespace Pulsar.Tests.Integration
 
             string[] ruleContents = new string[] { "invalid rule content" };
             var parsedResult = RuleParser.Parse(ruleContents[0]);
-            var compileResult = RuleCompiler.Compile(ruleContents);
+            var compiler = new AOTRuleCompiler();
+            var compileResult = compiler.Compile(
+                ruleContents.Select(r => new RuleDefinition()).ToArray(),
+                new CompilerOptions
+                {
+                    BuildConfig = new BuildConfig
+                    {
+                        OutputPath = "test-output",
+                        Target = "test-target",
+                        ProjectName = "test-project",
+                        TargetFramework = "net9.0",
+                        RulesPath = "test-rules"
+                    }
+                }
+            );
 
             Assert.False(parsedResult.IsValid, "Expected rule parsing to fail for invalid rule content.");
-            Assert.False(compileResult.IsSuccess, "Expected compilation to fail with invalid rules.");
+            Assert.False(compileResult.Success, "Expected compilation to fail with invalid rules.");
             Assert.NotNull(compileResult.Errors);
             Assert.NotEmpty(compileResult.Errors);
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Pulsar.Compiler.Models;
+using Pulsar.Compiler;
 using Serilog;
 
 namespace Pulsar.Tests.TestUtilities

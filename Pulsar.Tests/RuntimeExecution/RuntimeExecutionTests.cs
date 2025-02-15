@@ -5,12 +5,14 @@ using System.Collections.Generic;
 using Xunit;
 using Pulsar.Tests.TestUtilities;
 using Serilog;
+using Pulsar.Compiler;
+using Serilog.Core;
 
 namespace Pulsar.Tests.RuntimeExecution
 {
     public class RuntimeExecutionTests
     {
-        private readonly ILogger _logger;
+        private readonly Logger _logger;
 
         public RuntimeExecutionTests()
         {

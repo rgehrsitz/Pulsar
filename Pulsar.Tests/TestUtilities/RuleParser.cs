@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Pulsar.Compiler;
 using Pulsar.Compiler.Models;
 using Serilog;
 

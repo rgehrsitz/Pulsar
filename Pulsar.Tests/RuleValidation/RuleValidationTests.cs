@@ -6,6 +6,7 @@ using Xunit;
 using Pulsar.Tests.TestUtilities; // Updated namespace
 using Pulsar.Compiler.Models;
 using Serilog;
+using Pulsar.Compiler;
 
 namespace Pulsar.Tests.RuleValidation
 {
@@ -21,42 +22,54 @@ namespace Pulsar.Tests.RuleValidation
         [Fact]
         public void DetailedErrorProduced_ForMissingMandatoryFields()
         {
-            // Arrange: Create a rule input missing mandatory fields
-            string ruleContent = "// rule missing mandatory fields";
+            // Arrange: Create a rule missing mandatory fields
+            var rule = new RuleDefinition
+            {
+                // Intentionally leave required fields empty
+            };
 
             // Act: Validate the rule
-            var result = RuleValidator.Validate(ruleContent);
+            var result = RuleValidator.Validate(rule);
 
             // Assert: Expect validation to fail with detailed errors
             Assert.False(result.IsValid, "Validation should fail for incomplete rules.");
             Assert.NotNull(result.Errors);
             Assert.NotEmpty(result.Errors);
             Assert.Contains(
-                "missing mandatory",
+                "Rule name cannot be empty",
                 result.Errors[0],
                 StringComparison.OrdinalIgnoreCase
             );
         }
 
         [Fact]
-        public void MetadataExtracted_ForValidRuleFormat()
+        public void ValidationSucceeds_ForValidRuleFormat()
         {
-            // Arrange: Provide a well-formed rule input
-            string ruleContent = "// valid rule with all mandatory fields and extra metadata";
+            // Arrange: Provide a well-formed rule
+            var rule = new RuleDefinition
+            {
+                Name = "TestRule",
+                Description = "A test rule with all mandatory fields",
+                Conditions = new ConditionGroup(),
+                Actions = new List<ActionDefinition>
+                {
+                    new SetValueAction { Key = "output", Value = 1.0 }
+                }
+            };
 
             // Act: Validate the rule
-            var result = RuleValidator.Validate(ruleContent);
+            var result = RuleValidator.Validate(rule);
 
-            // Assert: Expect validation to succeed and metadata to be extracted
+            // Assert: Expect validation to succeed
             Assert.True(result.IsValid, "Validation should succeed for a complete rule.");
-            Assert.False(string.IsNullOrEmpty(result.Metadata));
+            Assert.Empty(result.Errors);
         }
 
         [Fact]
         public void Validation_ValidRule_Succeeds()
         {
             _logger.Debug("Running ValidRule validation test");
-            
+
             // Arrange
             var rule = new RuleDefinition
             {
@@ -75,7 +88,7 @@ namespace Pulsar.Tests.RuleValidation
             // Assert
             Assert.True(result.IsValid);
             Assert.Empty(result.Errors);
-            
+
             _logger.Debug("Valid rule validation test completed successfully");
         }
 
@@ -83,7 +96,7 @@ namespace Pulsar.Tests.RuleValidation
         public void Validation_EmptyRule_Fails()
         {
             _logger.Debug("Running EmptyRule validation test");
-            
+
             // Arrange
             var rule = new RuleDefinition();
 
@@ -93,7 +106,7 @@ namespace Pulsar.Tests.RuleValidation
             // Assert
             Assert.False(result.IsValid);
             Assert.NotEmpty(result.Errors);
-            
+
             _logger.Debug("Empty rule validation test completed successfully");
         }
     }

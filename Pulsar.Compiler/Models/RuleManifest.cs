@@ -242,8 +242,8 @@ namespace Pulsar.Compiler.Models
             {
                 var metadata = new RuleMetadata
                 {
-                    SourceFile = rule.SourceInfo?.FileName ?? "unknown",
-                    SourceLineNumber = rule.SourceInfo?.LineNumber ?? 0,
+                    SourceFile = rule.SourceFile ?? "unknown",
+                    SourceLineNumber = rule.LineNumber,
                     Layer = ruleLayerMap[rule.Name],
                     Description = rule.Description,
                     Dependencies = GetRuleDependencies(rule),

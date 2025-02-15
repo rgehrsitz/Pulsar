@@ -32,18 +32,32 @@ namespace Pulsar.Compiler.Core
 
                 _logger.Information("Rule dependencies analyzed and sorted");
 
-                var generatedFiles = CodeGenerator.GenerateCSharp(sortedRules, options.BuildConfig);
+                using var generator = new CodeGenerator();
+                var generatedFiles = generator.GenerateCSharp(sortedRules, options.BuildConfig);
                 _logger.Information("Generated {Count} source files", generatedFiles.Count);
 
-                // Compile the generated files using Roslyn
-                RoslynCompiler.CompileSource(generatedFiles, options.BuildConfig.OutputDllPath, options.BuildConfig.Debug);
-                _logger.Information("Successfully compiled rules to {Path}", options.BuildConfig.OutputDllPath);
+                // Instead of compiling to DLL, we now output source files for a standalone project
+                var outputPath = options.BuildConfig.OutputPath;
+                if (!Directory.Exists(outputPath))
+                {
+                    Directory.CreateDirectory(outputPath);
+                }
+
+                // Copy generated files to output directory
+                foreach (var file in generatedFiles)
+                {
+                    var targetPath = Path.Combine(outputPath, file.FileName);
+                    File.WriteAllText(targetPath, file.Content);
+                    _logger.Debug("Generated file written to {Path}", targetPath);
+                }
+
+                _logger.Information("Successfully generated source files in {Path}", outputPath);
 
                 return new CompilationResult
                 {
                     Success = true,
                     GeneratedFiles = generatedFiles.ToArray(),
-                    OutputPath = options.BuildConfig.OutputDllPath
+                    OutputPath = outputPath
                 };
             }
             catch (Exception ex)

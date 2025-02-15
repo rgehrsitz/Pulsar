@@ -156,12 +156,8 @@ namespace Pulsar.Compiler.Parsers
                         Description = rule.Description,
                         Conditions = ConvertConditions(rule.Conditions),
                         Actions = ConvertActions(rule.Actions ?? new List<ActionListItem>()),
-                        SourceInfo = new SourceInfo
-                        {
-                            FileName = _currentFile,
-                            LineNumber = rule.LineNumber,
-                            OriginalText = rule.OriginalText ?? string.Empty,
-                        },
+                        SourceFile = _currentFile,
+                        LineNumber = rule.LineNumber
                     };
 
                     ruleDefinitions.Add(ruleDefinition);

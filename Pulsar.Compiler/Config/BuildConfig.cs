@@ -13,6 +13,7 @@ namespace Pulsar.Compiler.Config
         public required string Target { get; set; }
         public required string ProjectName { get; set; }
         public required string TargetFramework { get; set; }
+        public required string RulesPath { get; set; } = string.Empty;
 
         public string Namespace { get; set; } = "Pulsar.Runtime.Rules";
         public bool Parallel { get; set; } = true;
@@ -40,6 +41,8 @@ namespace Pulsar.Compiler.Config
         public Dictionary<string, RuleMetrics> RuleMetrics { get; set; } =
             new Dictionary<string, RuleMetrics>();
         public RuleManifest Manifest { get; set; } = new RuleManifest();
+        public string OutputPath { get; set; } = string.Empty;
+        public RuleMetrics Metrics { get; set; } = new RuleMetrics();
 
         public BuildResult(bool success = true)
         {
