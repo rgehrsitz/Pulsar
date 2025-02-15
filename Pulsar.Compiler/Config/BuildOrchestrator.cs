@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/Config/BuildOrchestrator.cs
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,7 +28,7 @@ namespace Pulsar.Compiler.Config
             {
                 _logger.Information("Starting build for project: {ProjectName}", config.ProjectName);
 
-                var result = new BuildResult 
+                var result = new BuildResult
                 {
                     Success = true,
                     OutputPath = config.OutputPath,
@@ -52,7 +54,7 @@ namespace Pulsar.Compiler.Config
             catch (Exception ex)
             {
                 _logger.Error(ex, "Build failed with exception");
-                return new BuildResult 
+                return new BuildResult
                 {
                     Success = false,
                     Errors = new List<string> { ex.Message }.ToArray()
