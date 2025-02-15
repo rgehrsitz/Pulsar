@@ -1,293 +1,140 @@
 # Pulsar System Overview
 
-**What is Pulsar?**
-Pulsar is a high-performance, polling-based rules evaluation engine designed to process hundreds to thousands of key/value inputs using Redis as its data store. It fetches inputs, applies rules, and writes outputs back on a configurable schedule (default 100ms). The system's primary goal is to provide deterministic, real-time evaluations with minimal runtime overhead.
+## What is Pulsar?
 
-**Key Concepts and Components:**
+Pulsar is a high-performance, polling-based rules evaluation engine designed to process hundreds to thousands of key/value inputs using Redis as its primary data store. It fetches inputs, applies rules, and writes outputs back on a configurable schedule (default 100ms). The system's primary goal is to provide deterministic, real-time evaluations with minimal runtime overhead.
 
-1. **Rule Definitions (YAML/DSL)**:
-   Pulsar’s rules start as human-readable definitions in a structured language (YAML or similar lamguage supporting a specialized DSL). These rules:
+## Key Concepts and Components
 
-   - Specify conditions (e.g., comparisons, arithmetic operations) and may reference historical sensor values or computed facts for temporal-based operations.
-   - Declare Actions to be carried out as a result of evaluations.
-   - Adhere to a controlled set of allowed functions and syntax to ensure security and predictability.
+### 1. Rule Definitions (YAML/DSL)
 
-2. **Build-Time Compilation**:
-   Instead of interpreting rules at runtime, Pulsar employs a build-time compiler:
+- Rules are authored using a human-readable DSL in YAML format.
+- Each rule defines **conditions** (comparisons, arithmetic operations) and **actions** (set values, send messages).
+- Rules **can reference each other's outputs**, forming **dependency layers**.
+- Circular dependencies **must be detected at build time** and will fail compilation.
+- **Maximum allowed dependency depth** should be configurable (default: 10 levels) with warnings for deep chains.
 
-   - Validates rule syntax and semantics, ensuring no cycles or illegal references.
-   - Analyzes dependencies, performs a topological sort, and assigns each rule a layer number used for rule evaluation ordering.
-   - Generates optimized C# code representing all rules and their execution order.
-   - Sets up any necessary buffers used for temporal evaluations.
+### 2. Build-Time Compilation
 
-   This ensures no runtime parsing overhead and guarantees that only valid, verified rule sets are deployed and no circular references exist.
+- The compiler **validates rule syntax**, **performs dependency analysis**, and **generates optimized C# code**.
+- The compiled output is a **complete, standalone C# project**, capable of being **AOT-built**.
+- The system sorts rules into **evaluation layers** to ensure dependencies are resolved before execution.
+- **Ring Buffer Configuration**: Temporal buffers are configured at **build-time** to optimize memory and resource usage based on rule definitions.
+- **Pre-written templates** stored within the Pulsar repository ensure versioning and consistency.
 
-3. **Runtime Execution**:
-   Per specified cycle time (default = 100ms), the runtime:
+### 3. Runtime Execution
 
-   - Pulls the latest sensor values from the KV store in bulk.
-   - Uses the precompiled C# code to evaluate rules layer-by-layer, ensuring dependencies are respected and results are stable.
-   - Supports temporal logic by maintaining ring buffers of historical values for those sensors/facts that require them.
-   - Writes computed outputs back to the KV store.
+- The standalone executable fetches **bulk sensor values from Redis every 100ms**.
+- **Rules execute in dependency-resolved layers** to maintain deterministic evaluation.
+- Computed results are **written back to Redis** after processing.
+- **Temporal Data Handling**: The system maintains **an in-memory ring buffer** for historical values needed in temporal rule evaluations.
+- **Actions execute sequentially** within a rule, following the order in which they were defined.
+- **Structured Logging with Serilog**: The runtime will use **Serilog** for logging, ensuring uniformity with the broader system's logging strategy.
+- **Prometheus Metrics Exposure**: The runtime will expose **Prometheus-compatible** metrics for monitoring.
+- **Error Handling and Recovery**: Non-critical errors are logged and rule evaluation continues, while critical errors trigger alerts and halt execution when necessary.
 
-4. **Performance and Stability**:
-   Pulsar is designed for:
+### 4. Performance and Stability
 
-   - Deterministic timing: All evaluations finish reliably within the configured cycle time.
-   - Minimal overhead: Index-based lookups and code generation minimize memory allocations and GC pressure.
-   - Scalability: Can handle hundreds or thousands of rules without compromising performance.
+- **Deterministic timing**: Ensures all evaluations complete within the configured cycle time.
+- **Minimal overhead**: Uses **precompiled code** and **index-based lookups** instead of dictionaries.
+- **Scalability**: Capable of handling thousands of rules efficiently.
 
-   Additionally, it supports a four-node environment with one active instance at a time, enabling seamless failover and redundancy.
+## Rules Engine Requirements
 
-5. **Testing, Debugging, and Maintainability**:
-   Engineers can:
-   - Write and maintain rules as DSL files version-controlled alongside source code.
-   - Run unit and integration tests on the generated code.
-   - Debug and step through the compiled C# rules.
-   - Utilize performance metrics, logs, and traces for troubleshooting and optimization.
+### **Rules (DSL) Requirements**
 
-**In Summary**:
-Pulsar is a robust, precompiled rules engine that unites a human-readable rule definition stage with a high-performance runtime execution model. By separating the rule definition, build-time compilation, and runtime execution, Pulsar ensures reliability, maintainability, and predictable performance in a complex, real-time processing environment.
+1. **Language & Syntax**
 
----
+   - Supports **comparison, arithmetic, and temporal expressions**.
+   - **Strict Discrete Mode is the default** (values are not assumed unless explicitly reported).
+   - **Extended Last-Known Mode** must be explicitly enabled where needed.
 
-# Pulsar Requirements
+2. **Dependency Management**
 
-Below is a structured set of requirements for the logic system. The requirements are organized by the major components—**Rules (DSL)**, **Compiler**, and **Runtime**—highlighting the separation of concerns.
+   - Rules can reference **computed values from prior layers**.
+   - A **topological sort** determines rule execution order.
+   - **Circular dependencies cause build-time failure**.
 
----
+3. **Action Execution**
 
-## High-Level Objectives
+   - Actions execute **in sequence**, in the order they are defined.
+   - Supported actions: **Set Value, Send Message**.
 
-- **Deterministic, Timely Evaluation:** Evaluate hundreds (potentially over 1000) of rules and inputs during every cycle, ensuring predictable execution time.
-- **Maintainability and Testability:** Ensure that rules are easy to write, debug, test, and version-control.
-- **Robustness and Reliability:** Provide a stable, redundant environment that can failover seamlessly and run continuously without runtime rule modifications.
-- **Performance and Scalability:** Achieve minimal runtime overhead by precompiling rules, using efficient data structures, and avoiding unnecessary computations.
+### **Compiler Requirements**
 
----
+1. **Parsing and Validation**
 
-## Rules (JSON/DSL)
+   - Ensures correct syntax and references.
+   - Detects **cycles in rule dependencies** and rejects invalid configurations.
 
-**Purpose:**
-The rules are authored by engineers as a DSL that serves as the source of truth. These human-readable definitions govern what conditions trigger certain actions.
+2. **Code Generation**
 
-**Requirements:**
+   - Produces **fully self-contained C# projects**.
+   - Includes **rule tracking metadata** for debugging.
 
-1. **Language and Syntax:**
+3. **Build Integration**
 
-   - **Flexible Expressions:**
-     Support standard comparison operators and arithmetic operators.
-     Allow a controlled subset of functions, primarily `System.Math` methods and domain-specific library functions on a whitelist.
-   - **Temporal References:**
-     Provide DSL constructs for referencing historical values, e.g., `previous("SensorA", 1)`, with constraints (only certain facts may have historical lookbacks).
+   - Generates an **AOT-compatible project**.
+   - Users compile using:
+     ```sh
+     dotnet publish -c Release -r <runtime> --self-contained true
+     ```
+   - **Optional CI/CD script generation** for automating builds.
+   - **Automated versioning** embedded in generated project metadata.
+   - **Inclusion of test files** to validate rule execution correctness.
 
-2. **Dependency Declaration:**
+### **Runtime Requirements**
 
-   - **Input/Output Dependencies:**
-     Dependencies are implicitly determined during the compilation phase based on the conditions and actions declared in the rules.
+1. **Redis Integration**
 
-3. **No Arbitrary Code Execution:**
+   - **Bulk fetches all input values every 100ms**.
+   - **Writes computed outputs back to Redis** after evaluation.
+   - **Does not store intermediate values in Redis** between rule evaluations.
+   - **Supports both single-instance and clustered Redis configurations**.
+   - **Retry mechanisms with exponential backoff** in case of connectivity issues.
 
-   - **Controlled Expressions Only:**
-     No unbounded C# code. All allowed expressions must be parseable and safe.
+2. **Temporal Handling**
 
-4. **Validation Criteria:**
+   - **Ring buffer stores previous values** for temporal rule evaluation.
+   - Only **sensor values explicitly needing history are cached**.
 
-   - **Build-Time Checks:**
-     The rules must be self-contained, syntactically correct, with no reference to unknown sensors or functions.
-   - **No Cycles Allowed:**
-     Any cycles in rule dependencies result in a build-time error.
+3. **Execution Order**
 
-5. **Version Control & Documentation:**
-   - **Maintained in Source Control:**
-     The DSL files must be human-readable and stored in source control.
-   - **Documentation:**
-     Provide guidance for rule authors, including syntax, allowed operators, and best practices.
+   - **Rules execute layer-by-layer**, ensuring dependencies are satisfied.
+   - **Actions within a rule execute sequentially**.
 
----
+4. **Logging & Monitoring**
 
-## Compiler
+   - **Serilog for Structured Logging**: All logs will be structured and follow system-wide conventions.
+   - **Prometheus Metrics Exposure**: The runtime will expose **performance metrics** in a Prometheus-compatible format.
+   - **Error handling mechanisms** include structured error logging, recovery strategies, and alerts for critical failures.
 
-**Purpose:**
-The compiler transforms the human-readable rules into highly optimized C# code. This ensures no runtime parsing overhead and guarantees that only valid, cycle-free sets of rules reach production.
+### **CI/CD Integration**
 
-**Requirements:**
-
-1. **Parsing and Validation:**
-
-   - **Syntax Validation:**
-     Parse the DSL to check correctness of rule syntax, operators, and allowed functions.
-   - **Type Checking and Compatibility:**
-     Validate that values used in conditions and actions are compatible with their expected types.
-   - **Dependency Analysis:**
-     Identify rule dependencies, build a DAG, and detect cycles. If cycles exist, fail the build.
-   - **Temporal Checks:**
-     Validate temporal references. Ensure that only facts that require history are allocated historical buffers. If a rule references `previous("SensorA", X)`, confirm `SensorA` is marked for historical tracking.
-
-2. **Code Generation:**
-
-   - **Topological Sort and Layer Assignment:**
-     Compute an evaluation order from the DAG. Assign each rule a layer number.
-   - **Generated C# Code:**
-     Produce a `CompiledRules.cs` (or equivalent) that contains:
-     - A function evaluating each layer in order.
-     - Inline arithmetic and function calls for conditions.
-     - Indices for sensors/facts instead of dictionary lookups.
-     - Conditional logic for temporal lookups if required by that rule.
-
-3. **Error Reporting:**
-
-   - **Build-Time Failures:**
-     On errors (syntax, unknown references, cycles), the compiler fails with a clear message.
-   - **Human-Readable Output:**
-     Generated code should be human-readable for debugging. Errors should be understandable by the engineers modifying the rules.
-
-4. **Integration with CI/CD:**
-   - **Automated Build Steps:**
-     The compiler runs during CI/CD pipeline. A failure blocks deployment.
-   - **No Runtime Overhead:**
-     Once compiled, no further parsing or code generation is done at runtime.
+- **Manual Compilation for Now**: The generated project is manually compiled by users.
+- **Future CI/CD automation** may include:
+  - **Build script generation** for common CI/CD platforms.
+  - **Automated versioning** embedded in generated project metadata.
+  - **Inclusion of test files** to validate rule execution correctness.
 
 ---
 
-## Runtime
+## Summary of Clarifications
 
-**Purpose:**
-The runtime system executes the compiled rules every 100ms by default, integrating with Redis, evaluating rules in their dependency order, managing temporal data, and producing outputs.
-
-**Requirements:**
-
-1. **Redis Integration:**
-
-   - **Bulk Retrieval of Inputs:**
-     Fetch all current sensor values from Redis efficiently every cycle using pipelining.
-   - **Outputs Back to Redis:**
-     After evaluation, write computed results using atomic operations.
-   - **Index-Based Access:**
-     Use array or span indexing for sensors to avoid dictionary overhead in hot paths.
-
-     We are NOT using redis to store intermediate values. The concept, according to the spec (you have access to), is to do a bulk pull of the latest values every 100ms (default), evaluate all of the values against the rules, then send all of the updated values/status back to Redis. The idea was never to use redis in between each individual rule eval. That would slow things down tremendously.
-
-2. **Evaluation Logic:**
-
-   - **Layered Execution Order:**
-     Evaluate all rules in layer 0 first, then layer 1, and so forth, ensuring dependencies are satisfied.
-   - **Temporal Data Handling:**
-     Maintain fixed-size ring buffers for historical values only for the facts that actually require them.
-     If `previous("SensorA", 1)` is used by any rule, store `SensorA`’s values in a ring buffer. If no rule needs history for `SensorB`, do not allocate a buffer for it.
-   - **Performance Guarantees:**
-     - Finish evaluation well within defined cycle time.
-     - Minimal GC pressure.
-     - Possibly detect unchanged inputs (optional optimization) to skip unnecessary computations if all rules are stable.
-
-3. **Robustness and Stability:**
-
-   - **Redundancy and Failover:**
-     Operate in a four-node environment with only one active node at a time. Seamlessly failover if the active node fails.
-   - **Thread-Safety:**
-     Ensure thread-safe operations, no race conditions.
-   - **Error Handling:**
-     - If a runtime error occurs (e.g., unexpected null), handle gracefully, log the issue, and continue processing subsequent cycles.
-
-4. **Observability and Diagnostics:**
-
-   - **Logging and Metrics:**
-     Log evaluation times, triggered rules, and store performance metrics. Produce output compatible with Prometheus.
-   - **Debugging Hooks:**
-     Allow toggling verbose logging or stepping through generated code in a debug environment.
-   - **Replay and Historical Analysis:**
-     Support replaying historical data sets for testing or diagnostics.
-
-5. **Testing and Validation:**
-   - **Unit Tests for Generated Code:**
-     Allow offline testing of `CompiledRules.cs` by passing known inputs and checking outputs.
-   - **Integration Tests:**
-     Verify the entire pipeline (input retrieval, rule evaluation, output writing) under controlled conditions.
-   - **Performance and Stress Testing:**
-     Ensure the runtime can handle peak loads without degrading response times.
+| Topic                      | Clarification                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| **Standalone Execution**   | The **generated project** serves as a **self-contained runtime**.                             |
+| **Redis Requirement**      | Redis is the **primary data source**, but **temporal rules rely on in-memory caching**.       |
+| **Temporal Mode**          | **Strict Discrete Mode** is default; **Extended Last-Known Mode** must be explicitly enabled. |
+| **Rule Dependencies**      | Rules **can reference other rule outputs**; circular dependencies **cause build failure**.    |
+| **Maximum Dependency Depth** | Configurable (default: 10 levels) with warnings for deep chains.                            |
+| **Action Execution Order** | Actions execute **sequentially in defined order**.                                            |
+| **CI/CD Integration**      | Users currently **manually compile** the project; CI/CD automation may follow.                |
+| **Logging Framework**      | The runtime will use **Serilog** for structured logging.                                       |
+| **Monitoring**             | The runtime will expose **Prometheus-compatible metrics** for monitoring.                      |
+| **Error Handling**         | Logs errors using **Serilog**, applies retry strategies, and triggers alerts when necessary.  |
 
 ---
 
-## Redis-Specific Considerations
+This document now fully aligns with the clarified system behavior, execution model, structured logging with Serilog, Prometheus monitoring, Redis failover handling, and build-time configurations. Let me know if further refinements are needed!
 
-1. **Data Organization:**
-
-   - Use appropriate Redis data types (String, Hash, etc.) for different sensor types
-   - Implement efficient bulk operations using Redis pipelining
-   - Consider TTL for temporal data
-
-2. **Performance Optimization:**
-
-   - Minimize Redis round trips through batching
-   - Use Redis server-side scripts where appropriate
-   - Implement connection pooling and retry policies
-
-3. **Monitoring:**
-   - Track Redis operation latencies
-   - Monitor memory usage for temporal buffers
-   - Implement Redis-specific health checks
-
----
-
-## Safety and Security
-
-- **No Unauthorized Code Execution:**
-  The compiler strictly controls what code is generated. No external scripts or arbitrary code injection.
-- **Input Validation:**
-  Validate inputs from KV store before use, handle unexpected or invalid data gracefully.
-- **Resource Management:**
-  Avoid memory leaks by reusing buffers and ensuring stable resource usage over extended operation periods.
-
----
-
-## Documentation and Guidance
-
-- **Architectural Documentation:**
-  Provide an overview of the entire system (rules, compiler, runtime) and how they fit together.
-- **Rule Authoring Guide:**
-  Instruct engineers on allowed syntax, temporal references, and best practices.
-- **Deployment and Operations:**
-  Explain how to deploy the logic engine, manage failover, tune performance, and troubleshoot issues.
-- **Testing and Debugging Reference:**
-  Provide instructions on how to run unit, integration, and performance tests, as well as debugging steps and logging configuration.
-
----
-
-## Summary
-
-This refined requirement set clarifies the separation of concerns:
-
-- **Rules (DSL):** Human-readable, restricted DSL for defining conditions, including temporal logic.
-- **Compiler:** A build-time tool that validates, analyzes dependencies, checks for cycles, and generates optimized C# code.
-- **Runtime:** Executes the compiled code every cycle, handles data I/O, manages history only where needed, ensures determinism and performance, and provides observability and failover capabilities.
-
-````mermaid
-sequenceDiagram
-   participant Timer
-   participant Runtime
-   participant Redis
-   participant RingBuffer
-   participant Rules
-
-   Note over Timer,Rules: 100ms Cycle
-   Timer->>Runtime: Trigger Cycle
-   activate Runtime
-
-   Runtime->>Redis: Bulk Fetch (Pipeline)
-   Redis-->>Runtime: Sensor Values
-
-   Runtime->>RingBuffer: Update Historical Values
-   Runtime->>Rules: Layer 0 Evaluation
-   Runtime->>Rules: Layer 1 Evaluation
-   Runtime->>Rules: Layer N Evaluation
-
-   Runtime->>Redis: Bulk Write Results (Pipeline)
-   Redis-->>Runtime: Confirmation
-
-   Runtime->>Runtime: Calculate Cycle Stats
-   Runtime-->>Timer: Complete Cycle
-   deactivate Runtime
-
-   Note over Timer,Rules: Next 100ms Cycle
-   ```
-````
