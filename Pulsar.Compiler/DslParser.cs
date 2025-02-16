@@ -405,13 +405,18 @@ namespace Pulsar.Compiler.Parsers
             }
 
             return actions
-                .Select(actionItem =>
+                .Select<ActionListItem, ActionDefinition>(actionItem =>
                 {
                     Debug.WriteLine($"Processing action item");
 
-                    if (actionItem != null && actionItem.SetValue != null)
+                    if (actionItem?.SetValue != null)
                     {
                         Debug.WriteLine($"Found SetValue action");
+                        if (string.IsNullOrEmpty(actionItem.SetValue.Key))
+                        {
+                            throw new InvalidOperationException("SetValue action must have a key");
+                        }
+
                         var setValueAction = new SetValueAction
                         {
                             Type = ActionType.SetValue,
@@ -422,18 +427,23 @@ namespace Pulsar.Compiler.Parsers
                         Debug.WriteLine(
                             $"Created SetValueAction - Key: {setValueAction.Key}, Value: {setValueAction.Value}, Expression: {setValueAction.ValueExpression}"
                         );
-                        return setValueAction as ActionDefinition;
+                        return setValueAction;
                     }
 
-                    if (actionItem != null && actionItem.SendMessage != null)
+                    if (actionItem?.SendMessage != null)
                     {
                         Debug.WriteLine($"Found SendMessage action");
+                        if (string.IsNullOrEmpty(actionItem.SendMessage.Channel))
+                        {
+                            throw new InvalidOperationException("SendMessage action must have a channel");
+                        }
+
                         return new SendMessageAction
-                            {
-                                Type = ActionType.SendMessage,
-                                Channel = actionItem.SendMessage.Channel,
-                                Message = actionItem.SendMessage.Message,
-                            } as ActionDefinition;
+                        {
+                            Type = ActionType.SendMessage,
+                            Channel = actionItem.SendMessage.Channel,
+                            Message = actionItem.SendMessage.Message,
+                        };
                     }
 
                     Debug.WriteLine($"No valid action type found");

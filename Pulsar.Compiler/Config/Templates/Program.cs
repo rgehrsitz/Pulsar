@@ -26,7 +26,7 @@ namespace Pulsar.Runtime.Rules
                 logger.Information("Starting Pulsar Runtime v{Version}",
                     typeof(ProgramTemplate).Assembly.GetName().Version);
 
-                using var redis = new RedisService(config.RedisConnectionString);
+                using var redis = new RedisService(config.Redis);
                 using var bufferManager = new RingBufferManager(config.BufferCapacity);
 
                 using var orchestrator = new RuntimeOrchestrator(

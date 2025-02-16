@@ -129,6 +129,9 @@ namespace Pulsar.Compiler.Models
         [JsonPropertyName("namespace")]
         public string Namespace { get; set; } = "Pulsar.Generated";
 
+        [JsonPropertyName("version")]
+        public string Version { get; set; } = "1.0.0";
+
         [JsonPropertyName("ruleSourceMap")]
         public Dictionary<string, GeneratedSourceInfo> RuleSourceMap { get; set; } = new();
     }

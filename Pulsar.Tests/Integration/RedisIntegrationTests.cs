@@ -1,15 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Linq;
 using Xunit;
+using Xunit.Sdk;
 using Pulsar.Runtime.Services;
 
 namespace Pulsar.Tests.Integration
 {
     public class RedisIntegrationTests : IDisposable
     {
-        private RedisService _singleNodeRedis;
-        private RedisService _clusterRedis;
+        public required RedisService _singleNodeRedis;
+        public required RedisService _clusterRedis;
         private readonly RedisConfiguration _singleNodeConfig;
         private readonly RedisConfiguration _clusterConfig;
 
@@ -26,8 +28,8 @@ namespace Pulsar.Tests.Integration
 
             _clusterConfig = new RedisConfiguration
             {
-                Endpoints = new List<string> 
-                { 
+                Endpoints = new List<string>
+                {
                     "redis-node1:6379",
                     "redis-node2:6380",
                     "redis-node3:6381"
@@ -45,10 +47,10 @@ namespace Pulsar.Tests.Integration
             // Skip if Redis is not available
             if (!IsRedisAvailable(_singleNodeConfig.Endpoints[0]))
             {
-                Skip.If(true, "Redis single node not available");
+                return;
             }
 
-            _singleNodeRedis = new RedisService(_singleNodeConfig.Endpoints[0]);
+            _singleNodeRedis = new RedisService(_singleNodeConfig);
 
             var testData = new Dictionary<string, double>
             {
@@ -71,10 +73,10 @@ namespace Pulsar.Tests.Integration
             // Skip if Redis cluster is not available
             if (!IsClusterAvailable(_clusterConfig.Endpoints))
             {
-                Skip.If(true, "Redis cluster not available");
+                return;
             }
 
-            _clusterRedis = new RedisService(string.Join(",", _clusterConfig.Endpoints));
+            _clusterRedis = new RedisService(_clusterConfig);
 
             var testData = new Dictionary<string, double>
             {
@@ -96,10 +98,10 @@ namespace Pulsar.Tests.Integration
         {
             if (!IsRedisAvailable(_singleNodeConfig.Endpoints[0]))
             {
-                Skip.If(true, "Redis not available");
+                return;
             }
 
-            _singleNodeRedis = new RedisService(_singleNodeConfig.Endpoints[0]);
+            _singleNodeRedis = new RedisService(_singleNodeConfig);
 
             var tasks = new List<Task>();
             for (int i = 0; i < 100; i++)

@@ -10,23 +10,23 @@ namespace Pulsar.Compiler.Models
     {
         private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
-        public string FilePath { get; set; }
-        public string Content { get; set; }
+        public required string FilePath { get; set; }
+        public required string Content { get; set; }
         public DateTime LastModified { get; set; }
-        public string Hash { get; set; }
+        public required string Hash { get; set; }
 
         public static SourceInfo FromFile(string path)
         {
             try
             {
                 _logger.Debug("Loading source info from {Path}", path);
-                
+
                 var fileInfo = new FileInfo(path);
                 var content = File.ReadAllText(path);
                 var hash = CalculateHash(content);
 
                 _logger.Debug("Source file loaded successfully. Hash: {Hash}", hash);
-                
+
                 return new SourceInfo
                 {
                     FilePath = path,

@@ -22,7 +22,7 @@ namespace Pulsar.Compiler.Config
             _pipeline = new CompilationPipeline(new AOTRuleCompiler(), new Parsers.DslParser());
         }
 
-        public async Task<BuildResult> BuildProject(BuildConfig config)
+        public BuildResult BuildProject(BuildConfig config)
         {
             try
             {
