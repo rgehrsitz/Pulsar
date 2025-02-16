@@ -6,6 +6,8 @@ using System.Text.Json;
 using System.IO;
 using Serilog;
 using YamlDotNet.Serialization;
+using Pulsar.Runtime.Services;
+using Pulsar.Compiler;
 
 namespace Pulsar.Compiler.Models
 {
@@ -22,8 +24,8 @@ namespace Pulsar.Compiler.Models
         [YamlMember(Alias = "cycleTime")]
         public int CycleTime { get; set; } = 100; // Default 100ms
 
-        [YamlMember(Alias = "redisConnection")]
-        public string RedisConnection { get; set; } = "localhost:6379";
+        [YamlMember(Alias = "redis")]
+        public RedisConfiguration Redis { get; set; } = new();
 
         [YamlMember(Alias = "bufferCapacity")]
         public int BufferCapacity { get; set; } = 100;

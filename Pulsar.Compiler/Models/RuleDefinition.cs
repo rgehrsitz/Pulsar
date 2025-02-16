@@ -2,8 +2,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 using Serilog;
+using Pulsar.Compiler;
 
 namespace Pulsar.Compiler.Models
 {
@@ -96,7 +98,7 @@ namespace Pulsar.Compiler.Models
                 throw new ArgumentException("Condition group must have at least one condition in All or Any");
             }
 
-            foreach (var condition in All)
+            foreach (var condition in All ?? Enumerable.Empty<ConditionDefinition>())
             {
                 condition.Validate();
             }

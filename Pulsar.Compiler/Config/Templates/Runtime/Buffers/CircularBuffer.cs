@@ -34,7 +34,7 @@ public class CircularBuffer
     private readonly TimestampedValue[] _buffer;
     private int _head;
     private int _count;
-    private readonly object _lock = new();
+    private readonly ReaderWriterLockSlim _lock = new();
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public CircularBuffer(int capacity, IDateTimeProvider dateTimeProvider)
@@ -51,18 +51,24 @@ public class CircularBuffer
 
     public void Add(double value, DateTime timestamp)
     {
-        lock (_lock)
+        _lock.EnterWriteLock();
+        try
         {
             _buffer[_head] = new TimestampedValue(timestamp, value);
             _head = (_head + 1) % _buffer.Length;
             if (_count < _buffer.Length)
                 _count++;
         }
+        finally
+        {
+            _lock.ExitWriteLock();
+        }
     }
 
     public IEnumerable<TimestampedValue> GetValues(TimeSpan duration, bool includeOlder = false)
     {
-        lock (_lock)
+        _lock.EnterReadLock();
+        try
         {
             if (_count == 0)
                 return Enumerable.Empty<TimestampedValue>();
@@ -115,6 +121,10 @@ public class CircularBuffer
 
             // If no values are found, return empty.
             return orderedValues;
+        }
+        finally
+        {
+            _lock.ExitReadLock();
         }
     }
 

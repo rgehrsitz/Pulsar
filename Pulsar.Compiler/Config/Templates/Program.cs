@@ -1,4 +1,5 @@
 // File: Pulsar.Compiler/Config/Templates/Program.cs
+// Version: 1.0.0
 
 using System;
 using System.Collections.Generic;

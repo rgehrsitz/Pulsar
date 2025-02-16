@@ -1,4 +1,5 @@
 // File: Pulsar.Compiler/Config/Templates/Runtime/TemplateRuleCoordinator.cs
+// Version: 1.0.0
 
 using Pulsar.Compiler.Config.Templates.Interfaces;
 using Pulsar.Runtime.Buffers;

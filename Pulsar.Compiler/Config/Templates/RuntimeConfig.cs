@@ -1,23 +1,19 @@
 // File: Pulsar.Compiler/Config/Templates/RuntimeConfig.cs
+// Version: 1.0.0
 
 using System;
 using Serilog.Events;
 using System.Text.Json;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
+using Pulsar.Runtime.Services;
 
 namespace Pulsar.Runtime.Rules
 {
     public class RuntimeConfig
     {
-        private string _redisConnectionString = "localhost:6379";
-
-        [JsonPropertyName("RedisConnectionString")]
-        public string RedisConnectionString
-        {
-            get => _redisConnectionString;
-            set => _redisConnectionString = string.IsNullOrEmpty(value) ? "localhost:6379" : value;
-        }
+        [JsonPropertyName("Redis")]
+        public RedisConfiguration Redis { get; set; } = new();
 
         [JsonPropertyName("CycleTime")]
         [JsonConverter(typeof(TimeSpanConverter))]

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Pulsar.Compiler.Models;
 using Serilog;
+using Pulsar.Compiler;
 
 namespace Pulsar.Compiler.Generation
 {
@@ -14,7 +15,7 @@ namespace Pulsar.Compiler.Generation
     /// </summary>
     public static class CodeGenHelpers
     {
-        private static readonly Serilog.ILogger _logger = LoggingConfig.GetLogger();
+        private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
         /// <summary>
         /// Generates a standard file header comment including the file name and UTC generation timestamp.

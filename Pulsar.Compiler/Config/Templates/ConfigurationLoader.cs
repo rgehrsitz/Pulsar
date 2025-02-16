@@ -1,4 +1,5 @@
 // File: Pulsar.Compiler/Config/Templates/ConfigurationLoader.cs
+// Version: 1.0.0
 
 using System;
 using System.Text.Json;

@@ -62,7 +62,8 @@ namespace Pulsar.Compiler.Config
                             FileName = Path.GetFileName(templateFile),
                             FilePath = outputFilePath,
                             Content = content,
-                            Namespace = "Pulsar.Runtime.Rules"
+                            Namespace = "Pulsar.Runtime.Rules",
+                            Version = GetTemplateVersion(templateFile)
                         }
                     );
 
@@ -125,6 +126,19 @@ namespace Pulsar.Compiler.Config
 
             using var reader = new StreamReader(stream, Encoding.UTF8);
             return reader.ReadToEnd();
+        }
+
+        private string GetTemplateVersion(string templateFile)
+        {
+            // Implement logic to extract version information from the template file
+            // For example, read a version comment at the top of the file
+            var firstLine = File.ReadLines(templateFile).FirstOrDefault();
+            if (firstLine != null && firstLine.StartsWith("// Version: "))
+            {
+                return firstLine.Replace("// Version: ", "").Trim();
+            }
+
+            return "1.0.0"; // Default version if not specified
         }
     }
 }

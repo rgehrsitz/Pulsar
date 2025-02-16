@@ -6,6 +6,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Serilog;
+using Pulsar.Compiler;
 
 namespace Pulsar.Compiler.Models
 {
