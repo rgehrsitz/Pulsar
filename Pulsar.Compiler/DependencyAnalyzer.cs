@@ -13,31 +13,213 @@ namespace Pulsar.Compiler.Analysis
     {
         private readonly ILogger _logger;
         private Dictionary<string, RuleDefinition> _outputs = new();
+        private readonly int _maxDependencyDepth;
+        private readonly Dictionary<string, HashSet<string>> _temporalDependencies = new();
 
-        public DependencyAnalyzer()
+        public DependencyAnalyzer(int maxDependencyDepth = 10)
         {
             _logger = LoggingConfig.GetLogger();
+            _maxDependencyDepth = maxDependencyDepth;
         }
 
-        public List<RuleDefinition> AnalyzeDependencies(List<RuleDefinition> rules)
+        public class DependencyValidationResult
         {
-            try
+            public bool IsValid { get; set; }
+            public List<List<string>> CircularDependencies { get; set; } = new();
+            public List<List<string>> DeepDependencyChains { get; set; } = new();
+            public Dictionary<string, int> RuleComplexityScores { get; set; } = new();
+            public Dictionary<string, HashSet<string>> TemporalDependencies { get; set; } = new();
+        }
+
+        public DependencyValidationResult ValidateDependencies(List<RuleDefinition> rules)
+        {
+            var result = new DependencyValidationResult { IsValid = true };
+            var graph = BuildDependencyGraph(rules);
+
+            // Check for circular dependencies
+            var cycles = FindCircularDependencies(graph);
+            if (cycles.Any())
             {
-                _logger.Debug("Starting dependency analysis for {Count} rules", rules.Count);
+                result.IsValid = false;
+                result.CircularDependencies = cycles;
+                foreach (var cycle in cycles)
+                {
+                    _logger.Error("Circular dependency detected: {Path}", string.Join(" -> ", cycle));
+                }
+            }
+
+            // Check dependency depths
+            var deepChains = FindDeepDependencyChains(graph);
+            if (deepChains.Any())
+            {
+                result.DeepDependencyChains = deepChains;
+                foreach (var chain in deepChains)
+                {
+                    _logger.Warning("Deep dependency chain detected: {Path}", string.Join(" -> ", chain));
+                }
+            }
+
+            // Calculate complexity scores
+            result.RuleComplexityScores = CalculateRuleComplexity(rules, graph);
+            
+            // Track temporal dependencies
+            result.TemporalDependencies = _temporalDependencies;
+
+            return result;
+        }
+
+        private List<List<string>> FindCircularDependencies(Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+        {
+            var cycles = new List<List<string>>();
+            var visited = new HashSet<RuleDefinition>();
+            var path = new List<RuleDefinition>();
+
+            foreach (var rule in graph.Keys)
+            {
+                if (!visited.Contains(rule))
+                {
+                    DetectCycle(rule, graph, visited, path, cycles);
+                }
+            }
+
+            return cycles;
+        }
+
+        private void DetectCycle(
+            RuleDefinition current,
+            Dictionary<RuleDefinition, List<RuleDefinition>> graph,
+            HashSet<RuleDefinition> visited,
+            List<RuleDefinition> path,
+            List<List<string>> cycles)
+        {
+            if (path.Contains(current))
+            {
+                var cycleStart = path.IndexOf(current);
+                var cycle = path.Skip(cycleStart)
+                               .Select(r => r.Name)
+                               .Concat(new[] { current.Name })
+                               .ToList();
+                cycles.Add(cycle);
+                return;
+            }
+
+            if (visited.Contains(current))
+                return;
+
+            visited.Add(current);
+            path.Add(current);
+
+            foreach (var dependent in graph[current])
+            {
+                DetectCycle(dependent, graph, visited, path, cycles);
+            }
+
+            path.RemoveAt(path.Count - 1);
+        }
+
+        private List<List<string>> FindDeepDependencyChains(Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+        {
+            var deepChains = new List<List<string>>();
+            var visited = new HashSet<RuleDefinition>();
+            var path = new List<RuleDefinition>();
+
+            foreach (var rule in graph.Keys)
+            {
+                if (!visited.Contains(rule))
+                {
+                    FindLongPaths(rule, graph, visited, path, deepChains);
+                }
+            }
+
+            return deepChains;
+        }
+
+        private void FindLongPaths(
+            RuleDefinition current,
+            Dictionary<RuleDefinition, List<RuleDefinition>> graph,
+            HashSet<RuleDefinition> visited,
+            List<RuleDefinition> path,
+            List<List<string>> deepChains)
+        {
+            path.Add(current);
+
+            if (path.Count > _maxDependencyDepth)
+            {
+                deepChains.Add(path.Select(r => r.Name).ToList());
+            }
+
+            if (!visited.Contains(current))
+            {
+                visited.Add(current);
+                foreach (var dependent in graph[current])
+                {
+                    FindLongPaths(dependent, graph, visited, path, deepChains);
+                }
+                visited.Remove(current);
+            }
+
+            path.RemoveAt(path.Count - 1);
+        }
+
+        private Dictionary<string, int> CalculateRuleComplexity(
+            List<RuleDefinition> rules,
+            Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+        {
+            var scores = new Dictionary<string, int>();
+
+            foreach (var rule in rules)
+            {
+                var score = 0;
                 
-                var graph = BuildDependencyGraph(rules);
-                _logger.Debug("Dependency graph built with {Count} nodes", graph.Count);
+                // Add points for conditions
+                if (rule.Conditions != null)
+                {
+                    score += (rule.Conditions.All?.Count ?? 0) * 2;
+                    score += (rule.Conditions.Any?.Count ?? 0) * 3;
+                }
 
-                var sortedRules = TopologicalSort(graph);
-                _logger.Debug("Rules sorted in topological order");
+                // Add points for actions
+                score += rule.Actions.Count;
 
-                return sortedRules;
+                // Add points for temporal conditions
+                score += rule.Conditions?.All?.OfType<ThresholdOverTimeCondition>().Count() ?? 0 * 5;
+                score += rule.Conditions?.Any?.OfType<ThresholdOverTimeCondition>().Count() ?? 0 * 5;
+
+                // Add points for dependency depth
+                var depthScore = CalculateDependencyDepth(rule, graph);
+                score += depthScore * 3;
+
+                scores[rule.Name] = score;
             }
-            catch (Exception ex)
+
+            return scores;
+        }
+
+        private int CalculateDependencyDepth(
+            RuleDefinition rule,
+            Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+        {
+            var visited = new HashSet<RuleDefinition>();
+            var depth = 0;
+            var queue = new Queue<(RuleDefinition Rule, int Depth)>();
+            queue.Enqueue((rule, 0));
+
+            while (queue.Count > 0)
             {
-                _logger.Error(ex, "Error analyzing rule dependencies");
-                throw;
+                var (current, currentDepth) = queue.Dequeue();
+                if (!visited.Contains(current))
+                {
+                    visited.Add(current);
+                    depth = Math.Max(depth, currentDepth);
+
+                    foreach (var dependent in graph[current])
+                    {
+                        queue.Enqueue((dependent, currentDepth + 1));
+                    }
+                }
             }
+
+            return depth;
         }
 
         private Dictionary<RuleDefinition, List<RuleDefinition>> BuildDependencyGraph(
@@ -103,6 +285,7 @@ namespace Pulsar.Compiler.Analysis
                         break;
                     case ThresholdOverTimeCondition temporal:
                         dependencies.Add(temporal.Sensor);
+                        _temporalDependencies[rule.Name] = new HashSet<string> { temporal.Sensor };
                         break;
                     case ConditionGroup group:
                         group.All?.ForEach(AddConditionDependencies);
