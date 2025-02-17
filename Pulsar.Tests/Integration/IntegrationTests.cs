@@ -43,8 +43,15 @@ namespace Pulsar.Tests.Integration
 
             // Compile the parsed rules using the AOT compiler with full project generation
             var compiler = new AOTRuleCompiler();
+            
+            // Cast to non-nullable array after filtering out nulls
+            var rules = parsedResults.Where(r => r.IsValid && r.Rule != null)
+                                   .Select(r => r.Rule)
+                                   .OfType<RuleDefinition>()
+                                   .ToArray();
+                                   
             var compileResult = compiler.Compile(
-                parsedResults.Where(r => r.IsValid).Select(r => r.Rule).ToArray(),
+                rules,
                 new CompilerOptions
                 {
                     BuildConfig = new BuildConfig
@@ -77,15 +84,18 @@ namespace Pulsar.Tests.Integration
             Assert.NotEmpty(compileResult.GeneratedFiles);
             
             // Verify essential project files are generated
-            Assert.Contains(compileResult.GeneratedFiles, 
-                f => f.FileName.EndsWith(".csproj"), 
-                "Project file should be generated");
-            Assert.Contains(compileResult.GeneratedFiles,
-                f => f.FileName.EndsWith("RuleCoordinator.cs"),
-                "Rule coordinator should be generated");
-            Assert.Contains(compileResult.GeneratedFiles,
-                f => f.FileName.EndsWith("Program.cs"),
-                "Program entry point should be generated");
+            Assert.Contains(
+                compileResult.GeneratedFiles,
+                f => f.FileName.EndsWith(".csproj")
+            );
+            Assert.Contains(
+                compileResult.GeneratedFiles,
+                f => f.FileName.EndsWith("RuleCoordinator.cs")
+            );
+            Assert.Contains(
+                compileResult.GeneratedFiles,
+                f => f.FileName.EndsWith("Program.cs")
+            );
 
             // Simulate runtime execution with a stub runtime engine
             var sensorInput = new Dictionary<string, string>
@@ -97,7 +107,7 @@ namespace Pulsar.Tests.Integration
 
             // Assert: Check expected output from the runtime simulation
             Assert.NotNull(runtimeOutput);
-            Assert.True(runtimeOutput.ContainsKey("result"), "Runtime output should contain a 'result' key.");
+            Assert.Contains("result", runtimeOutput.Keys);
             Assert.Equal("success", runtimeOutput["result"]);
 
             _logger.Debug("End-to-end integration test completed successfully");
@@ -114,9 +124,9 @@ namespace Pulsar.Tests.Integration
             );
 
             Assert.Contains("Cycle Started", logs);
-            Assert.True(logs.Any(log => log.Contains("Processing rules:")));
-            Assert.True(logs.Any(log => log.Contains("Processed Rules:")));
-            Assert.True(logs.Any(log => log.Contains("Cycle Duration:")));
+            Assert.Contains(logs, log => log.Contains("Processing rules:"));
+            Assert.Contains(logs, log => log.Contains("Processed Rules:"));
+            Assert.Contains(logs, log => log.Contains("Cycle Duration:"));
             Assert.Contains("Cycle Ended", logs);
 
             _logger.Debug("Logging and metrics integration test completed successfully");
@@ -177,11 +187,12 @@ namespace Pulsar.Tests.Integration
             var output = RuntimeEngine.RunCycle(ruleContents, sensorInputs);
 
             Assert.Contains("Cycle Started", logs);
-            Assert.True(logs.Any(log => log.Contains("Processing rules:")));
-            Assert.True(logs.Any(log => log.Contains("Processed Rules:")));
-            Assert.True(logs.Any(log => log.Contains("Cycle Duration:")));
+            Assert.Contains(logs, log => log.Contains("Processing rules:"));
+            Assert.Contains(logs, log => log.Contains("Processed Rules:"));
+            Assert.Contains(logs, log => log.Contains("Cycle Duration:"));
             Assert.Contains("Cycle Ended", logs);
-            Assert.True(output.ContainsKey("result") && output["result"] == "success");
+            Assert.Contains("result", output.Keys);
+            Assert.Equal("success", output["result"]);
 
             _logger.Debug("Multiple rules and sensors integration test completed successfully");
         }
@@ -205,11 +216,12 @@ namespace Pulsar.Tests.Integration
             var output = RuntimeEngine.RunCycle(ruleContents, sensorInputs);
 
             Assert.Contains("Cycle Started", logs);
-            Assert.True(logs.Any(log => log.Contains("Processing rules:")));
-            Assert.True(logs.Any(log => log.Contains("Processed Rules:")));
-            Assert.True(logs.Any(log => log.Contains("Cycle Duration:")));
+            Assert.Contains(logs, log => log.Contains("Processing rules:"));
+            Assert.Contains(logs, log => log.Contains("Processed Rules:"));
+            Assert.Contains(logs, log => log.Contains("Cycle Duration:"));
             Assert.Contains("Cycle Ended", logs);
-            Assert.True(output.ContainsKey("result") && output["result"] == "success");
+            Assert.Contains("result", output.Keys);
+            Assert.Equal("success", output["result"]);
 
             _logger.Debug("Large rule set stress test completed successfully");
         }

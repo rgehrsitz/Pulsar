@@ -14,13 +14,12 @@ namespace Pulsar.Compiler.Config
 {
     public class TemplateManager
     {
-        private readonly Serilog.ILogger _logger;
+        private static readonly Serilog.ILogger _logger = LoggingConfig.GetLogger();
         private const string TemplateDirectory = "Config/Templates";
         private readonly string[] _templateExtensions = { ".cs", ".xml", ".csproj", ".json" };
 
         public TemplateManager()
         {
-            _logger = LoggingConfig.GetLogger();
         }
 
         public List<GeneratedFileInfo> CopyTemplateFiles(string outputPath)

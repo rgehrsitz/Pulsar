@@ -34,9 +34,12 @@
     <PackageReference Include="Microsoft.Build" Version="17.12.6" />
   </ItemGroup>
 
-  <!-- Include template files as embedded resources -->
+  <!-- Include template files both as embedded resources and content -->
   <ItemGroup>
     <EmbeddedResource Include="Config\Templates\**\*" />
+    <Content Include="Config\Templates\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

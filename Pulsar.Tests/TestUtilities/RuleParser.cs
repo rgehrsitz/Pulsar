@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Pulsar.Compiler;
 using Pulsar.Compiler.Models;
 using Serilog;
@@ -11,6 +12,7 @@ namespace Pulsar.Tests.TestUtilities
     public static class RuleParser
     {
         private static readonly ILogger _logger = LoggingConfig.GetLogger();
+        private static int _ruleCounter = 0;
 
         public static ParseResult Parse(string ruleContent)
         {
@@ -29,9 +31,10 @@ namespace Pulsar.Tests.TestUtilities
                     };
                 }
 
+                var ruleName = $"TestRule_{Interlocked.Increment(ref _ruleCounter)}";
                 var rule = new RuleDefinition
                 {
-                    Name = "TestRule",
+                    Name = ruleName,
                     Description = "Test rule for mock parsing",
                     Conditions = new ConditionGroup
                     {

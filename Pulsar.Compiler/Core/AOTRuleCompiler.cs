@@ -71,10 +71,8 @@ namespace Pulsar.Compiler.Core
                 var generatedFiles = generator.GenerateCSharp(sortedRules, options.BuildConfig);
                 _logger.Information("Generated {Count} source files", generatedFiles.Count);
 
-                // Convert relative path to absolute path
-                var outputPath = Path.IsPathRooted(options.BuildConfig.OutputPath) 
-                    ? options.BuildConfig.OutputPath 
-                    : Path.GetFullPath(options.BuildConfig.OutputPath);
+                // Use the output path as is, assuming it's already properly configured
+                var outputPath = options.BuildConfig.OutputPath;
 
                 if (!Directory.Exists(outputPath))
                 {
@@ -85,6 +83,11 @@ namespace Pulsar.Compiler.Core
                 foreach (var file in generatedFiles)
                 {
                     var targetPath = Path.Combine(outputPath, file.FileName);
+                    var targetDir = Path.GetDirectoryName(targetPath);
+                    if (targetDir != null && !Directory.Exists(targetDir))
+                    {
+                        Directory.CreateDirectory(targetDir);
+                    }
                     File.WriteAllText(targetPath, file.Content);
                     _logger.Debug("Generated file written to {Path}", targetPath);
                 }
