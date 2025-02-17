@@ -2,15 +2,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>{{TargetFramework}}</TargetFramework>
+    <RuntimeIdentifier>{{Target}}</RuntimeIdentifier>
+    <PublishAot>true</PublishAot>
     <Nullable>enable</Nullable>
+    <EnableTrimming>true</EnableTrimming>
+    <TrimMode>full</TrimMode>
+    <IlcOptimizationPreference>Speed</IlcOptimizationPreference>
+    <RootAllApplicationAssemblies>false</RootAllApplicationAssemblies>
   </PropertyGroup>
+
+  <ItemGroup>
+    <TrimmerRootDescriptor Include="trimming.xml" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Serilog" Version="4.0.0" />
-    <PackageReference Include="Prometheus.Client" Version="4.1.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="prometheus-net" Version="8.2.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="../../Pulsar.Runtime/Pulsar.Runtime.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
   </ItemGroup>
 </Project>

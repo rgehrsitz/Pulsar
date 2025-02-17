@@ -41,25 +41,51 @@ namespace Pulsar.Tests.Integration
                 Assert.True(result.IsValid, "Each rule should be valid.");
             }
 
-            // Compile the rules using the stub compiler
+            // Compile the parsed rules using the AOT compiler with full project generation
             var compiler = new AOTRuleCompiler();
             var compileResult = compiler.Compile(
-                ruleContents.Select(r => new RuleDefinition()).ToArray(),
+                parsedResults.Where(r => r.IsValid).Select(r => r.Rule).ToArray(),
                 new CompilerOptions
                 {
                     BuildConfig = new BuildConfig
                     {
                         OutputPath = "test-output",
-                        Target = "test-target",
-                        ProjectName = "test-project",
+                        Target = "win-x64",
+                        ProjectName = "TestProject",
                         TargetFramework = "net9.0",
-                        RulesPath = "test-rules"
+                        RulesPath = "test-rules",
+                        // Essential AOT and standalone project settings
+                        StandaloneExecutable = true,
+                        GenerateDebugInfo = true,
+                        OptimizeOutput = true,
+                        // Runtime configuration
+                        RedisConnection = "localhost:6379",
+                        CycleTime = 100,
+                        BufferCapacity = 100,
+                        // Project structure settings
+                        MaxRulesPerFile = 50,
+                        MaxLinesPerFile = 1000,
+                        ComplexityThreshold = 10,
+                        GroupParallelRules = true
                     }
                 }
             );
+
+            // Assert compilation success and project structure
             Assert.True(compileResult.Success, "Compilation should succeed with valid rules.");
             Assert.NotNull(compileResult.GeneratedFiles);
             Assert.NotEmpty(compileResult.GeneratedFiles);
+            
+            // Verify essential project files are generated
+            Assert.Contains(compileResult.GeneratedFiles, 
+                f => f.FileName.EndsWith(".csproj"), 
+                "Project file should be generated");
+            Assert.Contains(compileResult.GeneratedFiles,
+                f => f.FileName.EndsWith("RuleCoordinator.cs"),
+                "Rule coordinator should be generated");
+            Assert.Contains(compileResult.GeneratedFiles,
+                f => f.FileName.EndsWith("Program.cs"),
+                "Program entry point should be generated");
 
             // Simulate runtime execution with a stub runtime engine
             var sensorInput = new Dictionary<string, string>

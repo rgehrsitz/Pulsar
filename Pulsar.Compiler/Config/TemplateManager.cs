@@ -47,7 +47,7 @@ namespace Pulsar.Compiler.Config
                 {
                     var relativePath = Path.GetRelativePath(templatePath, templateFile);
                     var outputFilePath = Path.Combine(outputPath, relativePath);
-                    var content = GetTemplate(Path.GetFileName(templateFile));
+                    var content = GetTemplate(relativePath);
 
                     // Ensure directory exists for output file
                     var dirPath = Path.GetDirectoryName(outputFilePath);
@@ -111,16 +111,34 @@ namespace Pulsar.Compiler.Config
             return templatePath;
         }
 
-        public static string GetTemplate(string templateName)
+        public static string GetTemplate(string templatePath)
         {
             var assembly = Assembly.GetExecutingAssembly();
-            var resourceName = $"Pulsar.Compiler.Config.Templates.{templateName}";
+            
+            // Convert path separators to dots and prefix with assembly namespace
+            var resourcePath = templatePath.Replace('\\', '.').Replace('/', '.');
+            var resourceName = $"Pulsar.Compiler.Config.Templates.{resourcePath}";
+
+            _logger.Debug("Looking for embedded resource: {ResourceName}", resourceName);
 
             using var stream = assembly.GetManifestResourceStream(resourceName);
             if (stream == null)
             {
+                // Try direct file read as fallback
+                var fullPath = Path.Combine(
+                    Path.GetDirectoryName(assembly.Location) ?? "",
+                    "Config",
+                    "Templates",
+                    templatePath
+                );
+
+                if (File.Exists(fullPath))
+                {
+                    return File.ReadAllText(fullPath);
+                }
+
                 throw new InvalidOperationException(
-                    $"Template '{templateName}' not found in assembly {assembly.FullName}. Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}"
+                    $"Template '{templatePath}' not found as embedded resource '{resourceName}' or file. Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}"
                 );
             }
 

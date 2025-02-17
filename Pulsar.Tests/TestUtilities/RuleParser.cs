@@ -33,8 +33,26 @@ namespace Pulsar.Tests.TestUtilities
                 {
                     Name = "TestRule",
                     Description = "Test rule for mock parsing",
-                    Conditions = new ConditionGroup(),
-                    Actions = new List<ActionDefinition>()
+                    Conditions = new ConditionGroup
+                    {
+                        All = new List<ConditionDefinition>
+                        {
+                            new ComparisonCondition
+                            {
+                                Sensor = "TestSensor",
+                                Operator = ComparisonOperator.GreaterThan,
+                                Value = 0
+                            }
+                        }
+                    },
+                    Actions = new List<ActionDefinition>
+                    {
+                        new SetValueAction
+                        {
+                            Key = "TestOutput",
+                            Value = 1.0
+                        }
+                    }
                 };
 
                 _logger.Debug("Successfully parsed rule: {RuleName}", rule.Name);
