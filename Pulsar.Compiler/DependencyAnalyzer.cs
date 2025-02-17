@@ -61,7 +61,7 @@ namespace Pulsar.Compiler.Analysis
 
             // Calculate complexity scores
             result.RuleComplexityScores = CalculateRuleComplexity(rules, graph);
-            
+
             // Track temporal dependencies
             result.TemporalDependencies = _temporalDependencies;
 
@@ -170,7 +170,7 @@ namespace Pulsar.Compiler.Analysis
             foreach (var rule in rules)
             {
                 var score = 0;
-                
+
                 // Add points for conditions
                 if (rule.Conditions != null)
                 {
@@ -347,6 +347,27 @@ namespace Pulsar.Compiler.Analysis
                 "Tan",
             };
             return mathFunctions.Contains(token);
+        }
+
+        public List<RuleDefinition> AnalyzeDependencies(List<RuleDefinition> rules)
+        {
+            _logger.Information("Analyzing dependencies for {Count} rules", rules.Count);
+
+            // First validate dependencies
+            var validationResult = ValidateDependencies(rules);
+            if (!validationResult.IsValid)
+            {
+                throw new InvalidOperationException("Dependency validation failed: Circular dependencies detected");
+            }
+
+            if (validationResult.DeepDependencyChains.Any())
+            {
+                _logger.Warning("Deep dependency chains detected but continuing with compilation");
+            }
+
+            // Build dependency graph and perform topological sort
+            var graph = BuildDependencyGraph(rules);
+            return TopologicalSort(graph);
         }
 
         private List<RuleDefinition> TopologicalSort(
