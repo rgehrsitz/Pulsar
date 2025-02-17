@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/Config/ConfigurationLoader.cs
+
 using System;
 using System.Text.Json;
 using System.IO;
@@ -19,7 +21,7 @@ namespace Pulsar.Compiler.Config
             try
             {
                 _logger.Debug("Loading configuration from {Path}", configPath ?? "default location");
-                
+
                 var config = new RuntimeConfig();
 
                 if (configPath != null && File.Exists(configPath))

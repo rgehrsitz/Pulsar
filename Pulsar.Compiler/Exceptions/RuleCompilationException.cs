@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/Exceptions/RuleCompilationException.cs
+
 using System;
 using System.Collections.Generic;
 using Serilog;
@@ -20,7 +22,7 @@ namespace Pulsar.Compiler.Exceptions
             string ruleSource = null,
             int? lineNumber = null,
             string errorType = "CompilationError",
-            Dictionary<string, object> context = null) 
+            Dictionary<string, object> context = null)
             : base(message)
         {
             RuleName = ruleName;
@@ -61,7 +63,7 @@ namespace Pulsar.Compiler.Exceptions
 
             if (RuleSource != null)
                 errorContext["RuleSource"] = RuleSource;
-            
+
             if (LineNumber.HasValue)
                 errorContext["LineNumber"] = LineNumber.Value;
 

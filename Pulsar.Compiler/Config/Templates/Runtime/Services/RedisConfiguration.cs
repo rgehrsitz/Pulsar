@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/Config/Templates/Runtime/Services/RedisConfiguration.cs
+
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;

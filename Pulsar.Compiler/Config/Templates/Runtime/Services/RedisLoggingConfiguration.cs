@@ -1,3 +1,5 @@
+// File: Pulsar.Compiler/Config/Templates/Runtime/Services/RedisLoggingConfiguration.cs
+
 using System;
 using Serilog;
 using Serilog.Events;
@@ -8,7 +10,7 @@ namespace Pulsar.Runtime.Services
     public static class RedisLoggingConfiguration
     {
         private const string DefaultLogPath = "logs/redis/redis-{Date}.log";
-        
+
         public static ILogger ConfigureRedisLogger(RedisConfiguration config, string? logPath = null)
         {
             var loggerConfig = new LoggerConfiguration()
