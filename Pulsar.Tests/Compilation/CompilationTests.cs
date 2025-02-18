@@ -17,7 +17,7 @@ namespace Pulsar.Tests.Compilation
 
         public CompilationTests()
         {
-            _logger = LoggingConfig.GetLogger();
+            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger();
         }
 
         [Fact]

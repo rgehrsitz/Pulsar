@@ -100,7 +100,7 @@ namespace Pulsar.Compiler.Parsers
 
                 if (root?.Rules == null || !root.Rules.Any())
                 {
-                    throw new InvalidOperationException($"No rules found in file: {fileName}");
+                    throw new ValidationException($"No rules found in file: {fileName}");
                 }
 
                 Debug.WriteLine($"\nParsed YAML root: Rules count = {root?.Rules?.Count ?? 0}");
@@ -108,9 +108,7 @@ namespace Pulsar.Compiler.Parsers
                 // Validate that rules are not empty
                 if (root?.Rules == null || !root.Rules.Any())
                 {
-                    throw new InvalidOperationException(
-                        "The YAML file is invalid: no rules found."
-                    );
+                    throw new ValidationException("The YAML file is invalid: no rules found.");
                 }
 
                 if (root?.Rules?.Any() == true)
@@ -167,7 +165,7 @@ namespace Pulsar.Compiler.Parsers
             }
             catch (YamlDotNet.Core.YamlException ex)
             {
-                throw new InvalidOperationException(
+                throw new ValidationException(
                     $"Error parsing YAML in {fileName}: {ex.Message}",
                     ex
                 );
@@ -200,31 +198,11 @@ namespace Pulsar.Compiler.Parsers
 
         private void ValidateSensors(Rule rule, List<string> validSensors)
         {
-            Log.Information(
-                "[DslParser] Validating sensors for rule: {RuleName}. Valid sensors provided: {ValidSensors}",
+            _logger.Debug(
+                "Validating sensors for rule: {RuleName}. Valid sensors provided: {ValidSensors}",
                 rule.Name,
                 String.Join(", ", validSensors)
             );
-            var conditionSensors =
-                rule.Conditions?.All != null
-                    ? GetSensorsFromConditions(rule.Conditions.All).ToList()
-                    : new List<string>();
-            Log.Information(
-                "[DslParser] Sensors from conditions: {ConditionSensors}",
-                String.Join(", ", conditionSensors)
-            ); // Fixed: string.join -> String.Join
-            var actionKeys =
-                rule.Actions != null
-                    ? rule
-                        .Actions.Select(a => a.SetValue?.Key)
-                        .Where(k => k != null)
-                        .Select(k => k!)
-                        .ToList()
-                    : new List<string>(); // Changed to explicitly check for null
-            Log.Information("[DslParser] Action keys: {ActionKeys}", String.Join(", ", actionKeys));
-
-            Debug.WriteLine($"\nValidating rule: {rule.Name}");
-            Debug.WriteLine($"Valid sensors list: {String.Join(", ", validSensors)}");
 
             var allSensors = new List<string>();
 
@@ -233,23 +211,15 @@ namespace Pulsar.Compiler.Parsers
             {
                 foreach (var condition in rule.Conditions.All)
                 {
-                    Debug.WriteLine(
-                        $"Processing All condition: Type = {condition.ConditionDetails.Type}"
-                    );
-                    if (
-                        condition.ConditionDetails.Type == "threshold_over_time"
-                        || condition.ConditionDetails.Type == "comparison"
-                    )
+                    if (condition.ConditionDetails.Type == "threshold_over_time"
+                        || condition.ConditionDetails.Type == "comparison")
                     {
-                        Debug.WriteLine($"Adding sensor: {condition.ConditionDetails.Sensor}");
                         allSensors.Add(condition.ConditionDetails.Sensor);
                     }
                     else if (condition.ConditionDetails.Type == "expression")
                     {
-                        _logger.Debug(
-                            $"Expression condition: {condition.ConditionDetails.Expression}"
-                        );
-                        // We might need to parse the expression to extract sensors
+                        // For expressions, we'll validate the expression syntax separately
+                        _logger.Debug($"Expression condition: {condition.ConditionDetails.Expression}");
                     }
                 }
             }
@@ -258,59 +228,31 @@ namespace Pulsar.Compiler.Parsers
             {
                 foreach (var condition in rule.Conditions.Any)
                 {
-                    Debug.WriteLine(
-                        $"Processing Any condition: Type = {condition.ConditionDetails.Type}"
-                    );
-                    if (
-                        condition.ConditionDetails.Type == "threshold_over_time"
-                        || condition.ConditionDetails.Type == "comparison"
-                    )
+                    if (condition.ConditionDetails.Type == "threshold_over_time"
+                        || condition.ConditionDetails.Type == "comparison")
                     {
-                        Debug.WriteLine($"Adding sensor: {condition.ConditionDetails.Sensor}");
                         allSensors.Add(condition.ConditionDetails.Sensor);
                     }
                     else if (condition.ConditionDetails.Type == "expression")
                     {
-                        _logger.Debug(
-                            $"Expression condition: {condition.ConditionDetails.Expression}"
-                        );
-                        // We might need to parse the expression to extract sensors
+                        _logger.Debug($"Expression condition: {condition.ConditionDetails.Expression}");
                     }
                 }
             }
-
-            // Collect sensors from actions
-            if (rule.Actions != null)
-            {
-                foreach (var actionItem in rule.Actions)
-                {
-                    Debug.WriteLine("Processing action:");
-                    if (actionItem != null && actionItem.SetValue != null)
-                    {
-                        Debug.WriteLine($"Adding SetValue key: {actionItem.SetValue.Key}");
-                        allSensors.Add(actionItem.SetValue.Key);
-                    }
-                    if (actionItem != null && actionItem.SendMessage != null)
-                    {
-                        Debug.WriteLine($"SendMessage channel: {actionItem.SendMessage.Channel}");
-                        // Do we need to validate the channel?
-                    }
-                }
-            }
-
-            Debug.WriteLine($"All collected sensors: {String.Join(", ", allSensors)}");
 
             // Validate sensors against the valid list
             var invalidSensors = allSensors
                 .Where(sensor => !validSensors.Contains(sensor))
+                .Distinct()
                 .ToList();
 
-            Debug.WriteLine($"Invalid sensors found: {String.Join(", ", invalidSensors)}");
-
             if (invalidSensors.Any())
-                throw new InvalidOperationException(
-                    $"Invalid sensors or keys found: {String.Join(", ", invalidSensors)}"
-                );
+            {
+                _logger.Error("Invalid sensors found: {InvalidSensors}", String.Join(", ", invalidSensors));
+                throw new ValidationException($"Invalid sensors found: {String.Join(", ", invalidSensors)}");
+            }
+
+            // Note: We don't validate action keys as they are outputs, not inputs
         }
 
         private IEnumerable<string> GetSensorsFromConditions(List<Condition> conditions)
@@ -341,45 +283,109 @@ namespace Pulsar.Compiler.Parsers
 
         private ConditionDefinition ConvertCondition(Condition condition)
         {
-            switch (condition.ConditionDetails.Type)
+            if (condition.ConditionDetails == null)
+            {
+                throw new ValidationException("Condition details cannot be null");
+            }
+
+            switch (condition.ConditionDetails.Type.ToLowerInvariant())
             {
                 case "comparison":
+                    if (string.IsNullOrEmpty(condition.ConditionDetails.Sensor))
+                    {
+                        throw new ValidationException("Comparison condition must specify a sensor");
+                    }
                     return new ComparisonCondition
                     {
+                        Type = ConditionType.Comparison,
                         Sensor = condition.ConditionDetails.Sensor,
                         Operator = ParseOperator(condition.ConditionDetails.Operator),
                         Value = condition.ConditionDetails.Value,
                     };
+
                 case "expression":
+                    if (string.IsNullOrEmpty(condition.ConditionDetails.Expression))
+                    {
+                        throw new ValidationException("Expression condition must specify an expression");
+                    }
                     return new ExpressionCondition
                     {
+                        Type = ConditionType.Expression,
                         Expression = condition.ConditionDetails.Expression,
                     };
+
                 case "threshold_over_time":
+                    if (string.IsNullOrEmpty(condition.ConditionDetails.Sensor))
+                    {
+                        throw new ValidationException("Threshold over time condition must specify a sensor");
+                    }
+                    if (condition.ConditionDetails.Duration <= 0)
+                    {
+                        throw new ValidationException("Threshold over time condition must specify a positive duration");
+                    }
+
+                    var mode = ThresholdOverTimeMode.Strict; // Default to strict mode
+                    if (!string.IsNullOrEmpty(condition.ConditionDetails.Mode))
+                    {
+                        mode = condition.ConditionDetails.Mode.ToLowerInvariant() switch
+                        {
+                            "strict" => ThresholdOverTimeMode.Strict,
+                            "extended" => ThresholdOverTimeMode.Extended,
+                            _ => throw new ValidationException($"Invalid temporal mode: {condition.ConditionDetails.Mode}. Must be 'strict' or 'extended'.")
+                        };
+                    }
+
                     return new ThresholdOverTimeCondition
                     {
+                        Type = ConditionType.ThresholdOverTime,
                         Sensor = condition.ConditionDetails.Sensor,
                         Threshold = condition.ConditionDetails.Value,
                         Duration = condition.ConditionDetails.Duration,
+                        Mode = mode
                     };
+
+                case "group":
+                    var group = new ConditionGroup { Type = ConditionType.Group };
+                    
+                    if (condition.ConditionDetails.All != null)
+                    {
+                        foreach (var subCondition in condition.ConditionDetails.All)
+                        {
+                            group.AddToAll(ConvertCondition(subCondition));
+                        }
+                    }
+
+                    if (condition.ConditionDetails.Any != null)
+                    {
+                        foreach (var subCondition in condition.ConditionDetails.Any)
+                        {
+                            group.AddToAny(ConvertCondition(subCondition));
+                        }
+                    }
+
+                    if ((group.All == null || !group.All.Any()) && (group.Any == null || !group.Any.Any()))
+                    {
+                        throw new ValidationException("Group condition must have at least one condition in All or Any");
+                    }
+
+                    return group;
+
                 default:
-                    throw new NotImplementedException(
-                        $"Unsupported condition type: {condition.ConditionDetails.Type}"
-                    );
+                    throw new ValidationException($"Unsupported condition type: {condition.ConditionDetails.Type}");
             }
         }
 
         private ComparisonOperator ParseOperator(string op)
         {
-            return op switch
+            return op.ToLowerInvariant() switch
             {
-                ">" => ComparisonOperator.GreaterThan,
-                "<" => ComparisonOperator.LessThan,
-                ">=" => ComparisonOperator.GreaterThanOrEqual,
-                "<=" => ComparisonOperator.LessThanOrEqual,
-                "==" => ComparisonOperator.EqualTo,
-                "!=" => ComparisonOperator.NotEqualTo,
-                _ => throw new InvalidOperationException($"Unsupported operator: {op}"),
+                "greater_than" or "gt" or ">" => ComparisonOperator.GreaterThan,
+                "less_than" or "lt" or "<" => ComparisonOperator.LessThan,
+                "greater_than_or_equal" or "gte" or ">=" => ComparisonOperator.GreaterThanOrEqual,
+                "less_than_or_equal" or "lte" or "<=" => ComparisonOperator.LessThanOrEqual,
+                "equal_to" or "eq" or "==" => ComparisonOperator.EqualTo,
+                "not_equal_to" or "ne" or "!=" => ComparisonOperator.NotEqualTo,
+                _ => throw new ValidationException($"Invalid operator: {op}. Must be one of: greater_than, less_than, greater_than_or_equal, less_than_or_equal, equal_to, not_equal_to")
             };
         }
 
@@ -414,7 +420,7 @@ namespace Pulsar.Compiler.Parsers
                         Debug.WriteLine($"Found SetValue action");
                         if (string.IsNullOrEmpty(actionItem.SetValue.Key))
                         {
-                            throw new InvalidOperationException("SetValue action must have a key");
+                            throw new ValidationException("SetValue action must have a key");
                         }
 
                         var setValueAction = new SetValueAction
@@ -435,7 +441,7 @@ namespace Pulsar.Compiler.Parsers
                         Debug.WriteLine($"Found SendMessage action");
                         if (string.IsNullOrEmpty(actionItem.SendMessage.Channel))
                         {
-                            throw new InvalidOperationException("SendMessage action must have a channel");
+                            throw new ValidationException("SendMessage action must have a channel");
                         }
 
                         return new SendMessageAction
@@ -447,7 +453,7 @@ namespace Pulsar.Compiler.Parsers
                     }
 
                     Debug.WriteLine($"No valid action type found");
-                    throw new InvalidOperationException(
+                    throw new ValidationException(
                         $"Unknown action type. Action item details: {actionItem?.ToString() ?? "null"}"
                     );
                 })
@@ -502,6 +508,9 @@ namespace Pulsar.Compiler.Parsers
         public double Value { get; set; }
         public string Expression { get; set; } = string.Empty;
         public int Duration { get; set; }
+        public string Mode { get; set; } = string.Empty;  // For temporal conditions
+        public List<Condition> All { get; set; } = new();  // For group conditions
+        public List<Condition> Any { get; set; } = new();  // For group conditions
     }
 
     public class ActionYaml

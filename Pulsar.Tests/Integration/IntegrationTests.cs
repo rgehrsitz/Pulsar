@@ -3,23 +3,33 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Xunit;
 using Pulsar.Tests.TestUtilities;
 using Serilog;
-using Pulsar.Compiler;
-using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Config;
+using Pulsar.Compiler.Parsers;
+using Pulsar.Compiler.Exceptions;
+using Pulsar.Compiler.Core;
 
 namespace Pulsar.Tests.Integration
 {
     public class IntegrationTests
     {
         private readonly ILogger _logger;
+        private readonly DslParser _parser;
+        private readonly List<string> _validSensors;
 
         public IntegrationTests()
         {
-            _logger = LoggingConfig.GetLogger();
+            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger();
+            _parser = new DslParser();
+            _validSensors = new List<string> 
+            { 
+                "SensorA", "SensorB", "SensorC", "SensorD",
+                "temp1", "temp2", "pressure", "humidity" 
+            };
         }
 
         [Fact]
@@ -27,31 +37,49 @@ namespace Pulsar.Tests.Integration
         {
             _logger.Debug("Starting end-to-end integration test");
 
-            // Arrange: Define a set of valid rule contents
-            string[] ruleContents = new string[]
+            // Arrange: Define a set of valid rules
+            var ruleContents = new[]
             {
-                "valid rule content",
-                "another valid rule content",
+                @"rules:
+                  - name: Rule1
+                    description: Temperature monitoring rule
+                    conditions:
+                      all:
+                        - type: comparison
+                          sensor: SensorA
+                          operator: greater_than
+                          value: 30
+                    actions:
+                      - set_value:
+                          key: temp_alert
+                          value: 1",
+                @"rules:
+                  - name: Rule2
+                    description: Pressure monitoring rule
+                    conditions:
+                      all:
+                        - type: comparison
+                          sensor: SensorB
+                          operator: less_than
+                          value: 100
+                    actions:
+                      - set_value:
+                          key: pressure_alert
+                          value: 1"
             };
 
-            // Act: Parse each rule using the stub parser
-            var parsedResults = ruleContents.Select(r => RuleParser.Parse(r)).ToArray();
-            foreach (var result in parsedResults)
+            // Act: Parse each rule
+            var rules = new List<RuleDefinition>();
+            foreach (var content in ruleContents)
             {
-                Assert.True(result.IsValid, "Each rule should be valid.");
+                var parsedRules = _parser.ParseRules(content, _validSensors, "test.yaml");
+                rules.AddRange(parsedRules);
             }
 
             // Compile the parsed rules using the AOT compiler with full project generation
             var compiler = new AOTRuleCompiler();
-            
-            // Cast to non-nullable array after filtering out nulls
-            var rules = parsedResults.Where(r => r.IsValid && r.Rule != null)
-                                   .Select(r => r.Rule)
-                                   .OfType<RuleDefinition>()
-                                   .ToArray();
-                                   
             var compileResult = compiler.Compile(
-                rules,
+                rules.ToArray(),
                 new CompilerOptions
                 {
                     BuildConfig = new BuildConfig
@@ -97,7 +125,7 @@ namespace Pulsar.Tests.Integration
                 f => f.FileName.EndsWith("Program.cs")
             );
 
-            // Simulate runtime execution with a stub runtime engine
+            // Simulate runtime execution
             var sensorInput = new Dictionary<string, string>
             {
                 { "SensorA", "100" },
@@ -118,8 +146,23 @@ namespace Pulsar.Tests.Integration
         {
             _logger.Debug("Starting logging and metrics integration test");
 
+            var ruleContent = @"rules:
+              - name: LoggingTestRule
+                description: Rule for testing logging
+                conditions:
+                  all:
+                    - type: comparison
+                      sensor: SensorA
+                      operator: greater_than
+                      value: 100
+                actions:
+                  - set_value:
+                      key: log_test
+                      value: 1";
+
+            var rules = _parser.ParseRules(ruleContent, _validSensors, "test.yaml");
             var logs = RuntimeEngine.RunCycleWithLogging(
-                new string[] { "valid rule content" },
+                new[] { ruleContent },
                 new Dictionary<string, string> { { "SensorA", "123" } }
             );
 
@@ -137,28 +180,16 @@ namespace Pulsar.Tests.Integration
         {
             _logger.Debug("Starting rule failure integration test");
 
-            string[] ruleContents = new string[] { "invalid rule content" };
-            var parsedResult = RuleParser.Parse(ruleContents[0]);
-            var compiler = new AOTRuleCompiler();
-            var compileResult = compiler.Compile(
-                ruleContents.Select(r => new RuleDefinition()).ToArray(),
-                new CompilerOptions
-                {
-                    BuildConfig = new BuildConfig
-                    {
-                        OutputPath = "test-output",
-                        Target = "test-target",
-                        ProjectName = "test-project",
-                        TargetFramework = "net9.0",
-                        RulesPath = "test-rules"
-                    }
-                }
-            );
+            // Invalid rule with missing required fields
+            var invalidRuleContent = @"rules:
+              - name: InvalidRule
+                # Missing conditions and actions";
 
-            Assert.False(parsedResult.IsValid, "Expected rule parsing to fail for invalid rule content.");
-            Assert.False(compileResult.Success, "Expected compilation to fail with invalid rules.");
-            Assert.NotNull(compileResult.Errors);
-            Assert.NotEmpty(compileResult.Errors);
+            // This should throw a ValidationException
+            var ex = Assert.Throws<ValidationException>(() => 
+                _parser.ParseRules(invalidRuleContent, _validSensors, "test.yaml"));
+            
+            Assert.Contains("must have conditions", ex.Message);
 
             _logger.Debug("Rule failure integration test completed with expected errors");
         }
@@ -168,11 +199,45 @@ namespace Pulsar.Tests.Integration
         {
             _logger.Debug("Starting multiple rules and sensors integration test");
 
-            string[] ruleContents = new string[]
+            var ruleContents = new[]
             {
-                "valid rule content 1",
-                "valid rule content 2",
-                "valid rule content 3",
+                @"rules:
+                  - name: Rule1
+                    description: Multiple sensor test rule 1
+                    conditions:
+                      all:
+                        - type: comparison
+                          sensor: SensorA
+                          operator: greater_than
+                          value: 50
+                    actions:
+                      - set_value:
+                          key: alert1
+                          value: 1",
+                @"rules:
+                  - name: Rule2
+                    description: Multiple sensor test rule 2
+                    conditions:
+                      all:
+                        - type: comparison
+                          sensor: SensorB
+                          operator: less_than
+                          value: 150
+                    actions:
+                      - set_value:
+                          key: alert2
+                          value: 1",
+                @"rules:
+                  - name: Rule3
+                    description: Multiple sensor test rule 3
+                    conditions:
+                      all:
+                        - type: expression
+                          expression: SensorC + SensorD > 500
+                    actions:
+                      - set_value:
+                          key: alert3
+                          value: 1"
             };
 
             var sensorInputs = new Dictionary<string, string>
@@ -200,30 +265,54 @@ namespace Pulsar.Tests.Integration
         [Fact]
         public void Integration_StressTest_LargeRuleSet()
         {
-            _logger.Debug("Starting large rule set stress test");
+            _logger.Debug("Starting stress test with large rule set");
 
-            var ruleContents = Enumerable.Range(1, 1000)
-                .Select(i => $"valid rule content {i}")
-                .ToArray();
-
-            var sensorInputs = new Dictionary<string, string>();
+            // Generate a large set of rules
+            var ruleBuilder = new StringBuilder();
+            ruleBuilder.AppendLine("rules:");
+            
             for (int i = 1; i <= 100; i++)
             {
-                sensorInputs.Add($"Sensor{i}", (i * 10).ToString());
+                ruleBuilder.AppendLine($@"  - name: StressRule{i}
+    description: Stress test rule {i}
+    conditions:
+      all:
+        - type: comparison
+          sensor: SensorA
+          operator: greater_than
+          value: {i}
+    actions:
+      - set_value:
+          key: stress_alert_{i}
+          value: 1");
             }
 
-            var logs = RuntimeEngine.RunCycleWithLogging(ruleContents, sensorInputs);
-            var output = RuntimeEngine.RunCycle(ruleContents, sensorInputs);
+            var rules = _parser.ParseRules(ruleBuilder.ToString(), _validSensors, "stress_test.yaml");
+            Assert.Equal(100, rules.Count());
 
-            Assert.Contains("Cycle Started", logs);
-            Assert.Contains(logs, log => log.Contains("Processing rules:"));
-            Assert.Contains(logs, log => log.Contains("Processed Rules:"));
-            Assert.Contains(logs, log => log.Contains("Cycle Duration:"));
-            Assert.Contains("Cycle Ended", logs);
-            Assert.Contains("result", output.Keys);
-            Assert.Equal("success", output["result"]);
+            var compiler = new AOTRuleCompiler();
+            var compileResult = compiler.Compile(
+                rules.ToArray(),
+                new CompilerOptions
+                {
+                    BuildConfig = new BuildConfig
+                    {
+                        OutputPath = "stress-test-output",
+                        Target = "win-x64",
+                        ProjectName = "StressTestProject",
+                        TargetFramework = "net9.0",
+                        RulesPath = "stress-test-rules",
+                        StandaloneExecutable = true,
+                        OptimizeOutput = true,
+                        MaxRulesPerFile = 50
+                    }
+                }
+            );
 
-            _logger.Debug("Large rule set stress test completed successfully");
+            Assert.True(compileResult.Success);
+            Assert.True(compileResult.GeneratedFiles.Count() > 2); // Should have multiple rule files due to MaxRulesPerFile
+
+            _logger.Debug("Stress test completed successfully");
         }
     }
 }

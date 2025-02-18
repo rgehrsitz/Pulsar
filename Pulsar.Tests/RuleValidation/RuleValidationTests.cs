@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
-using Pulsar.Tests.TestUtilities; // Updated namespace
+using Pulsar.Tests.TestUtilities; 
 using Pulsar.Compiler.Models;
 using Serilog;
 using Pulsar.Compiler;
@@ -16,7 +16,7 @@ namespace Pulsar.Tests.RuleValidation
 
         public RuleValidationTests()
         {
-            _logger = LoggingConfig.GetLogger();
+            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger();
         }
 
         [Fact]

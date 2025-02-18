@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json.Serialization;
 using Serilog;
 using Pulsar.Compiler;
+using Pulsar.Compiler.Exceptions;
 
 namespace Pulsar.Compiler.Models
 {
@@ -29,27 +30,36 @@ namespace Pulsar.Compiler.Models
                 if (string.IsNullOrEmpty(Name))
                 {
                     _logger.Error("Rule name is required");
-                    throw new ArgumentException("Rule name is required");
+                    throw new ValidationException("Rule name is required");
                 }
 
                 if (Conditions == null)
                 {
                     _logger.Error("Rule {RuleName} must have conditions", Name);
-                    throw new ArgumentException($"Rule {Name} must have conditions");
+                    throw new ValidationException($"Rule {Name} must have conditions");
                 }
 
                 if (Actions.Count == 0)
                 {
                     _logger.Error("Rule {RuleName} must have at least one action", Name);
-                    throw new ArgumentException($"Rule {Name} must have at least one action");
+                    throw new ValidationException($"Rule {Name} must have at least one action");
+                }
+
+                // Validate conditions
+                Conditions.Validate();
+
+                // Validate actions
+                foreach (var action in Actions)
+                {
+                    action.Validate();
                 }
 
                 _logger.Debug("Rule {RuleName} validation successful", Name);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not ValidationException)
             {
                 _logger.Error(ex, "Rule {RuleName} validation failed", Name);
-                throw;
+                throw new ValidationException($"Rule {Name} validation failed: {ex.Message}", ex);
             }
         }
 
@@ -67,6 +77,7 @@ namespace Pulsar.Compiler.Models
 
     public class ConditionGroup : ConditionDefinition
     {
+        public new ConditionType Type { get; set; } = ConditionType.Group;
         public List<ConditionDefinition> All { get; set; } = new();
         public List<ConditionDefinition> Any { get; set; } = new();
         public ConditionGroup? Parent { get; private set; }
@@ -95,7 +106,7 @@ namespace Pulsar.Compiler.Models
             if ((All == null || All.Count == 0) && (Any == null || Any.Count == 0))
             {
                 _logger.Error("Condition group must have at least one condition in All or Any");
-                throw new ArgumentException("Condition group must have at least one condition in All or Any");
+                throw new ValidationException("Condition group must have at least one condition in All or Any");
             }
 
             foreach (var condition in All ?? Enumerable.Empty<ConditionDefinition>())
@@ -147,7 +158,7 @@ namespace Pulsar.Compiler.Models
             if (string.IsNullOrEmpty(Sensor))
             {
                 _logger.Error("Comparison condition must specify a sensor");
-                throw new ArgumentException("Sensor is required for comparison condition");
+                throw new ValidationException("Sensor is required for comparison condition");
             }
         }
     }
@@ -173,9 +184,15 @@ namespace Pulsar.Compiler.Models
             if (string.IsNullOrEmpty(Expression))
             {
                 _logger.Error("Expression condition must have an expression");
-                throw new ArgumentException("Expression is required");
+                throw new ValidationException("Expression is required");
             }
         }
+    }
+
+    public enum ThresholdOverTimeMode
+    {
+        Strict,      // Only trust explicit data points
+        Extended     // Use last known value for missing points
     }
 
     public class ThresholdOverTimeCondition : ConditionDefinition
@@ -184,19 +201,20 @@ namespace Pulsar.Compiler.Models
         public string Sensor { get; set; } = string.Empty;
         public double Threshold { get; set; }
         public int Duration { get; set; }
+        public ThresholdOverTimeMode Mode { get; set; } = ThresholdOverTimeMode.Strict;
 
         public override void Validate()
         {
             if (string.IsNullOrEmpty(Sensor))
             {
                 _logger.Error("Sensor is required for threshold over time condition");
-                throw new ArgumentException("Sensor is required for threshold over time condition");
+                throw new ValidationException("Sensor is required for threshold over time condition");
             }
 
             if (Duration <= 0)
             {
                 _logger.Error("Duration must be greater than 0");
-                throw new ArgumentException("Duration must be greater than 0");
+                throw new ValidationException("Duration must be greater than 0");
             }
         }
     }
@@ -235,12 +253,12 @@ namespace Pulsar.Compiler.Models
             if (string.IsNullOrEmpty(Key))
             {
                 _logger.Error("SetValue action must specify a key");
-                throw new ArgumentException("Key is required for SetValue action");
+                throw new ValidationException("Key is required for SetValue action");
             }
             if (string.IsNullOrEmpty(ValueExpression) && Value == 0)
             {
                 _logger.Error("SetValue action must specify either Value or ValueExpression");
-                throw new ArgumentException("Either Value or ValueExpression must be specified");
+                throw new ValidationException("Either Value or ValueExpression must be specified");
             }
         }
     }
@@ -258,12 +276,12 @@ namespace Pulsar.Compiler.Models
             if (string.IsNullOrEmpty(Channel))
             {
                 _logger.Error("SendMessage action must specify a channel");
-                throw new ArgumentException("Channel is required for SendMessage action");
+                throw new ValidationException("Channel is required for SendMessage action");
             }
             if (string.IsNullOrEmpty(Message))
             {
                 _logger.Error("SendMessage action must specify a message");
-                throw new ArgumentException("Message is required for SendMessage action");
+                throw new ValidationException("Message is required for SendMessage action");
             }
         }
     }

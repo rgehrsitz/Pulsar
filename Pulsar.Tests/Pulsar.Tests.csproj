@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -29,11 +29,10 @@
     <None Update="TestData\rules.yaml">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-</ItemGroup>
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Pulsar.Compiler\Pulsar.Compiler.csproj" />
-    <ProjectReference Include="..\Pulsar.Runtime\Pulsar.Runtime.csproj" />
   </ItemGroup>
 
 </Project>
