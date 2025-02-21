@@ -32,10 +32,27 @@ namespace Pulsar.Tests.Compilation
                 {
                     Name = "TestRule",
                     Description = "Test rule for compilation",
-                    Conditions = new ConditionGroup(),
+                    Conditions = new ConditionGroup
+                    {
+                        All = new List<ConditionDefinition>
+                        {
+                            new ComparisonCondition
+                            {
+                                Type = ConditionType.Comparison,
+                                Sensor = "temp",
+                                Operator = ComparisonOperator.GreaterThan,
+                                Value = 30.0
+                            }
+                        }
+                    },
                     Actions = new List<ActionDefinition>
                     {
-                        new SetValueAction { Key = "output", Value = 1.0 }
+                        new SetValueAction 
+                        { 
+                            Type = ActionType.SetValue,
+                            Key = "output", 
+                            Value = 1.0 
+                        }
                     }
                 }
             };

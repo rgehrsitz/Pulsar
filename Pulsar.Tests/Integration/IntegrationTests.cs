@@ -45,10 +45,11 @@ namespace Pulsar.Tests.Integration
                     description: Temperature monitoring rule
                     conditions:
                       all:
-                        - type: comparison
-                          sensor: SensorA
-                          operator: greater_than
-                          value: 30
+                        - condition:
+                            type: comparison
+                            sensor: SensorA
+                            operator: greater_than
+                            value: 30
                     actions:
                       - set_value:
                           key: temp_alert
@@ -58,10 +59,11 @@ namespace Pulsar.Tests.Integration
                     description: Pressure monitoring rule
                     conditions:
                       all:
-                        - type: comparison
-                          sensor: SensorB
-                          operator: less_than
-                          value: 100
+                        - condition:
+                            type: comparison
+                            sensor: SensorB
+                            operator: less_than
+                            value: 100
                     actions:
                       - set_value:
                           key: pressure_alert
@@ -151,10 +153,11 @@ namespace Pulsar.Tests.Integration
                 description: Rule for testing logging
                 conditions:
                   all:
-                    - type: comparison
-                      sensor: SensorA
-                      operator: greater_than
-                      value: 100
+                    - condition:
+                        type: comparison
+                        sensor: SensorA
+                        operator: greater_than
+                        value: 100
                 actions:
                   - set_value:
                       key: log_test
@@ -189,7 +192,7 @@ namespace Pulsar.Tests.Integration
             var ex = Assert.Throws<ValidationException>(() => 
                 _parser.ParseRules(invalidRuleContent, _validSensors, "test.yaml"));
             
-            Assert.Contains("must have conditions", ex.Message);
+            Assert.Contains("must have at least one condition", ex.Message);
 
             _logger.Debug("Rule failure integration test completed with expected errors");
         }
@@ -206,10 +209,11 @@ namespace Pulsar.Tests.Integration
                     description: Multiple sensor test rule 1
                     conditions:
                       all:
-                        - type: comparison
-                          sensor: SensorA
-                          operator: greater_than
-                          value: 50
+                        - condition:
+                            type: comparison
+                            sensor: SensorA
+                            operator: greater_than
+                            value: 50
                     actions:
                       - set_value:
                           key: alert1
@@ -219,10 +223,11 @@ namespace Pulsar.Tests.Integration
                     description: Multiple sensor test rule 2
                     conditions:
                       all:
-                        - type: comparison
-                          sensor: SensorB
-                          operator: less_than
-                          value: 150
+                        - condition:
+                            type: comparison
+                            sensor: SensorB
+                            operator: less_than
+                            value: 150
                     actions:
                       - set_value:
                           key: alert2
@@ -232,8 +237,9 @@ namespace Pulsar.Tests.Integration
                     description: Multiple sensor test rule 3
                     conditions:
                       all:
-                        - type: expression
-                          expression: SensorC + SensorD > 500
+                        - condition:
+                            type: expression
+                            expression: SensorC + SensorD > 500
                     actions:
                       - set_value:
                           key: alert3
@@ -277,10 +283,11 @@ namespace Pulsar.Tests.Integration
     description: Stress test rule {i}
     conditions:
       all:
-        - type: comparison
-          sensor: SensorA
-          operator: greater_than
-          value: {i}
+        - condition:
+            type: comparison
+            sensor: SensorA
+            operator: greater_than
+            value: {i}
     actions:
       - set_value:
           key: stress_alert_{i}
