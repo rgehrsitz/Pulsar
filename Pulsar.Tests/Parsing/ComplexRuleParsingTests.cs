@@ -82,6 +82,13 @@ rules:
             Assert.NotNull(temp1Condition);
             Assert.Equal("temp1", temp1Condition.Sensor);
             Assert.Equal(ComparisonOperator.GreaterThan, temp1Condition.Operator);
+            Assert.Equal(30.0, temp1Condition.Value);
+            
+            var temp2Condition = rule.Conditions.All[1] as ComparisonCondition;
+            Assert.NotNull(temp2Condition);
+            Assert.Equal("temp2", temp2Condition.Sensor);
+            Assert.Equal(ComparisonOperator.LessThan, temp2Condition.Operator);
+            Assert.Equal(25.0, temp2Condition.Value);
             
             var temporalCondition = rule.Conditions.Any[0] as ThresholdOverTimeCondition;
             Assert.NotNull(temporalCondition);

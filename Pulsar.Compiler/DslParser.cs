@@ -323,6 +323,10 @@ namespace Pulsar.Compiler.Parsers
                     {
                         throw new ValidationException("Threshold over time condition must specify a positive duration");
                     }
+                    if (condition.ConditionDetails.Threshold <= 0)  // Check Threshold instead of Value
+                    {
+                        throw new ValidationException("Threshold over time condition must specify a positive threshold");
+                    }
 
                     var mode = ThresholdOverTimeMode.Strict; // Default to strict mode
                     if (!string.IsNullOrEmpty(condition.ConditionDetails.Mode))
@@ -339,7 +343,7 @@ namespace Pulsar.Compiler.Parsers
                     {
                         Type = ConditionType.ThresholdOverTime,
                         Sensor = condition.ConditionDetails.Sensor,
-                        Threshold = condition.ConditionDetails.Value,
+                        Threshold = condition.ConditionDetails.Threshold,  // Use Threshold instead of Value
                         Duration = condition.ConditionDetails.Duration,
                         Mode = mode
                     };
@@ -506,11 +510,12 @@ namespace Pulsar.Compiler.Parsers
         public string Sensor { get; set; } = string.Empty;
         public string Operator { get; set; } = string.Empty;
         public double Value { get; set; }
+        public double Threshold { get; set; }  // Add this field
         public string Expression { get; set; } = string.Empty;
         public int Duration { get; set; }
-        public string Mode { get; set; } = string.Empty;  // For temporal conditions
-        public List<Condition> All { get; set; } = new();  // For group conditions
-        public List<Condition> Any { get; set; } = new();  // For group conditions
+        public string Mode { get; set; } = string.Empty;
+        public List<Condition> All { get; set; } = new();
+        public List<Condition> Any { get; set; } = new();
     }
 
     public class ActionYaml
