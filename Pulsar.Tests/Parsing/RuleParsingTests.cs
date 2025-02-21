@@ -81,13 +81,16 @@ rules:
 
             // Arrange
             var ruleContent = @"
-rules:
-  - name: TestRule
-    invalid_indent:
-      - this is not valid YAML";
+rules: [
+  { this is clearly invalid
+    YAML syntax
+  name: TestRule
+  conditions: *invalid-anchor
+  actions: <<invalid-merge
+";  // Multiple YAML syntax errors: unclosed brackets, invalid anchor, invalid merge
 
             // Act & Assert
-            var ex = Assert.Throws<YamlException>(() =>
+            var ex = Assert.Throws<ValidationException>(() =>
                 _parser.ParseRules(ruleContent, _validSensors, "test.yaml"));
             Assert.Contains("Error parsing YAML", ex.Message);
 

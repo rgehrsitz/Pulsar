@@ -28,6 +28,7 @@ namespace Pulsar.Compiler.Parsers
                 .WithNodeDeserializer(new YamlNodeDeserializer())
                 .IgnoreUnmatchedProperties()
                 .WithDuplicateKeyChecking() // Add this to catch duplicate keys
+                .WithAttemptingUnquotedStringTypeDeserialization()  // Add this line
                 .Build();
             _logger.Debug("DslParser initialized");
         }
@@ -96,7 +97,26 @@ namespace Pulsar.Compiler.Parsers
             try
             {
                 _currentFile = fileName;
-                var root = _deserializer.Deserialize<RuleRoot>(yamlContent);
+                
+                if (string.IsNullOrWhiteSpace(yamlContent))
+                {
+                    throw new ValidationException($"Error parsing YAML: Content is empty");
+                }
+
+                RuleRoot? root;
+                try
+                {
+                    root = _deserializer.Deserialize<RuleRoot>(yamlContent);
+                }
+                catch (YamlException ex)
+                {
+                    throw new ValidationException($"Error parsing YAML: {ex.Message}", ex);
+                }
+
+                if (root == null)
+                {
+                    throw new ValidationException($"Error parsing YAML: Invalid format");
+                }
 
                 if (root?.Rules == null || !root.Rules.Any())
                 {
@@ -163,12 +183,15 @@ namespace Pulsar.Compiler.Parsers
 
                 return ruleDefinitions;
             }
-            catch (YamlDotNet.Core.YamlException ex)
+            catch (YamlException ex)
             {
-                throw new ValidationException(
-                    $"Error parsing YAML in {fileName}: {ex.Message}",
-                    ex
-                );
+                _logger.Error(ex, "YAML parsing error in {FileName}: {Message}", fileName, ex.Message);
+                throw new ValidationException($"Error parsing YAML: {ex.Message}", ex);
+            }
+            catch (Exception ex) when (ex is not ValidationException)
+            {
+                _logger.Error(ex, "Unexpected error parsing YAML in {FileName}: {Message}", fileName, ex.Message);
+                throw new ValidationException($"Error parsing YAML: {ex.Message}", ex);
             }
         }
 
@@ -190,6 +213,14 @@ namespace Pulsar.Compiler.Parsers
             {
                 throw new ValidationException(
                     $"Rule '{rule.Name}' must have at least one condition"
+                );
+            }
+
+            // Validate that rule has at least one action
+            if (rule.Actions == null || rule.Actions.Count == 0)
+            {
+                throw new ValidationException(
+                    $"Rule '{rule.Name}' must have at least one action"
                 );
             }
 
