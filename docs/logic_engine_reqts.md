@@ -17,14 +17,22 @@ Pulsar is a high-performance, polling-based rules evaluation engine designed to 
 ### 2. Build-Time Compilation
 
 - The compiler **validates rule syntax**, **performs dependency analysis**, and **generates optimized C# code**.
-- The compiled output is a **complete, standalone C# project**, capable of being **AOT-built**.
+- The compiled output is a **complete, standalone C# solution** named **Beacon**, containing:
+  - `Beacon.sln` - The main solution file
+  - `Beacon.Runtime/` - The main runtime project
+    - `Beacon.Runtime.csproj` - Runtime project file
+    - `Generated/` - Contains all generated rule files
+    - `Services/` - Core runtime services
+  - `Beacon.Tests/` - Test project for generated rules
+    - `Beacon.Tests.csproj` - Test project file
+    - `Generated/` - Generated test files
 - The system sorts rules into **evaluation layers** to ensure dependencies are resolved before execution.
 - **Ring Buffer Configuration**: Temporal buffers are configured at **build-time** to optimize memory and resource usage based on rule definitions.
 - **Pre-written templates** stored within the Pulsar repository ensure versioning and consistency.
 
 ### 3. Runtime Execution
 
-- The standalone executable fetches **bulk sensor values from Redis every 100ms**.
+- The **Beacon.Runtime** executable fetches **bulk sensor values from Redis every 100ms**.
 - **Rules execute in dependency-resolved layers** to maintain deterministic evaluation.
 - Computed results are **written back to Redis** after processing.
 - **Temporal Data Handling**: The system maintains **an in-memory ring buffer** for historical values needed in temporal rule evaluations.
@@ -69,29 +77,32 @@ Pulsar is a high-performance, polling-based rules evaluation engine designed to 
 
 2. **Code Generation**
 
-   - Produces **fully self-contained C# projects**.
+   - Produces a complete **Beacon solution** with runtime and test projects.
    - Includes **rule tracking metadata** for debugging.
+   - Generates appropriate **project files** and solution structure.
+   - Places generated code in the correct project directories.
 
 3. **Build Integration**
 
-   - Generates an **AOT-compatible project**.
+   - Generates an **AOT-compatible Beacon solution**.
    - Users compile using:
      ```sh
      dotnet publish -c Release -r <runtime> --self-contained true
      ```
    - **Optional CI/CD script generation** for automating builds.
    - **Automated versioning** embedded in generated project metadata.
-   - **Inclusion of test files** to validate rule execution correctness.
+   - **Inclusion of test files** in the Beacon.Tests project to validate rule execution correctness.
 
 ### **Runtime Requirements**
 
 1. **Redis Integration**
 
-   - **Bulk fetches all input values every 100ms**.
-   - **Writes computed outputs back to Redis** after evaluation.
-   - **Does not store intermediate values in Redis** between rule evaluations.
-   - **Supports both single-instance and clustered Redis configurations**.
-   - **Retry mechanisms with exponential backoff** in case of connectivity issues.
+   - The **Beacon.Runtime** project:
+     - **Bulk fetches all input values every 100ms**.
+     - **Writes computed outputs back to Redis** after evaluation.
+     - **Does not store intermediate values in Redis** between rule evaluations.
+     - **Supports both single-instance and clustered Redis configurations**.
+     - **Retry mechanisms with exponential backoff** in case of connectivity issues.
 
 2. **Temporal Handling**
 
@@ -111,11 +122,11 @@ Pulsar is a high-performance, polling-based rules evaluation engine designed to 
 
 ### **CI/CD Integration**
 
-- **Manual Compilation for Now**: The generated project is manually compiled by users.
+- **Manual Compilation for Now**: The generated Beacon solution is manually compiled by users.
 - **Future CI/CD automation** may include:
   - **Build script generation** for common CI/CD platforms.
   - **Automated versioning** embedded in generated project metadata.
-  - **Inclusion of test files** to validate rule execution correctness.
+  - **Test execution** using the Beacon.Tests project to validate rule execution correctness.
 
 ---
 
@@ -123,13 +134,14 @@ Pulsar is a high-performance, polling-based rules evaluation engine designed to 
 
 | Topic                      | Clarification                                                                                 |
 | -------------------------- | --------------------------------------------------------------------------------------------- |
-| **Standalone Execution**   | The **generated project** serves as a **self-contained runtime**.                             |
+| **Project Structure**      | Generated code is organized in a **Beacon solution** with runtime and test projects.          |
+| **Standalone Execution**   | The **Beacon.Runtime** project serves as a **self-contained runtime**.                        |
 | **Redis Requirement**      | Redis is the **primary data source**, but **temporal rules rely on in-memory caching**.       |
 | **Temporal Mode**          | **Strict Discrete Mode** is default; **Extended Last-Known Mode** must be explicitly enabled. |
 | **Rule Dependencies**      | Rules **can reference other rule outputs**; circular dependencies **cause build failure**.    |
 | **Maximum Dependency Depth** | Configurable (default: 10 levels) with warnings for deep chains.                            |
 | **Action Execution Order** | Actions execute **sequentially in defined order**.                                            |
-| **CI/CD Integration**      | Users currently **manually compile** the project; CI/CD automation may follow.                |
+| **CI/CD Integration**      | Users currently **manually compile** the Beacon solution; CI/CD automation may follow.        |
 | **Logging Framework**      | The runtime will use **Serilog** for structured logging.                                       |
 | **Monitoring**             | The runtime will expose **Prometheus-compatible metrics** for monitoring.                      |
 | **Error Handling**         | Logs errors using **Serilog**, applies retry strategies, and triggers alerts when necessary.  |
@@ -137,4 +149,3 @@ Pulsar is a high-performance, polling-based rules evaluation engine designed to 
 ---
 
 This document now fully aligns with the clarified system behavior, execution model, structured logging with Serilog, Prometheus monitoring, Redis failover handling, and build-time configurations. Let me know if further refinements are needed!
-

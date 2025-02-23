@@ -1,7 +1,7 @@
 # Pulsar System Refactoring Plan
 
 ## Overview
-Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The previous **Pulsar.Runtime** project has been deprecated, and its relevant classes and methods have been **migrated into Pulsar.Compiler**. This refactoring effort ensures that Pulsar functions as a **code generation tool** that outputs a complete, **standalone C# project** capable of executing all required runtime functionality, including Redis data integration, rule evaluation, and error handling.
+Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The previous **Pulsar.Runtime** project has been deprecated, and its relevant classes and methods have been **migrated into Pulsar.Compiler**. This refactoring effort ensures that Pulsar functions as a **code generation tool** that outputs a complete, **standalone C# project** named **Beacon** that contains all required runtime functionality, including Redis data integration, rule evaluation, and error handling.
 
 ## Goals
 - **AOT Compatibility**: Ensure the generated project supports **AOT compilation** and produces a fully standalone executable.
@@ -16,13 +16,16 @@ Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The 
 - All runtime logic is migrated into **Pulsar.Compiler**.
 - The final output must be a **fully functional, self-contained C# project**.
 
-### 2. Generate a Complete Standalone Project
-- Pulsar will output a directory containing:
-  - `.sln` (solution) file.
-  - `.csproj` (project) files.
-  - `.cs` source files.
-  - **Pre-written templates** for core runtime logic.
-  - **Generated rule logic** in optimized C#.
+### 2. Generate a Complete Standalone Project (Beacon)
+- Pulsar will output a directory containing the **Beacon** solution with the following structure:
+  - `Beacon.sln` - The main solution file
+  - `Beacon.Runtime/` - The main runtime project
+    - `Beacon.Runtime.csproj` - Runtime project file
+    - `Generated/` - Contains all generated rule files
+    - `Services/` - Core runtime services
+  - `Beacon.Tests/` - Test project for generated rules
+    - `Beacon.Tests.csproj` - Test project file
+    - `Generated/` - Generated test files
 - The solution must be **AOT-compatible** and able to be built using:
   ```sh
   dotnet publish -c Release -r <runtime> --self-contained true
@@ -55,24 +58,28 @@ Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The 
 ## Implementation Phases
 ### Phase 1: Code Generation Updates
 - Update `Pulsar.Compiler` to:
-  - Generate **C# source files** instead of emitting runtime DLLs.
-  - Include **rule metadata** in comments for traceability.
-  - **Support file splitting** for large rule sets.
-  - **Eliminate reflection/dynamic code.**
-  - Generate a **manifest** tracking all output files.
+  - Generate the complete **Beacon solution structure**
+  - Output **C# source files** in appropriate project directories
+  - Include **rule metadata** in comments for traceability
+  - **Support file splitting** for large rule sets
+  - **Eliminate reflection/dynamic code**
+  - Generate a **manifest** tracking all output files
+  - Generate appropriate **project files** for both runtime and test projects
 
 ### Phase 2: Build Process Integration
 - Implement a **build-time orchestrator** that:
-  - Reads **YAML rule files**.
-  - Validates and compiles them into **C# code**.
-  - Manages **file splitting/grouping**.
-  - Outputs a **fully functional project directory**.
+  - Reads **YAML rule files**
+  - Validates and compiles them into **C# code**
+  - Manages **file splitting/grouping**
+  - Outputs a complete **Beacon solution** with all necessary files
+  - Generates appropriate **test files** in the Beacon.Tests project
 - Integrate with **MSBuild**:
-  - Define a **pre-build step** to run the orchestrator.
-  - Allow configuration of **file thresholds and output paths**.
+  - Define a **pre-build step** to run the orchestrator
+  - Allow configuration of **file thresholds and output paths**
+  - Support customization of the **Beacon solution structure**
 
 ### Phase 3: Runtime System Execution
-- The **generated standalone executable** will:
+- The **generated Beacon solution** will:
   - **Fetch data from Redis every 100ms**.
   - **Process rules in evaluation layers**, ensuring dependencies are satisfied.
   - **Write outputs back to Redis**.
@@ -101,23 +108,24 @@ Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The 
 
 ## Expected Output
 Once the changes are implemented, Pulsar will function as a **purely static code generator**, ensuring that:
-- The **output directory** contains a complete **standalone C# project**.
-- No runtime-generated code exists.
-- The solution **can be built separately** via MSBuild or command-line tools.
-- The final binary is fully **AOT-compatible**.
-- The generated solution includes all **required runtime execution functionality**.
+- The **output directory** contains a complete **Beacon solution** with runtime and test projects
+- No runtime-generated code exists
+- The solution **can be built separately** via MSBuild or command-line tools
+- The final binary is fully **AOT-compatible**
+- The generated solution includes all **required runtime execution functionality**
+- Test projects are properly configured to validate rule behavior
 
 ## Summary of Clarifications
 | Topic | Clarification |
 |-------|--------------|
-| **Runtime Execution** | The **generated project** must implement **all runtime logic**, including the 100ms execution loop. |
-| **Redis Requirement** | Redis is the **primary** data source, with an exception for **temporal caching** in memory. |
-| **Temporal Mode** | **Strict Discrete Mode** is the default. **Extended Last-Known Mode** must be explicitly defined in the DSL. |
-| **Rule Dependencies** | Rules **can reference each other’s outputs**. Circular dependencies **must be detected** at build time. |
-| **Action Execution Order** | Actions execute **in sequence**, in the order they are written in the rule definition. |
-| **CI/CD Integration** | The user is responsible for compiling the generated project. Future CI/CD automation is possible. |
+| **Runtime Execution** | The **Beacon.Runtime** project must implement **all runtime logic**, including the 100ms execution loop |
+| **Redis Requirement** | Redis is the **primary** data source, with an exception for **temporal caching** in memory |
+| **Temporal Mode** | **Strict Discrete Mode** is the default. **Extended Last-Known Mode** must be explicitly defined in the DSL |
+| **Rule Dependencies** | Rules **can reference each other's outputs**. Circular dependencies **must be detected** at build time |
+| **Action Execution Order** | Actions execute **in sequence**, in the order they are written in the rule definition |
+| **CI/CD Integration** | The user is responsible for compiling the generated Beacon solution. Future CI/CD automation is possible |
+| **Project Structure** | The generated Beacon solution follows a standard structure with separate runtime and test projects |
 
 ---
 
 This document now fully aligns with the clarified requirements, including the explicit handling of temporal caching. Let me know if further refinements are needed.
-

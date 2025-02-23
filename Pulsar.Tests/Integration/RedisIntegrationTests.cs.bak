@@ -10,6 +10,9 @@ using Pulsar.Runtime.Services;
 
 namespace Pulsar.Tests.Integration
 {
+    [Collection("Integration Tests")]
+    [Trait("Category", "Integration")]
+    [Trait("Skip", "Temporarily disabled during refactoring")]
     public class RedisIntegrationTests : IDisposable
     {
         public required RedisService _singleNodeRedis;

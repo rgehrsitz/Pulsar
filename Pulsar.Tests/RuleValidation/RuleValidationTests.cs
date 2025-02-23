@@ -1,12 +1,10 @@
-// File: Pulsar.Tests/RuleValidation/RuleValidationTests.cs
-
 using System;
 using System.Collections.Generic;
 using Xunit;
-using Pulsar.Tests.TestUtilities; 
 using Pulsar.Compiler.Models;
 using Serilog;
 using Pulsar.Compiler;
+using Pulsar.Compiler.Core;
 
 namespace Pulsar.Tests.RuleValidation
 {
@@ -83,7 +81,7 @@ namespace Pulsar.Tests.RuleValidation
             };
 
             // Act
-            var result = TestUtilities.RuleValidator.Validate(rule);
+            var result = RuleValidator.Validate(rule);
 
             // Assert
             Assert.True(result.IsValid);
@@ -101,7 +99,7 @@ namespace Pulsar.Tests.RuleValidation
             var rule = new RuleDefinition();
 
             // Act
-            var result = TestUtilities.RuleValidator.Validate(rule);
+            var result = RuleValidator.Validate(rule);
 
             // Assert
             Assert.False(result.IsValid);
