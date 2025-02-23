@@ -9,26 +9,26 @@ namespace Pulsar.Compiler.Exceptions
     public class RuleCompilationException : Exception
     {
         public string RuleName { get; }
-        public string RuleSource { get; }
+        public string? RuleSource { get; }
         public int? LineNumber { get; }
-        public string ErrorType { get; }
-        public Dictionary<string, object> Context { get; }
+        public string? ErrorType { get; }
+        public Dictionary<string, object>? Context { get; }
 
         private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
         public RuleCompilationException(
             string message,
             string ruleName,
-            string ruleSource = null,
+            string? ruleSource = null,
             int? lineNumber = null,
-            string errorType = "CompilationError",
-            Dictionary<string, object> context = null)
+            string? errorType = "CompilationError",
+            Dictionary<string, object>? context = null)
             : base(message)
         {
             RuleName = ruleName;
             RuleSource = ruleSource;
             LineNumber = lineNumber;
-            ErrorType = errorType;
+            ErrorType = errorType ?? "CompilationError";
             Context = context ?? new Dictionary<string, object>();
 
             LogError();
@@ -38,16 +38,16 @@ namespace Pulsar.Compiler.Exceptions
             string message,
             string ruleName,
             Exception innerException,
-            string ruleSource = null,
+            string? ruleSource = null,
             int? lineNumber = null,
-            string errorType = "CompilationError",
-            Dictionary<string, object> context = null)
+            string? errorType = "CompilationError",
+            Dictionary<string, object>? context = null)
             : base(message, innerException)
         {
             RuleName = ruleName;
             RuleSource = ruleSource;
             LineNumber = lineNumber;
-            ErrorType = errorType;
+            ErrorType = errorType ?? "CompilationError";
             Context = context ?? new Dictionary<string, object>();
 
             LogError();

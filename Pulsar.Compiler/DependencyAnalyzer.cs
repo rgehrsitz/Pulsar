@@ -1,24 +1,23 @@
-// File: Pulsar.Compiler/DependencyAnalyzer.cs
-
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Compiler.Models;
-using Serilog;
 
-namespace Pulsar.Compiler.Analysis
+namespace Pulsar.Compiler.Core
 {
     public class DependencyAnalyzer
     {
-        private readonly ILogger _logger;
+        private readonly ILogger<DependencyAnalyzer> _logger;
         private Dictionary<string, RuleDefinition> _outputs = new();
         private readonly int _maxDependencyDepth;
         private readonly Dictionary<string, HashSet<string>> _temporalDependencies = new();
 
-        public DependencyAnalyzer(int maxDependencyDepth = 10)
+        public DependencyAnalyzer(int maxDependencyDepth = 10, ILogger<DependencyAnalyzer>? logger = null)
         {
-            _logger = LoggingConfig.GetLogger();
+            _logger = logger ?? NullLogger<DependencyAnalyzer>.Instance;
             _maxDependencyDepth = maxDependencyDepth;
         }
 
@@ -34,7 +33,7 @@ namespace Pulsar.Compiler.Analysis
         public DependencyValidationResult ValidateDependencies(List<RuleDefinition> rules)
         {
             var result = new DependencyValidationResult { IsValid = true };
-            var graph = BuildDependencyGraph(rules);
+            var graph = BuildGraph(rules);
 
             // Check for circular dependencies
             var cycles = FindCircularDependencies(graph);
@@ -44,7 +43,7 @@ namespace Pulsar.Compiler.Analysis
                 result.CircularDependencies = cycles;
                 foreach (var cycle in cycles)
                 {
-                    _logger.Error("Circular dependency detected: {Path}", string.Join(" -> ", cycle));
+                    _logger.LogError("Circular dependency detected: {Path}", string.Join(" -> ", cycle));
                 }
             }
 
@@ -55,7 +54,7 @@ namespace Pulsar.Compiler.Analysis
                 result.DeepDependencyChains = deepChains;
                 foreach (var chain in deepChains)
                 {
-                    _logger.Warning("Deep dependency chain detected: {Path}", string.Join(" -> ", chain));
+                    _logger.LogWarning("Deep dependency chain detected: {Path}", string.Join(" -> ", chain));
                 }
             }
 
@@ -68,11 +67,53 @@ namespace Pulsar.Compiler.Analysis
             return result;
         }
 
-        private List<List<string>> FindCircularDependencies(Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+        public List<RuleDefinition> AnalyzeDependencies(List<RuleDefinition> rules)
+        {
+            try
+            {
+                var graph = BuildGraph(rules);
+                var sortedRules = TopologicalSort(graph, rules);
+                return sortedRules;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error analyzing rule dependencies");
+                throw;
+            }
+        }
+
+        private Dictionary<string, HashSet<string>> BuildGraph(List<RuleDefinition> rules)
+        {
+            var graph = new Dictionary<string, HashSet<string>>();
+
+            foreach (var rule in rules)
+            {
+                if (!graph.ContainsKey(rule.Name))
+                {
+                    graph[rule.Name] = new HashSet<string>();
+                }
+
+                var dependencies = GetDependencies(rule, rules.ToDictionary(r => r.Name, r => r));
+                foreach (var dependency in dependencies)
+                {
+                    if (!rules.Any(r => r.Name == dependency))
+                    {
+                        _logger.LogWarning("Rule {RuleName} depends on non-existent rule {DependencyName}", rule.Name, dependency);
+                        continue;
+                    }
+
+                    graph[rule.Name].Add(dependency);
+                }
+            }
+
+            return graph;
+        }
+
+        private List<List<string>> FindCircularDependencies(Dictionary<string, HashSet<string>> graph)
         {
             var cycles = new List<List<string>>();
-            var visited = new HashSet<RuleDefinition>();
-            var path = new List<RuleDefinition>();
+            var visited = new HashSet<string>();
+            var path = new List<string>();
 
             foreach (var rule in graph.Keys)
             {
@@ -86,42 +127,43 @@ namespace Pulsar.Compiler.Analysis
         }
 
         private void DetectCycle(
-            RuleDefinition current,
-            Dictionary<RuleDefinition, List<RuleDefinition>> graph,
-            HashSet<RuleDefinition> visited,
-            List<RuleDefinition> path,
+            string current,
+            Dictionary<string, HashSet<string>> graph,
+            HashSet<string> visited,
+            List<string> path,
             List<List<string>> cycles)
         {
             if (path.Contains(current))
             {
                 var cycleStart = path.IndexOf(current);
                 var cycle = path.Skip(cycleStart)
-                               .Select(r => r.Name)
-                               .Concat(new[] { current.Name })
+                               .Concat(new[] { current })
                                .ToList();
                 cycles.Add(cycle);
                 return;
             }
 
             if (visited.Contains(current))
+            {
                 return;
+            }
 
             visited.Add(current);
             path.Add(current);
 
-            foreach (var dependent in graph[current])
+            foreach (var dependency in graph[current])
             {
-                DetectCycle(dependent, graph, visited, path, cycles);
+                DetectCycle(dependency, graph, visited, path, cycles);
             }
 
             path.RemoveAt(path.Count - 1);
         }
 
-        private List<List<string>> FindDeepDependencyChains(Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+        private List<List<string>> FindDeepDependencyChains(Dictionary<string, HashSet<string>> graph)
         {
             var deepChains = new List<List<string>>();
-            var visited = new HashSet<RuleDefinition>();
-            var path = new List<RuleDefinition>();
+            var visited = new HashSet<string>();
+            var path = new List<string>();
 
             foreach (var rule in graph.Keys)
             {
@@ -135,26 +177,28 @@ namespace Pulsar.Compiler.Analysis
         }
 
         private void FindLongPaths(
-            RuleDefinition current,
-            Dictionary<RuleDefinition, List<RuleDefinition>> graph,
-            HashSet<RuleDefinition> visited,
-            List<RuleDefinition> path,
+            string current,
+            Dictionary<string, HashSet<string>> graph,
+            HashSet<string> visited,
+            List<string> path,
             List<List<string>> deepChains)
         {
             path.Add(current);
 
             if (path.Count > _maxDependencyDepth)
             {
-                deepChains.Add(path.Select(r => r.Name).ToList());
+                deepChains.Add(path.ToList());
             }
 
             if (!visited.Contains(current))
             {
                 visited.Add(current);
-                foreach (var dependent in graph[current])
+
+                foreach (var dependency in graph[current])
                 {
-                    FindLongPaths(dependent, graph, visited, path, deepChains);
+                    FindLongPaths(dependency, graph, visited, path, deepChains);
                 }
+
                 visited.Remove(current);
             }
 
@@ -163,7 +207,7 @@ namespace Pulsar.Compiler.Analysis
 
         private Dictionary<string, int> CalculateRuleComplexity(
             List<RuleDefinition> rules,
-            Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+            Dictionary<string, HashSet<string>> graph)
         {
             var scores = new Dictionary<string, int>();
 
@@ -171,23 +215,13 @@ namespace Pulsar.Compiler.Analysis
             {
                 var score = 0;
 
-                // Add points for conditions
-                if (rule.Conditions != null)
-                {
-                    score += (rule.Conditions.All?.Count ?? 0) * 2;
-                    score += (rule.Conditions.Any?.Count ?? 0) * 3;
-                }
-
-                // Add points for actions
+                // Base complexity
+                score += rule.Conditions?.All?.Count ?? 0;
+                score += rule.Conditions?.Any?.Count ?? 0;
                 score += rule.Actions.Count;
 
-                // Add points for temporal conditions
-                score += rule.Conditions?.All?.OfType<ThresholdOverTimeCondition>().Count() ?? 0 * 5;
-                score += rule.Conditions?.Any?.OfType<ThresholdOverTimeCondition>().Count() ?? 0 * 5;
-
-                // Add points for dependency depth
-                var depthScore = CalculateDependencyDepth(rule, graph);
-                score += depthScore * 3;
+                // Dependency complexity
+                score += CalculateDependencyDepth(rule, graph);
 
                 scores[rule.Name] = score;
             }
@@ -197,24 +231,25 @@ namespace Pulsar.Compiler.Analysis
 
         private int CalculateDependencyDepth(
             RuleDefinition rule,
-            Dictionary<RuleDefinition, List<RuleDefinition>> graph)
+            Dictionary<string, HashSet<string>> graph)
         {
-            var visited = new HashSet<RuleDefinition>();
+            var visited = new HashSet<string>();
             var depth = 0;
-            var queue = new Queue<(RuleDefinition Rule, int Depth)>();
-            queue.Enqueue((rule, 0));
+            var queue = new Queue<(string Rule, int Depth)>();
+            queue.Enqueue((rule.Name, 0));
 
             while (queue.Count > 0)
             {
                 var (current, currentDepth) = queue.Dequeue();
+
                 if (!visited.Contains(current))
                 {
                     visited.Add(current);
                     depth = Math.Max(depth, currentDepth);
 
-                    foreach (var dependent in graph[current])
+                    foreach (var dependency in graph[current])
                     {
-                        queue.Enqueue((dependent, currentDepth + 1));
+                        queue.Enqueue((dependency, currentDepth + 1));
                     }
                 }
             }
@@ -222,253 +257,209 @@ namespace Pulsar.Compiler.Analysis
             return depth;
         }
 
-        private Dictionary<RuleDefinition, List<RuleDefinition>> BuildDependencyGraph(
-            List<RuleDefinition> rules
-        )
+        public Dictionary<string, string> GetDependencyMap(List<RuleDefinition> rules)
         {
-            _logger.Debug("Building dependency graph");
-            var graph = new Dictionary<RuleDefinition, List<RuleDefinition>>();
+            var layerMap = BuildDependencyGraph(rules);
+            
+            // Convert int values to strings for AOT compatibility
+            return layerMap.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.ToString()
+            );
+        }
 
-            // Collect outputs from each rule
+        private Dictionary<string, int> BuildDependencyGraph(List<RuleDefinition> rules)
+        {
+            var graph = BuildGraph(rules);
+            var layerMap = new Dictionary<string, int>();
+            var visited = new HashSet<string>();
+            var visiting = new HashSet<string>();
+
             foreach (var rule in rules)
+            {
+                if (!layerMap.ContainsKey(rule.Name))
+                {
+                    AssignLayerDFS(rule.Name, graph, layerMap, visited, visiting);
+                }
+            }
+
+            return layerMap;
+        }
+
+        private void AssignLayerDFS(
+            string ruleName,
+            Dictionary<string, HashSet<string>> graph,
+            Dictionary<string, int> layerMap,
+            HashSet<string> visited,
+            HashSet<string> visiting)
+        {
+            if (visiting.Contains(ruleName))
+            {
+                _logger.LogError("Cyclic dependency detected involving rule {RuleName}", ruleName);
+                throw new InvalidOperationException($"Cyclic dependency detected involving rule '{ruleName}'");
+            }
+
+            if (visited.Contains(ruleName))
+            {
+                return;
+            }
+
+            visiting.Add(ruleName);
+
+            int maxDependencyLayer = -1;
+            foreach (var dependency in graph[ruleName])
+            {
+                if (!layerMap.ContainsKey(dependency))
+                {
+                    AssignLayerDFS(dependency, graph, layerMap, visited, visiting);
+                }
+                maxDependencyLayer = Math.Max(maxDependencyLayer, layerMap[dependency]);
+            }
+
+            layerMap[ruleName] = maxDependencyLayer + 1;
+            visiting.Remove(ruleName);
+            visited.Add(ruleName);
+        }
+
+        private List<RuleDefinition> TopologicalSort(Dictionary<string, HashSet<string>> graph, List<RuleDefinition> rules)
+        {
+            var visited = new HashSet<string>();
+            var visiting = new HashSet<string>();
+            var sorted = new List<string>();
+
+            foreach (var rule in rules)
+            {
+                if (!visited.Contains(rule.Name))
+                {
+                    TopologicalSortVisit(rule.Name, graph, visited, visiting, sorted);
+                }
+            }
+
+            sorted.Reverse();
+            return sorted.Select(name => rules.First(r => r.Name == name)).ToList();
+        }
+
+        private void TopologicalSortVisit(
+            string ruleName,
+            Dictionary<string, HashSet<string>> graph,
+            HashSet<string> visited,
+            HashSet<string> visiting,
+            List<string> sorted)
+        {
+            if (visiting.Contains(ruleName))
+            {
+                _logger.LogError("Cyclic dependency detected involving rule {RuleName}", ruleName);
+                throw new InvalidOperationException($"Cyclic dependency detected involving rule '{ruleName}'");
+            }
+
+            if (visited.Contains(ruleName))
+            {
+                return;
+            }
+
+            visiting.Add(ruleName);
+
+            foreach (var dependency in graph[ruleName])
+            {
+                TopologicalSortVisit(dependency, graph, visited, visiting, sorted);
+            }
+
+            visiting.Remove(ruleName);
+            visited.Add(ruleName);
+            sorted.Add(ruleName);
+        }
+
+        private HashSet<string> GetDependencies(RuleDefinition rule, Dictionary<string, RuleDefinition> rules)
+        {
+            var dependencies = new HashSet<string>();
+
+            // Check condition dependencies
+            if (rule.Conditions != null)
+            {
+                if (rule.Conditions.All != null)
+                {
+                    foreach (var condition in rule.Conditions.All)
+                    {
+                        dependencies.UnionWith(GetConditionDependencies(condition, rules));
+                    }
+                }
+
+                if (rule.Conditions.Any != null)
+                {
+                    foreach (var condition in rule.Conditions.Any)
+                    {
+                        dependencies.UnionWith(GetConditionDependencies(condition, rules));
+                    }
+                }
+            }
+
+            // Check action dependencies
+            if (rule.Actions != null)
             {
                 foreach (var action in rule.Actions)
                 {
-                    if (action is SetValueAction setValueAction)
-                    {
-                        _outputs[setValueAction.Key] = rule;
-                    }
+                    dependencies.UnionWith(GetActionDependencies(action, rules));
                 }
             }
 
-            // Initialize empty lists for all rules
-            foreach (var rule in rules)
-            {
-                graph[rule] = new List<RuleDefinition>();
-            }
-
-            // Build dependencies
-            foreach (var rule in rules)
-            {
-                var dependencies = GetDependencies(rule);
-                foreach (var dependency in dependencies)
-                {
-                    if (_outputs.TryGetValue(dependency, out var dependencyRule))
-                    {
-                        graph[dependencyRule].Add(rule);
-                        Debug.WriteLine(
-                            $"Added dependency edge from {dependencyRule.Name} to {rule.Name}"
-                        );
-                    }
-                }
-            }
-
-            return graph;
+            return dependencies;
         }
 
-        private List<string> GetDependencies(RuleDefinition rule)
+        private HashSet<string> GetConditionDependencies(ConditionDefinition condition, Dictionary<string, RuleDefinition> rules)
         {
-            _logger.Debug("Getting dependencies for rule: {RuleName}", rule.Name);
-            var dependencies = new List<string>();
+            var dependencies = new HashSet<string>();
 
-            // Collect dependencies from conditions
-            void AddConditionDependencies(ConditionDefinition condition)
+            switch (condition)
             {
-                switch (condition)
-                {
-                    case ComparisonCondition comp:
-                        dependencies.Add(comp.Sensor);
-                        break;
-                    case ExpressionCondition expr:
-                        // Extract sensors from expression using regex
-                        ExtractSensorsFromExpression(expr.Expression, dependencies);
-                        break;
-                    case ThresholdOverTimeCondition temporal:
-                        dependencies.Add(temporal.Sensor);
-                        _temporalDependencies[rule.Name] = new HashSet<string> { temporal.Sensor };
-                        break;
-                    case ConditionGroup group:
-                        group.All?.ForEach(AddConditionDependencies);
-                        group.Any?.ForEach(AddConditionDependencies);
-                        break;
-                }
+                case ComparisonCondition comparison:
+                    dependencies.Add(comparison.Sensor);
+                    break;
+
+                case ExpressionCondition expression:
+                    dependencies.UnionWith(ExtractSensorsFromExpression(expression.Expression));
+                    break;
+
+                case ThresholdOverTimeCondition threshold:
+                    dependencies.Add(threshold.Sensor);
+                    _temporalDependencies[threshold.Sensor] = new HashSet<string>();
+                    break;
             }
 
-            // Process conditions
-            if (rule.Conditions?.All != null)
-            {
-                rule.Conditions.All.ForEach(AddConditionDependencies);
-            }
-
-            if (rule.Conditions?.Any != null)
-            {
-                rule.Conditions.Any.ForEach(AddConditionDependencies);
-            }
-
-            return dependencies.Distinct().ToList();
+            return dependencies;
         }
 
-        private void ExtractSensorsFromExpression(string expression, List<string> dependencies)
+        private HashSet<string> GetActionDependencies(ActionDefinition action, Dictionary<string, RuleDefinition> rules)
         {
-            _logger.Debug("Extracting sensors from expression: {Expression}", expression);
-            if (string.IsNullOrWhiteSpace(expression))
-                return;
+            var dependencies = new HashSet<string>();
 
-            // Basic sensor extraction using regex
-            var sensorPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b";
-            var matches = System.Text.RegularExpressions.Regex.Matches(expression, sensorPattern);
-
-            foreach (System.Text.RegularExpressions.Match match in matches)
+            switch (action)
             {
-                var potentialSensor = match.Value;
-                // Exclude known math functions and keywords
-                if (!IsMathFunction(potentialSensor))
-                {
-                    dependencies.Add(potentialSensor);
-                }
-            }
-        }
-
-        private bool IsMathFunction(string token)
-        {
-            // List of known math functions to exclude from sensor extraction
-            string[] mathFunctions =
-            {
-                "Math",
-                "Abs",
-                "Max",
-                "Min",
-                "Round",
-                "Floor",
-                "Ceiling",
-                "Sqrt",
-                "Sin",
-                "Cos",
-                "Tan",
-            };
-            return mathFunctions.Contains(token);
-        }
-
-        public List<RuleDefinition> AnalyzeDependencies(List<RuleDefinition> rules)
-        {
-            _logger.Information("Analyzing dependencies for {Count} rules", rules.Count);
-
-            // First validate dependencies
-            var validationResult = ValidateDependencies(rules);
-            if (!validationResult.IsValid)
-            {
-                throw new InvalidOperationException("Dependency validation failed: Circular dependencies detected");
-            }
-
-            if (validationResult.DeepDependencyChains.Any())
-            {
-                _logger.Warning("Deep dependency chains detected but continuing with compilation");
-            }
-
-            // Build dependency graph and perform topological sort
-            var graph = BuildDependencyGraph(rules);
-            return TopologicalSort(graph);
-        }
-
-        private List<RuleDefinition> TopologicalSort(
-            Dictionary<RuleDefinition, List<RuleDefinition>> graph
-        )
-        {
-            _logger.Debug("Performing topological sort on {Count} nodes", graph.Count);
-            var sorted = new List<RuleDefinition>();
-            var visited = new HashSet<RuleDefinition>();
-            var visiting = new HashSet<RuleDefinition>();
-
-            // Find nodes that have incoming edges (are depended upon)
-            var hasIncomingEdges = new HashSet<RuleDefinition>();
-            foreach (var kvp in graph)
-            {
-                foreach (var dependent in kvp.Value)
-                {
-                    hasIncomingEdges.Add(dependent);
-                }
-            }
-
-            Debug.WriteLine("\nProcessing nodes with no incoming edges first (base nodes):");
-            // First process nodes with no incoming edges (nothing depends on them)
-            foreach (var rule in graph.Keys)
-            {
-                if (!hasIncomingEdges.Contains(rule))
-                {
-                    Debug.WriteLine($"Starting with base node: {rule.Name}");
-                    if (!visited.Contains(rule))
+                case SetValueAction set:
+                    if (!string.IsNullOrEmpty(set.ValueExpression))
                     {
-                        Visit(rule, graph, visited, visiting, sorted);
+                        dependencies.UnionWith(ExtractSensorsFromExpression(set.ValueExpression));
                     }
-                }
+                    break;
             }
 
-            Debug.WriteLine("\nProcessing remaining nodes:");
-            // Then process any remaining nodes
-            foreach (var rule in graph.Keys)
-            {
-                if (!visited.Contains(rule))
-                {
-                    Debug.WriteLine($"Processing remaining node: {rule.Name}");
-                    Visit(rule, graph, visited, visiting, sorted);
-                }
-            }
-
-            return sorted;
+            return dependencies;
         }
 
-        private void Visit(
-            RuleDefinition rule,
-            Dictionary<RuleDefinition, List<RuleDefinition>> graph,
-            HashSet<RuleDefinition> visited,
-            HashSet<RuleDefinition> visiting,
-            List<RuleDefinition> sorted
-        )
+        private HashSet<string> ExtractSensorsFromExpression(string expression)
         {
-            if (visiting.Contains(rule))
+            var sensors = new HashSet<string>();
+            var sensorPattern = @"sensor\[([^\]]+)\]";
+            var matches = Regex.Matches(expression, sensorPattern);
+
+            foreach (Match match in matches)
             {
-                _logger.Error("Cyclic dependency detected involving rule {RuleName}", rule.Name);
-                throw new InvalidOperationException(
-                    $"Cycle detected involving rule '{rule.Name}'!"
-                );
-            }
-
-            Debug.WriteLine($"Visiting {rule.Name}");
-
-            if (!visited.Contains(rule))
-            {
-                visiting.Add(rule);
-
-                // Visit all dependents first
-                foreach (var dependent in graph[rule])
+                if (match.Groups.Count > 1)
                 {
-                    if (!visited.Contains(dependent))
-                    {
-                        Visit(dependent, graph, visited, visiting, sorted);
-                    }
-                }
-
-                visiting.Remove(rule);
-                visited.Add(rule);
-
-                if (!sorted.Contains(rule))
-                {
-                    // If this rule has dependents, insert at beginning
-                    // Otherwise append to maintain original order
-                    if (graph[rule].Any())
-                    {
-                        sorted.Insert(0, rule);
-                        Debug.WriteLine(
-                            $"Added {rule.Name} to start of sorted list (has dependents)"
-                        );
-                    }
-                    else
-                    {
-                        sorted.Add(rule);
-                        Debug.WriteLine($"Added {rule.Name} to end of sorted list (no dependents)");
-                    }
+                    sensors.Add(match.Groups[1].Value.Trim());
                 }
             }
+
+            return sensors;
         }
     }
 }

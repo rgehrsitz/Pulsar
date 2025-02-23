@@ -1,44 +1,68 @@
 // File: Pulsar.Compiler/Config/Templates/Runtime/TemplateRuleCoordinator.cs
 // Version: 1.0.0
 
-using Pulsar.Compiler.Config.Templates.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Pulsar.Runtime.Buffers;
-using Serilog;
+using Pulsar.Runtime.Services;
+using Pulsar.Runtime.Interfaces;
 
 namespace Pulsar.Runtime.Rules
 {
-    public class TemplateRuleCoordinator : IRuleCoordinator
+    public abstract class TemplateRuleCoordinator : IRuleCoordinator
     {
-        private readonly ILogger _logger;
-        private readonly RingBufferManager _bufferManager;
+        protected readonly IRedisService _redis;
+        protected readonly ILogger _logger;
+        protected readonly RingBufferManager _bufferManager;
+        protected readonly List<IRuleGroup> _ruleGroups;
 
-        public TemplateRuleCoordinator(ILogger logger, RingBufferManager bufferManager)
+        public TemplateRuleCoordinator(
+            IRedisService redis,
+            ILogger logger,
+            RingBufferManager bufferManager)
         {
-            _logger = logger;
-            _bufferManager = bufferManager;
+            _redis = redis ?? throw new ArgumentNullException(nameof(redis));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));
+            _ruleGroups = new List<IRuleGroup>();
+
+            InitializeRuleGroups();
         }
 
-        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)
+        public string[] RequiredSensors => GetRequiredSensors();
+
+        public async Task EvaluateRulesAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs)
         {
-            // Template implementation - just log evaluation
-            _logger.Debug("Evaluating rules with inputs: {@Inputs}, outputs: {@Outputs}", inputs, outputs);
+            foreach (var group in _ruleGroups)
+            {
+                try
+                {
+                    await group.EvaluateRulesAsync(inputs, outputs);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error evaluating rule group");
+                }
+            }
         }
 
-        public void ProcessInputs(Dictionary<string, string> inputs)
+        protected void AddRuleGroup(IRuleGroup group)
         {
-            // Template implementation - just log inputs
-            _logger.Debug("Processing inputs: {@Inputs}", inputs);
+            _ruleGroups.Add(group);
         }
 
-        public Dictionary<string, string> GetOutputs()
-        {
-            // Template implementation - return empty outputs
-            return new Dictionary<string, string>();
-        }
+        protected abstract void InitializeRuleGroups();
 
-        public void Dispose()
+        private string[] GetRequiredSensors()
         {
-            // No resources to dispose in template
+            var sensors = new HashSet<string>();
+            foreach (var group in _ruleGroups)
+            {
+                sensors.UnionWith(group.RequiredSensors);
+            }
+            return sensors.ToArray();
         }
     }
 }

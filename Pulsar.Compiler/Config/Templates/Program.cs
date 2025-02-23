@@ -2,90 +2,80 @@
 // Version: 1.0.0
 
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using StackExchange.Redis;
-using Pulsar.Runtime.Services;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Pulsar.Runtime.Buffers;
-using Serilog;
-using Pulsar.Compiler.Config.Templates.Interfaces;
-using Pulsar.Compiler;
+using Pulsar.Runtime.Services;
+using Pulsar.Runtime.Rules;
+using Pulsar.Runtime.Interfaces;
 
-namespace Pulsar.Runtime.Rules
+namespace Pulsar.Runtime
 {
-    public class ProgramTemplate
+    public class Program
     {
-        public static async Task<int> Run(string[] args)
+        public static async Task Main(string[] args)
         {
-            var config = ConfigurationLoader.LoadConfiguration(args);
-            var logger = LoggingConfig.GetLogger();
+            var host = CreateHostBuilder(args).Build();
+            await host.RunAsync();
+        }
 
-            try
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
+                .ConfigureServices((hostContext, services) =>
+                {
+                    // Configure Redis
+                    var redisConfig = hostContext.Configuration.GetSection("Redis").Get<RedisConfiguration>();
+                    if (redisConfig == null)
+                    {
+                        throw new InvalidOperationException("Redis configuration is missing");
+                    }
+                    services.AddSingleton(redisConfig);
+
+                    // Configure logging
+                    var loggingConfig = hostContext.Configuration.GetSection("Logging").Get<RedisLoggingConfiguration>();
+                    if (loggingConfig != null)
+                    {
+                        services.AddSingleton(loggingConfig);
+                    }
+
+                    // Configure runtime components
+                    services.AddSingleton<IRedisService, RedisService>();
+                    services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
+                    services.AddSingleton<RingBufferManager>();
+                    services.AddSingleton<IRuleCoordinator, RuleCoordinator>();
+
+                    // Add the runtime orchestrator as a hosted service
+                    services.AddHostedService<RuntimeHostedService>();
+                });
+
+        private class RuntimeHostedService : IHostedService
+        {
+            private readonly RuntimeOrchestrator _orchestrator;
+
+            public RuntimeHostedService(
+                IRedisService redis,
+                ILogger<RuntimeOrchestrator> logger,
+                IRuleCoordinator coordinator)
             {
-                logger.Information("Starting Pulsar Runtime v{Version}",
-                    typeof(ProgramTemplate).Assembly.GetName().Version);
-
-                using var redis = new RedisService(config.Redis);
-                using var bufferManager = new RingBufferManager(config.BufferCapacity);
-
-                using var orchestrator = new RuntimeOrchestrator(
+                _orchestrator = new RuntimeOrchestrator(
                     redis,
-                    EmbeddedConfig.ValidSensors.ToArray(),
-                    LoadRuleCoordinator(config, bufferManager),
-                    config.CycleTime);
-
-                // Setup graceful shutdown
-                var cts = new CancellationTokenSource();
-                Console.CancelKeyPress += (s, e) =>
-                {
-                    logger.Information("Shutdown requested, stopping gracefully...");
-                    e.Cancel = true;
-                    cts.Cancel();
-                };
-
-                logger.Information("Starting orchestrator with {SensorCount} sensors, {CycleTime}ms cycle time",
-                    EmbeddedConfig.ValidSensors.Length,
-                    EmbeddedConfig.CycleTime);
-
-                await orchestrator.StartAsync();
-
-                // Wait for cancellation
-                try
-                {
-                    await Task.Delay(Timeout.Infinite, cts.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Normal shutdown
-                }
-
-                logger.Information("Shutting down...");
-                await orchestrator.StopAsync();
-
-                return 0;
+                    logger,
+                    coordinator);
             }
-            catch (Exception ex)
+
+            public async Task StartAsync(CancellationToken cancellationToken)
             {
-                logger.Fatal(ex, "Fatal error during runtime execution");
-                return 1;
+                await _orchestrator.StartAsync();
             }
-            finally
+
+            public async Task StopAsync(CancellationToken cancellationToken)
             {
-                Log.CloseAndFlush();
+                await _orchestrator.StopAsync();
             }
         }
-
-        private static IRuleCoordinator LoadRuleCoordinator(RuntimeConfig config, RingBufferManager bufferManager)
-        {
-            // For template purposes, return an empty coordinator
-            return new TemplateRuleCoordinator(LoggingConfig.GetLogger(), bufferManager);
-        }
-    }
-
-    internal static class EmbeddedConfig
-    {
-        public static string[] ValidSensors { get; } = new string[0];
-        public static int CycleTime { get; } = 100;
     }
 }

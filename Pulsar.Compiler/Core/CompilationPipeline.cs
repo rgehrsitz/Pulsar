@@ -2,9 +2,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using Pulsar.Compiler.Analysis;
 using Pulsar.Compiler.Models;
+using Pulsar.Compiler.Core;
+using Pulsar.Compiler.Generation;
+using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Parsers;
 using Serilog;
 
@@ -29,7 +32,7 @@ namespace Pulsar.Compiler.Core
             {
                 _logger.Information("Starting rule compilation pipeline for {Path}", rulesPath);
 
-                var rules = LoadRulesFromPaths(rulesPath);
+                var rules = LoadRulesFromPaths(rulesPath, options.ValidSensors);
                 _logger.Information("Loaded {Count} rules from {Path}", rules.Count, rulesPath);
 
                 var result = _compiler.Compile(rules.ToArray(), options);
@@ -51,7 +54,7 @@ namespace Pulsar.Compiler.Core
             }
         }
 
-        private List<RuleDefinition> LoadRulesFromPaths(string rulesPath)
+        private List<RuleDefinition> LoadRulesFromPaths(string rulesPath, List<string> validSensors)
         {
             try
             {
@@ -65,14 +68,14 @@ namespace Pulsar.Compiler.Core
                     {
                         _logger.Debug("Processing rule file: {File}", file);
                         var content = System.IO.File.ReadAllText(file);
-                        rules.AddRange(_parser.ParseRules(content, new List<string>(), file));
+                        rules.AddRange(_parser.ParseRules(content, validSensors, file));
                     }
                 }
                 else if (System.IO.File.Exists(rulesPath))
                 {
                     _logger.Debug("Loading rules from file: {Path}", rulesPath);
                     var content = System.IO.File.ReadAllText(rulesPath);
-                    rules.AddRange(_parser.ParseRules(content, new List<string>(), rulesPath));
+                    rules.AddRange(_parser.ParseRules(content, validSensors, rulesPath));
                 }
                 else
                 {

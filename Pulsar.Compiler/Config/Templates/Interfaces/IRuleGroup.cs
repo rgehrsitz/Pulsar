@@ -1,9 +1,10 @@
 // File: Pulsar.Compiler/Config/Templates/Interfaces/IRuleGroup.cs
+// Version: 1.0.0
 
 using System.Collections.Generic;
-using Pulsar.Runtime.Buffers;
+using System.Threading.Tasks;
 
-namespace Pulsar.Runtime.Rules
+namespace Pulsar.Runtime.Interfaces
 {
     /// <summary>
     /// Represents a group of rules that can be evaluated together
@@ -11,15 +12,15 @@ namespace Pulsar.Runtime.Rules
     public interface IRuleGroup
     {
         /// <summary>
-        /// Evaluates all rules within this group
+        /// Gets the list of sensor names required by this rule group
         /// </summary>
-        /// <param name="inputs">Input sensor values</param>
-        /// <param name="outputs">Output sensor values to be modified</param>
-        /// <param name="bufferManager">Ring buffer manager for temporal conditions</param>
-        void EvaluateGroup(
-            Dictionary<string, double> inputs,
-            Dictionary<string, double> outputs,
-            RingBufferManager bufferManager
-        );
+        string[] RequiredSensors { get; }
+
+        /// <summary>
+        /// Evaluates the rules in this group with the given inputs and returns the outputs
+        /// </summary>
+        /// <param name="inputs">Dictionary of sensor values</param>
+        /// <param name="outputs">Dictionary of output values</param>
+        Task EvaluateRulesAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs);
     }
 }

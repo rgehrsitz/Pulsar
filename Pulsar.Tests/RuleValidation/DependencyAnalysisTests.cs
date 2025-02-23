@@ -2,20 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using Pulsar.Tests.TestUtilities;
 using Pulsar.Compiler.Models;
-using Pulsar.Compiler.Analysis;
-using Serilog;
+using Pulsar.Compiler.Core;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Pulsar.Tests.RuleValidation
 {
     public class DependencyAnalysisTests
     {
-        private readonly ILogger _logger;
+        private readonly ILogger<DependencyAnalyzer> _logger;
 
         public DependencyAnalysisTests()
         {
-            _logger = LoggingConfig.GetLogger();
+            _logger = NullLogger<DependencyAnalyzer>.Instance;
         }
 
         [Fact]

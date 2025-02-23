@@ -3,14 +3,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Models;
-using Serilog;
-using Serilog.Events;
+using Pulsar.Compiler.Core;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Pulsar.Compiler.Generation
 {
@@ -23,11 +24,11 @@ namespace Pulsar.Compiler.Generation
 
     public class CodeGenerator : IDisposable
     {
-        private readonly Serilog.ILogger _logger;
+        private readonly ILogger<CodeGenerator> _logger;
 
-        public CodeGenerator()
+        public CodeGenerator(ILogger<CodeGenerator>? logger = null)
         {
-            _logger = LoggingConfig.GetLogger();
+            _logger = logger ?? NullLogger<CodeGenerator>.Instance;
         }
 
         public void Dispose()
@@ -38,9 +39,9 @@ namespace Pulsar.Compiler.Generation
 
         public List<Pulsar.Compiler.Models.GeneratedFileInfo> GenerateCSharp(
             List<RuleDefinition> rules,
-            BuildConfig? config = null)
+            BuildConfig? buildConfig = null)
         {
-            config ??= new BuildConfig
+            buildConfig ??= new BuildConfig
             {
                 OutputPath = "Generated",
                 RulesPath = "Rules",
@@ -49,54 +50,98 @@ namespace Pulsar.Compiler.Generation
                 TargetFramework = "net9.0",
             };
 
-            var files = new List<Pulsar.Compiler.Models.GeneratedFileInfo>();
+            var analyzer = new DependencyAnalyzer();
+            var layerMap = analyzer.GetDependencyMap(rules);
+            var ruleGroups = SplitRulesIntoGroups(rules, layerMap, new RuleGroupingConfig());
 
-            try
+            var generatedFiles = new List<Pulsar.Compiler.Models.GeneratedFileInfo>();
+
+            // Generate rule groups
+            foreach (var group in ruleGroups)
             {
-                // Copy template files first
-                var templateManager = new TemplateManager();
-                files.AddRange(templateManager.CopyTemplateFiles(config.OutputPath));
+                var groupImplementation = GenerateGroupImplementation(group.Key, group.Value, layerMap);
+                generatedFiles.Add(groupImplementation);
+            }
 
-                // Get layer assignments for rules
-                var layerMap = AssignLayers(rules);
-                var rulesByLayer = GetRulesByLayer(rules, layerMap);
+            // Generate rule coordinator
+            var coordinator = GenerateRuleCoordinator(ruleGroups, layerMap);
+            generatedFiles.Add(coordinator);
 
-                // Generate rule-specific files
-                var groups = SplitRulesIntoGroups(
-                    rules,
-                    layerMap,
-                    new RuleGroupingConfig
-                    {
-                        MaxRulesPerFile = config.MaxRulesPerFile,
-                        MaxLinesPerFile = config.MaxLinesPerFile,
-                        GroupParallelRules = config.GroupParallelRules,
-                    }
-                );
+            // Generate metadata file
+            var metadata = GenerateMetadataFile(rules, layerMap);
+            generatedFiles.Add(metadata);
 
-                // Generate each rule group
-                foreach (var group in groups)
+            // Generate embedded config
+            var embeddedConfig = GenerateEmbeddedConfig(buildConfig);
+            generatedFiles.Add(embeddedConfig);
+
+            return generatedFiles;
+        }
+
+        public static Dictionary<int, List<RuleDefinition>> SplitRulesIntoGroups(
+            List<RuleDefinition> rules,
+            Dictionary<string, string> layerMap,
+            RuleGroupingConfig config)
+        {
+            var groups = new Dictionary<int, List<RuleDefinition>>();
+            var currentGroupIndex = 0;
+
+            // Sort rules by layer to maintain dependency order
+            var sortedRules = rules.OrderBy(r => int.Parse(layerMap[r.Name])).ToList();
+
+            if (config.GroupParallelRules)
+            {
+                var rulesByLayer = sortedRules
+                    .GroupBy(r => int.Parse(layerMap[r.Name]))
+                    .OrderBy(g => g.Key)
+                    .ToList();
+
+                foreach (var layer in rulesByLayer)
                 {
-                    files.Add(GenerateGroupImplementation(group.Key, group.Value, layerMap));
+                    var layerRules = layer.ToList();
+                    var remainingRules = layerRules.Count;
+                    var currentIndex = 0;
+
+                    while (remainingRules > 0)
+                    {
+                        var rulesInThisGroup = Math.Min(remainingRules, config.MaxRulesPerFile);
+                        groups[currentGroupIndex++] = layerRules
+                            .Skip(currentIndex)
+                            .Take(rulesInThisGroup)
+                            .ToList();
+                        currentIndex += rulesInThisGroup;
+                        remainingRules -= rulesInThisGroup;
+                    }
+                }
+            }
+            else
+            {
+                var currentRules = new List<RuleDefinition>();
+                var currentLayer = int.Parse(layerMap[sortedRules.First().Name]);
+
+                foreach (var rule in sortedRules)
+                {
+                    var ruleLayer = int.Parse(layerMap[rule.Name]);
+
+                    if (currentRules.Count >= config.MaxRulesPerFile ||
+                        (ruleLayer != currentLayer && currentRules.Any()))
+                    {
+                        groups[currentGroupIndex] = currentRules;
+                        currentRules = new List<RuleDefinition>();
+                        currentGroupIndex++;
+                    }
+
+                    currentRules.Add(rule);
+                    currentLayer = ruleLayer;
                 }
 
-                // Generate coordinator
-                files.Add(GenerateRuleCoordinator(groups, layerMap));
-
-                // Generate embedded config
-                files.Add(GenerateEmbeddedConfig(config));
-
-                // Generate metadata
-                files.Add(GenerateMetadataFile(rules, layerMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString())));
-
-                files = ApplyPostGenerationFixups(files);
-
-                return files;
+                if (currentRules.Any())
+                {
+                    groups[currentGroupIndex] = currentRules;
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Error generating C# files");
-                throw;
-            }
+
+            return groups;
         }
 
         private static Dictionary<string, int> AssignLayers(List<RuleDefinition> rules)
@@ -224,361 +269,312 @@ namespace Pulsar.Compiler.Generation
             visited.Add(ruleName);
         }
 
-        private static Dictionary<int, List<RuleDefinition>> GetRulesByLayer(
+        private static Dictionary<string, int> GetRulesByLayer(
             List<RuleDefinition> rules,
-            Dictionary<string, int> layerMap
+            Dictionary<string, string> layerMap
         )
         {
-            return rules.GroupBy(r => layerMap[r.Name]).ToDictionary(g => g.Key, g => g.ToList());
+            return rules.GroupBy(r => int.Parse(layerMap[r.Name])).ToDictionary(g => g.Key, g => g.ToList());
         }
 
-        private static Dictionary<int, List<RuleDefinition>> SplitRulesIntoGroups(
+        public static Pulsar.Compiler.Models.GeneratedFileInfo GenerateGroupImplementation(
+            int groupId,
             List<RuleDefinition> rules,
-            Dictionary<string, int> layerMap,
-            RuleGroupingConfig config
-        )
+            Dictionary<string, string> layerMap)
         {
-            var groups = new Dictionary<int, List<RuleDefinition>>();
-            var currentGroupIndex = 0;
+            var sb = new StringBuilder();
+            sb.AppendLine("// Auto-generated rule group");
+            sb.AppendLine("// Generated: " + DateTime.UtcNow.ToString("O"));
+            sb.AppendLine();
 
-            // Sort rules by layer to maintain dependency order
-            var sortedRules = rules.OrderBy(r => layerMap[r.Name]).ToList();
+            sb.AppendLine("using System;");
+            sb.AppendLine("using System.Collections.Generic;");
+            sb.AppendLine("using System.Threading.Tasks;");
+            sb.AppendLine("using Microsoft.Extensions.Logging;");
+            sb.AppendLine("using Pulsar.Runtime.Buffers;");
+            sb.AppendLine("using Pulsar.Runtime.Services;");
+            sb.AppendLine("using Pulsar.Runtime.Rules;");
+            sb.AppendLine("using Pulsar.Runtime.Interfaces;");
+            sb.AppendLine();
 
-            if (config.GroupParallelRules)
-            {
-                var rulesByLayer = sortedRules
-                    .GroupBy(r => layerMap[r.Name])
-                    .OrderBy(g => g.Key)
-                    .ToList();
+            sb.AppendLine("namespace Pulsar.Runtime.Generated");
+            sb.AppendLine("{");
 
-                foreach (var layer in rulesByLayer)
-                {
-                    var layerRules = layer.ToList();
-                    var remainingRules = layerRules.Count;
-                    var currentIndex = 0;
-
-                    while (remainingRules > 0)
-                    {
-                        var rulesInThisGroup = Math.Min(remainingRules, config.MaxRulesPerFile);
-                        groups[currentGroupIndex++] = layerRules
-                            .Skip(currentIndex)
-                            .Take(rulesInThisGroup)
-                            .ToList();
-                        currentIndex += rulesInThisGroup;
-                        remainingRules -= rulesInThisGroup;
-                    }
-                }
-            }
-            else
-            {
-                var currentRules = new List<RuleDefinition>();
-                var currentLayer = layerMap[sortedRules.First().Name];
-
-                foreach (var rule in sortedRules)
-                {
-                    var ruleLayer = layerMap[rule.Name];
-
-                    if (currentRules.Count >= config.MaxRulesPerFile ||
-                        (ruleLayer != currentLayer && currentRules.Any()))
-                    {
-                        groups[currentGroupIndex] = currentRules;
-                        currentRules = new List<RuleDefinition>();
-                        currentGroupIndex++;
-                    }
-
-                    currentRules.Add(rule);
-                    currentLayer = ruleLayer;
-                }
-
-                if (currentRules.Any())
-                {
-                    groups[currentGroupIndex] = currentRules;
-                }
-            }
-
-            return groups;
-        }
-
-        // Continuing CodeGenerator.cs...
-
-        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateGroupImplementation(
-            int groupIndex,
-            List<RuleDefinition> rules,
-            Dictionary<string, int> layerMap)
-        {
-            var builder = new StringBuilder();
-            builder.AppendLine(CodeGenerator.GenerateFileHeader());
-            builder.AppendLine(GenerateCommonUsings());
-            builder.AppendLine("namespace Pulsar.Runtime.Rules");
-            builder.AppendLine("{");
-
-            builder.AppendLine($"    public class RuleGroup{groupIndex} : IRuleGroup");
-            builder.AppendLine("    {");
-            builder.AppendLine("        private readonly Serilog.ILogger _logger;");
-            builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
-            builder.AppendLine();
+            // Class declaration
+            sb.AppendLine($"    public class RuleGroup{groupId} : TemplateRuleGroup");
+            sb.AppendLine("    {");
 
             // Constructor
-            builder.AppendLine(
-                $"        public RuleGroup{groupIndex}(Serilog.ILogger logger, RingBufferManager bufferManager)"
-            );
-            builder.AppendLine("        {");
-            builder.AppendLine(
-                "            _logger = logger ?? throw new ArgumentNullException(nameof(logger));"
-            );
-            builder.AppendLine(
-                "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
-            );
-            builder.AppendLine("        }");
-            builder.AppendLine();
+            sb.AppendLine($"        public RuleGroup{groupId}(");
+            sb.AppendLine("            IRedisService redis,");
+            sb.AppendLine("            ILogger logger,");
+            sb.AppendLine("            RingBufferManager bufferManager)");
+            sb.AppendLine("            : base(redis, logger, bufferManager)");
+            sb.AppendLine("        {");
+            sb.AppendLine("        }");
+            sb.AppendLine();
 
-            // Interface implementation
-            builder.AppendLine(
-                "        public void EvaluateGroup(Dictionary<string, double> inputs, Dictionary<string, double> outputs, RingBufferManager bufferManager)"
-            );
-            builder.AppendLine("        {");
-            builder.AppendLine("            try");
-            builder.AppendLine("            {");
-            builder.AppendLine(
-                $"                _logger.Debug(\"Evaluating rule group {groupIndex}\");"
-            );
-
-            // Generate rule implementations in layer order
-            foreach (var rule in rules.OrderBy(r => layerMap[r.Name]))
+            // Required sensors property
+            var requiredSensors = rules.SelectMany(r => GetRequiredSensors(r)).Distinct().ToList();
+            sb.AppendLine("        public override string[] RequiredSensors => new[]");
+            sb.AppendLine("        {");
+            foreach (var sensor in requiredSensors)
             {
-                // Add source tracking
-                if (rule.SourceFile != null)
-                {
-                    builder.AppendLine(
-                        $"                // Source: {rule.SourceFile}:{rule.LineNumber}"
-                    );
-                }
-                builder.AppendLine($"                // Rule: {rule.Name}");
-                if (!string.IsNullOrEmpty(rule.Description))
-                {
-                    builder.AppendLine($"                // Description: {rule.Description}");
-                }
+                sb.AppendLine($"            \"{sensor}\",");
+            }
+            sb.AppendLine("        };");
+            sb.AppendLine();
 
-                builder.AppendLine(
-                    $"                _logger.Debug(\"Evaluating rule {rule.Name}\");"
-                );
+            // Rule evaluation method
+            sb.AppendLine("        protected override async Task EvaluateRulesAsync(");
+            sb.AppendLine("            Dictionary<string, object> inputs,");
+            sb.AppendLine("            Dictionary<string, object> outputs)");
+            sb.AppendLine("        {");
 
-                string condition = GenerateCondition(rule.Conditions);
-                if (!string.IsNullOrEmpty(condition) && condition != "true")
+            foreach (var rule in rules)
+            {
+                // Add rule metadata as comments
+                sb.AppendLine($"            // Rule: {rule.Name}");
+                sb.AppendLine($"            // Layer: {layerMap[rule.Name]}");
+                sb.AppendLine($"            // Source: {rule.SourceFile}:{rule.SourceLine}");
+                sb.AppendLine();
+
+                // Generate condition check
+                if (rule.Conditions != null)
                 {
-                    builder.AppendLine($"                if ({condition})");
-                    builder.AppendLine("                {");
-                    GenerateActions(builder, rule.Actions, "                    ");
-                    builder.AppendLine("                }");
+                    sb.AppendLine($"            if ({GenerateCondition(rule.Conditions)})");
+                    sb.AppendLine("            {");
+
+                    // Generate actions
+                    if (rule.Actions != null)
+                    {
+                        foreach (var action in rule.Actions)
+                        {
+                            sb.AppendLine($"                {GenerateAction(action)}");
+                        }
+                    }
+
+                    sb.AppendLine("            }");
                 }
                 else
                 {
-                    GenerateActions(builder, rule.Actions, "                ");
-                }
-            }
-
-            builder.AppendLine("            }");
-            builder.AppendLine("            catch (Exception ex)");
-            builder.AppendLine("            {");
-            builder.AppendLine(
-                $"                _logger.Error(ex, \"Error evaluating rule group {groupIndex}\");"
-            );
-            builder.AppendLine("                throw;");
-            builder.AppendLine("            }");
-            builder.AppendLine(
-                $"            _logger.Debug(\"Completed rule group {groupIndex}\");"
-            );
-            builder.AppendLine("        }");
-            builder.AppendLine("    }");
-            builder.AppendLine("}");
-
-            return new Pulsar.Compiler.Models.GeneratedFileInfo
-            {
-                FileName = $"RuleGroup{groupIndex}.cs",
-                Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules",
-                LayerRange = new RuleLayerRange
-                {
-                    Start = rules.Min(r => layerMap[r.Name]),
-                    End = rules.Max(r => layerMap[r.Name]),
-                },
-            };
-        }
-
-        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateRuleCoordinator(
-            Dictionary<int, List<RuleDefinition>> groups,
-            Dictionary<string, int> layerMap)
-        {
-            var builder = new StringBuilder();
-            builder.AppendLine(CodeGenerator.GenerateFileHeader());
-            builder.AppendLine(GenerateCommonUsings());
-            builder.AppendLine();
-            builder.AppendLine("using System.Diagnostics.CodeAnalysis;");
-            builder.AppendLine("using System.Diagnostics.Metrics;");
-            builder.AppendLine();
-            builder.AppendLine("namespace Pulsar.Runtime.Rules");
-            builder.AppendLine("{");
-
-            // Generate coordinator class with AOT compatibility
-            builder.AppendLine(
-                "    [UnconditionalSuppressMessage(\"Trimming\", \"IL2026\", Justification = \"Types preserved in trimming.xml\")]"
-            );
-            builder.AppendLine(
-                "    [UnconditionalSuppressMessage(\"Trimming\", \"IL2074\", Justification = \"Required interfaces preserved\")]"
-            );
-            builder.AppendLine("    public class RuleCoordinator : IRuleCoordinator");
-            builder.AppendLine("    {");
-
-            // Add performance metrics
-            builder.AppendLine(
-                "        private static readonly Meter s_meter = new(\"Pulsar.Runtime\");"
-            );
-            builder.AppendLine(
-                "        private static readonly Counter<int> s_evaluationCount = s_meter.CreateCounter<int>(\"rule_evaluations_total\");"
-            );
-            builder.AppendLine(
-                "        private static readonly Histogram<double> s_evaluationDuration = s_meter.CreateHistogram<double>(\"rule_evaluation_duration_seconds\");"
-            );
-            builder.AppendLine();
-
-            // Fields
-            builder.AppendLine("        private readonly Serilog.ILogger _logger;");
-            builder.AppendLine("        private readonly RingBufferManager _bufferManager;");
-
-            // Add fields for each group
-            foreach (var group in groups.OrderBy(g => g.Key))
-            {
-                builder.AppendLine();
-                builder.AppendLine($"        // Rules for Group {group.Key}:");
-                foreach (var rule in group.Value)
-                {
-                    if (rule != null)
+                    // If no conditions, always execute actions
+                    if (rule.Actions != null)
                     {
-                        builder.AppendLine($"        // - {rule.Name}");
+                        foreach (var action in rule.Actions)
+                        {
+                            sb.AppendLine($"            {GenerateAction(action)}");
+                        }
                     }
                 }
-                builder.AppendLine(
-                    $"        private readonly RuleGroup{group.Key} _group{group.Key};"
-                );
+
+                sb.AppendLine();
             }
 
-            builder.AppendLine();
-
-            // Constructor
-            builder.AppendLine(
-                "        public RuleCoordinator(Serilog.ILogger logger, RingBufferManager bufferManager)"
-            );
-            builder.AppendLine("        {");
-            builder.AppendLine(
-                "            _logger = logger ?? throw new ArgumentNullException(nameof(logger));"
-            );
-            builder.AppendLine(
-                "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
-            );
-            builder.AppendLine();
-
-            // Initialize each group
-            foreach (var groupIndex in groups.Keys.OrderBy(k => k))
-            {
-                builder.AppendLine("            try");
-                builder.AppendLine("            {");
-                builder.AppendLine(
-                    $"                _group{groupIndex} = new RuleGroup{groupIndex}(logger, bufferManager);"
-                );
-                builder.AppendLine("            }");
-                builder.AppendLine("            catch (Exception ex)");
-                builder.AppendLine("            {");
-                builder.AppendLine(
-                    $"                _logger.Error(ex, \"Failed to initialize rule group {groupIndex}\");"
-                );
-                builder.AppendLine("                throw;");
-                builder.AppendLine("            }");
-            }
-            builder.AppendLine("        }");
-            builder.AppendLine();
-
-            // EvaluateRules implementation
-            builder.AppendLine(
-                "        public void EvaluateRules(Dictionary<string, double> inputs, Dictionary<string, double> outputs)"
-            );
-            builder.AppendLine("        {");
-            builder.AppendLine("            try");
-            builder.AppendLine("            {");
-            builder.AppendLine("                var startTime = DateTime.UtcNow;");
-            builder.AppendLine("                _logger.Debug(\"Starting rule evaluation\");");
-            builder.AppendLine();
-            builder.AppendLine("                s_evaluationCount.Add(1);");
-            builder.AppendLine();
-
-            // Call groups in dependency order
-            var orderedGroups = groups
-                .OrderBy(g => g.Value.Min(r => layerMap[r.Name]))
-                .Select(g => g.Key)
-                .ToList();
-
-            foreach (var groupIndex in orderedGroups)
-            {
-                var groupRules = groups[groupIndex];
-                builder.AppendLine(
-                    $"                // Layer {layerMap[groupRules[0].Name]} rules:"
-                );
-                foreach (var rule in groupRules)
-                {
-                    builder.AppendLine($"                // - {rule.Name}");
-                }
-                builder.AppendLine();
-
-                builder.AppendLine("                try");
-                builder.AppendLine("                {");
-                builder.AppendLine(
-                    $"                    _group{groupIndex}.EvaluateGroup(inputs, outputs, _bufferManager);"
-                );
-                builder.AppendLine("                }");
-                builder.AppendLine("                catch (Exception ex)");
-                builder.AppendLine("                {");
-                builder.AppendLine(
-                    $"                    _logger.Error(ex, \"Error evaluating rule group {groupIndex}\");"
-                );
-                builder.AppendLine("                    throw;");
-                builder.AppendLine("                }");
-                builder.AppendLine();
-            }
-
-            // Record metrics
-            builder.AppendLine("                var duration = DateTime.UtcNow - startTime;");
-            builder.AppendLine(
-                "                s_evaluationDuration.Record(duration.TotalSeconds);"
-            );
-            builder.AppendLine();
-            builder.AppendLine(
-                "                _logger.Debug(\"Completed rule evaluation in {Duration}ms\", duration.TotalMilliseconds);"
-            );
-            builder.AppendLine("            }");
-            builder.AppendLine("            catch (Exception ex)");
-            builder.AppendLine("            {");
-            builder.AppendLine(
-                "                _logger.Error(ex, \"Error during rule evaluation\");"
-            );
-            builder.AppendLine("                throw;");
-            builder.AppendLine("            }");
-            builder.AppendLine("        }");
-            builder.AppendLine("    }");
-            builder.AppendLine("}");
+            sb.AppendLine("            await Task.CompletedTask;");
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
 
             return new Pulsar.Compiler.Models.GeneratedFileInfo
             {
-                FileName = "RuleCoordinator.cs",
-                Content = builder.ToString(),
-                Namespace = "Pulsar.Runtime.Rules",
-                LayerRange = new RuleLayerRange
-                {
-                    Start = orderedGroups.First(),
-                    End = orderedGroups.Last(),
-                },
+                FileName = $"RuleGroup{groupId}.cs",
+                Content = sb.ToString(),
+                Namespace = "Pulsar.Runtime.Generated",
+                LayerRange = rules.Select(r => layerMap[r.Name]).Distinct().ToArray()
             };
         }
 
-        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateMetadataFile(
+        private static string GenerateCondition(ConditionGroup? conditions)
+        {
+            if (conditions == null)
+            {
+                return "true";
+            }
+
+            var parts = new List<string>();
+
+            if (conditions.All?.Any() == true)
+            {
+                var allConditions = conditions.All.Select(GenerateConditionExpression);
+                parts.Add($"({string.Join(" && ", allConditions)})");
+            }
+
+            if (conditions.Any?.Any() == true)
+            {
+                var anyConditions = conditions.Any.Select(GenerateConditionExpression);
+                parts.Add($"({string.Join(" || ", anyConditions)})");
+            }
+
+            return parts.Count > 0 ? string.Join(" && ", parts) : "true";
+        }
+
+        private static string GenerateConditionExpression(ConditionDefinition condition)
+        {
+            return condition switch
+            {
+                ComparisonCondition comparison => GenerateComparisonCondition(comparison),
+                ExpressionCondition expression => FixupExpression(expression.Expression),
+                ThresholdOverTimeCondition threshold => GenerateThresholdCondition(threshold),
+                _ => throw new InvalidOperationException($"Unknown condition type: {condition.GetType().Name}")
+            };
+        }
+
+        private static string GenerateComparisonCondition(ComparisonCondition comparison)
+        {
+            var op = comparison.ComparisonOperator switch
+            {
+                ComparisonOperator.GreaterThan => ">",
+                ComparisonOperator.LessThan => "<",
+                ComparisonOperator.GreaterThanOrEqual => ">=",
+                ComparisonOperator.LessThanOrEqual => "<=",
+                ComparisonOperator.Equal => "==",
+                ComparisonOperator.NotEqual => "!=",
+                _ => throw new InvalidOperationException($"Unknown operator: {comparison.ComparisonOperator}")
+            };
+
+            return $"Convert.ToDouble(inputs[\"{comparison.Sensor}\"]) {op} {comparison.Value}";
+        }
+
+        private static string GenerateThresholdCondition(ThresholdOverTimeCondition threshold)
+        {
+            return $"CheckThreshold(\"{threshold.Sensor}\", {threshold.Value}, TimeSpan.FromSeconds({threshold.Duration.TotalSeconds}), \"{threshold.ComparisonOperator}\")";
+        }
+
+        private static string GenerateAction(ActionDefinition action)
+        {
+            return action switch
+            {
+                SetValueAction setValue => GenerateSetValueAction(setValue),
+                _ => throw new InvalidOperationException($"Unknown action type: {action.GetType().Name}")
+            };
+        }
+
+        private static string GenerateSetValueAction(SetValueAction setValue)
+        {
+            var value = !string.IsNullOrEmpty(setValue.ValueExpression)
+                ? FixupExpression(setValue.ValueExpression)
+                : setValue.Value.ToString();
+
+            return $"outputs[\"{setValue.Key}\"] = {value};";
+        }
+
+        private static string FixupExpression(string expression)
+        {
+            // Replace sensor references with dictionary lookups
+            return Regex.Replace(
+                expression,
+                @"\$([a-zA-Z_][a-zA-Z0-9_]*)",
+                m => $"Convert.ToDouble(inputs[\"{m.Groups[1].Value}\"])"
+            );
+        }
+
+        private static IEnumerable<string> GetRequiredSensors(RuleDefinition rule)
+        {
+            var sensors = new HashSet<string>();
+
+            if (rule.Conditions != null)
+            {
+                if (rule.Conditions.All != null)
+                {
+                    foreach (var condition in rule.Conditions.All)
+                    {
+                        AddConditionSensors(condition, sensors);
+                    }
+                }
+
+                if (rule.Conditions.Any != null)
+                {
+                    foreach (var condition in rule.Conditions.Any)
+                    {
+                        AddConditionSensors(condition, sensors);
+                    }
+                }
+            }
+
+            return sensors;
+        }
+
+        private static void AddConditionSensors(ConditionDefinition condition, HashSet<string> sensors)
+        {
+            switch (condition)
+            {
+                case ComparisonCondition comparison:
+                    sensors.Add(comparison.Sensor);
+                    break;
+
+                case ExpressionCondition expression:
+                    // Extract sensor names from expression using regex
+                    var matches = Regex.Matches(expression.Expression, @"inputs\[""([^""]+)""\]");
+                    foreach (Match match in matches)
+                    {
+                        sensors.Add(match.Groups[1].Value);
+                    }
+                    break;
+
+                case ThresholdOverTimeCondition threshold:
+                    sensors.Add(threshold.Sensor);
+                    break;
+            }
+        }
+
+        public static Pulsar.Compiler.Models.GeneratedFileInfo GenerateRuleCoordinator(
+            Dictionary<int, List<RuleDefinition>> ruleGroups,
+            Dictionary<string, string> layerMap)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("// Auto-generated rule coordinator");
+            sb.AppendLine("// Generated: " + DateTime.UtcNow.ToString("O"));
+            sb.AppendLine();
+
+            sb.AppendLine("using System;");
+            sb.AppendLine("using System.Collections.Generic;");
+            sb.AppendLine("using System.Threading.Tasks;");
+            sb.AppendLine("using Microsoft.Extensions.Logging;");
+            sb.AppendLine("using Pulsar.Runtime.Buffers;");
+            sb.AppendLine("using Pulsar.Runtime.Services;");
+            sb.AppendLine("using Pulsar.Runtime.Rules;");
+            sb.AppendLine("using Pulsar.Runtime.Interfaces;");
+            sb.AppendLine();
+
+            sb.AppendLine("namespace Pulsar.Runtime.Generated");
+            sb.AppendLine("{");
+
+            // Class declaration
+            sb.AppendLine("    public class GeneratedRuleCoordinator : TemplateRuleCoordinator");
+            sb.AppendLine("    {");
+
+            // Constructor
+            sb.AppendLine("        public GeneratedRuleCoordinator(");
+            sb.AppendLine("            IRedisService redis,");
+            sb.AppendLine("            ILogger logger,");
+            sb.AppendLine("            RingBufferManager bufferManager)");
+            sb.AppendLine("            : base(redis, logger, bufferManager)");
+            sb.AppendLine("        {");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+
+            // Initialize rule groups
+            sb.AppendLine("        protected override void InitializeRuleGroups()");
+            sb.AppendLine("        {");
+            foreach (var group in ruleGroups)
+            {
+                sb.AppendLine($"            AddRuleGroup(new RuleGroup{group.Key}(_redis, _logger, _bufferManager));");
+            }
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
+            {
+                FileName = "GeneratedRuleCoordinator.cs",
+                Content = sb.ToString(),
+                Namespace = "Pulsar.Runtime.Generated",
+                LayerRange = null
+            };
+        }
+
+        public static Pulsar.Compiler.Models.GeneratedFileInfo GenerateMetadataFile(
             List<RuleDefinition> rules,
             Dictionary<string, string> layerMap)
         {
@@ -594,7 +590,7 @@ namespace Pulsar.Compiler.Generation
                 {
                     SourceFile = rule.SourceFile,
                     SourceLineNumber = rule.LineNumber,
-                    Layer = int.Parse(layerMap[rule.Name].ToString()),
+                    Layer = int.Parse(layerMap[rule.Name]),
                     Description = rule.Description,
                     Dependencies = GetDependencies(rule, rules.ToDictionary(
                         r => r.Name,
@@ -619,6 +615,27 @@ namespace Pulsar.Compiler.Generation
             };
         }
 
+        public static Pulsar.Compiler.Models.GeneratedFileInfo GenerateEmbeddedConfig(BuildConfig buildConfig)
+        {
+            string content = "// Embedded config for Pulsar Compiler" + Environment.NewLine;
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
+            {
+                FileName = System.IO.Path.Combine(buildConfig.OutputPath, "EmbeddedConfig.cs"),
+                Content = content
+            };
+        }
+
+        private static List<Pulsar.Compiler.Models.GeneratedFileInfo> ApplyPostGenerationFixups(List<Pulsar.Compiler.Models.GeneratedFileInfo> files)
+        {
+            // Currently no post-generation fixups needed.
+            return files;
+        }
+
+        private static string GenerateFileHeader()
+        {
+            return "// Generated by Pulsar AOT Compiler";
+        }
+
         private static string GenerateCommonUsings()
         {
             var builder = new StringBuilder();
@@ -626,8 +643,9 @@ namespace Pulsar.Compiler.Generation
             builder.AppendLine("using System.Collections.Generic;");
             builder.AppendLine("using System.Linq;");
             builder.AppendLine("using System.Threading.Tasks;");
-            builder.AppendLine("using Serilog;");
+            builder.AppendLine("using Microsoft.Extensions.Logging;");
             builder.AppendLine("using Prometheus;");
+            builder.AppendLine("using StackExchange.Redis;");
             builder.AppendLine("using Pulsar.Runtime.Buffers;");
             builder.AppendLine("using Pulsar.Runtime.Rules;");
             return builder.ToString();
@@ -700,176 +718,6 @@ namespace Pulsar.Compiler.Generation
                     sensors.Add(potentialSensor);
                 }
             }
-        }
-
-        private static bool IsMathFunction(string token)
-        {
-            string[] mathFunctions = {
-                "Math",
-                "Abs",
-                "Max",
-                "Min",
-                "Round",
-                "Floor",
-                "Ceiling",
-                "Sqrt",
-                "Sin",
-                "Cos",
-                "Tan",
-            };
-            return mathFunctions.Contains(token);
-        }
-
-        private static string GenerateCondition(ConditionGroup? conditions, bool isPartOfOr = false)
-        {
-            if (
-                conditions == null
-                || (!conditions.All?.Any() ?? true) && (!conditions.Any?.Any() ?? true)
-            )
-            {
-                return string.Empty;
-            }
-
-            var parts = new List<string>();
-
-            if (conditions.All?.Any() == true)
-            {
-                var expressions = conditions.All.Select(c => GenerateConditionExpression(c, false));
-                parts.Add(string.Join(" && ", expressions));
-            }
-
-            if (conditions.Any?.Any() == true)
-            {
-                var expressions = conditions.Any.Select(c => GenerateConditionExpression(c, true));
-                parts.Add($"({string.Join(" || ", expressions)})");
-            }
-
-            var result = string.Join(" && ", parts);
-            return isPartOfOr ? $"({result})" : result;
-        }
-
-        private static string GenerateConditionExpression(
-            ConditionDefinition condition,
-            bool isPartOfOr = false
-        )
-        {
-            string expression = condition switch
-            {
-                ComparisonCondition comp =>
-                    $"inputs[\"{comp.Sensor}\"] {GetOperator(comp.Operator)} {comp.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
-                ExpressionCondition expr => FixupExpression(expr.Expression),
-                ThresholdOverTimeCondition threshold =>
-                    $"_bufferManager.IsAboveThresholdForDuration(\"{threshold.Sensor}\", {threshold.Threshold}, TimeSpan.FromMilliseconds({threshold.Duration}))",
-                ConditionGroup group => GenerateCondition(group, isPartOfOr),
-                _ => throw new NotSupportedException(
-                    $"Unsupported condition type: {condition.GetType().Name}"
-                ),
-            };
-
-            return expression;
-        }
-
-        private static string GetOperator(ComparisonOperator op)
-        {
-            return op switch
-            {
-                ComparisonOperator.LessThan => "<",
-                ComparisonOperator.GreaterThan => ">",
-                ComparisonOperator.LessThanOrEqual => "<=",
-                ComparisonOperator.GreaterThanOrEqual => ">=",
-                ComparisonOperator.EqualTo => "==",
-                ComparisonOperator.NotEqualTo => "!=",
-                _ => throw new InvalidOperationException($"Unsupported operator: {op}"),
-            };
-        }
-
-        private static string FixupExpression(string expression)
-        {
-            if (string.IsNullOrEmpty(expression))
-            {
-                return expression;
-            }
-
-            // List of Math functions to preserve
-            var mathFunctions = new[]
-            {
-                "Math.Abs",
-                "Math.Pow",
-                "Math.Sqrt",
-                "Math.Sin",
-                "Math.Cos",
-                "Math.Tan",
-                "Math.Log",
-                "Math.Exp",
-                "Math.Floor",
-                "Math.Ceiling",
-                "Math.Round",
-            };
-
-            // First handle Math function calls - preserve case
-            foreach (var func in mathFunctions)
-            {
-                expression = expression.Replace(func.ToLower(), func);
-            }
-
-            // Fix: Correctly wrap variables in inputs[] access while preserving existing parentheses
-            var wrappedExpression = Regex.Replace(
-                expression,
-                @"\b(?!Math\.)([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\[|\()",
-                "inputs[\"$1\"]"
-            );
-
-            return wrappedExpression;
-        }
-
-        private static void GenerateActions(
-            StringBuilder builder,
-            List<ActionDefinition> actions,
-            string indent = "            "
-        )
-        {
-            foreach (var action in actions.OfType<SetValueAction>())
-            {
-                string valueAssignment;
-                if (action.Value.HasValue)
-                {
-                    valueAssignment = action.Value.Value.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture
-                    );
-                }
-                else if (!string.IsNullOrEmpty(action.ValueExpression))
-                {
-                    var fixedExpression = FixupExpression(action.ValueExpression);
-                    valueAssignment = fixedExpression;
-                }
-                else
-                {
-                    valueAssignment = "0";
-                }
-
-                builder.AppendLine($"{indent}outputs[\"{action.Key}\"] = {valueAssignment};");
-            }
-        }
-
-        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateEmbeddedConfig(Pulsar.Compiler.Config.BuildConfig config)
-        {
-            string content = "// Embedded config for Pulsar Compiler" + Environment.NewLine;
-            return new Pulsar.Compiler.Models.GeneratedFileInfo
-            {
-                FileName = System.IO.Path.Combine(config.OutputPath, "EmbeddedConfig.cs"),
-                Content = content
-            };
-        }
-
-        private static List<Pulsar.Compiler.Models.GeneratedFileInfo> ApplyPostGenerationFixups(List<Pulsar.Compiler.Models.GeneratedFileInfo> files)
-        {
-            // Currently no post-generation fixups needed.
-            return files;
-        }
-
-        private static string GenerateFileHeader()
-        {
-            return "// Generated by Pulsar AOT Compiler";
         }
 
         public class SerilogAdapter : Microsoft.Extensions.Logging.ILogger

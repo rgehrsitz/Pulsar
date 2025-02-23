@@ -1,0 +1,14 @@
+redis:
+  host: "localhost"
+  port: 6379
+  database: 0
+  keyPrefix: "test:"
+
+logging:
+  level: "Information"
+  file: "logs/pulsar.log"
+
+monitoring:
+  enabled: true
+  port: 9090
+  path: "/metrics"

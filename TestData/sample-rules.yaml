@@ -1,0 +1,10 @@
+rules:
+  - name: "Sample Rule"
+    description: "A simple test rule that copies input to output"
+    condition:
+      type: "sensor"
+      key: "test:input"
+    action:
+      type: "SetValue"
+      key: "test:output"
+      value: "$input"

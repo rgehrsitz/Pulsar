@@ -42,8 +42,9 @@ namespace Pulsar.Compiler.Models
                     return new SystemConfig();
                 }
 
-                var json = File.ReadAllText(path);
-                var config = JsonSerializer.Deserialize<SystemConfig>(json) ?? new SystemConfig();
+                var yaml = File.ReadAllText(path);
+                var deserializer = new DeserializerBuilder().Build();
+                var config = deserializer.Deserialize<SystemConfig>(yaml);
                 
                 _logger.Information("Successfully loaded system configuration with {SensorCount} valid sensors", config.ValidSensors.Count);
                 return config;
