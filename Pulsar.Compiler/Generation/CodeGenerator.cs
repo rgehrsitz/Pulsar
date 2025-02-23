@@ -269,7 +269,7 @@ namespace Pulsar.Compiler.Generation
             visited.Add(ruleName);
         }
 
-        private static Dictionary<int, List<Pulsar.Compiler.Models.RuleDefinition>> GetRulesByLayer(
+        private static Dictionary<string, int> GetRulesByLayer(
             List<RuleDefinition> rules,
             Dictionary<string, string> layerMap
         )
@@ -297,7 +297,7 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("using Pulsar.Runtime.Interfaces;");
             sb.AppendLine();
 
-            sb.AppendLine("namespace Pulsar.Runtime.Generated");
+            sb.AppendLine("namespace Beacon.Runtime.Generated");
             sb.AppendLine("{");
 
             // Class declaration
@@ -380,7 +380,7 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = $"RuleGroup{groupId}.cs",
                 Content = sb.ToString(),
-                Namespace = "Pulsar.Runtime.Generated"
+                Namespace = "Beacon.Runtime.Generated"
             };
         }
 
@@ -536,7 +536,7 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("using Pulsar.Runtime.Interfaces;");
             sb.AppendLine();
 
-            sb.AppendLine("namespace Pulsar.Runtime.Generated");
+            sb.AppendLine("namespace Beacon.Runtime.Generated");
             sb.AppendLine("{");
 
             // Class declaration
@@ -568,7 +568,7 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = "GeneratedRuleCoordinator.cs",
                 Content = sb.ToString(),
-                Namespace = "Pulsar.Runtime.Generated"
+                Namespace = "Beacon.Runtime.Generated"
             };
         }
 
@@ -766,5 +766,90 @@ namespace Pulsar.Compiler.Generation
                 public void Dispose() { }
             }
         }
+
+        // ----- Begin Beacon Project Generation Methods -----
+        
+        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateBeaconSolution()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("Microsoft Visual Studio Solution File, Format Version 12.00");
+            sb.AppendLine("# Visual Studio Version 17\nVisualStudioVersion = 17.0.31903.59");
+            sb.AppendLine("MinimumVisualStudioVersion = 10.0.40219.1");
+            // Add project entries for Beacon.Runtime and Beacon.Tests
+            sb.AppendLine("Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Beacon.Runtime\", \"Beacon.Runtime.csproj\", \"{D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}\"");
+            sb.AppendLine("EndProject");
+            sb.AppendLine("Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Beacon.Tests\", \"Beacon.Tests.csproj\", \"{E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}\"");
+            sb.AppendLine("EndProject");
+            sb.AppendLine("Global");
+            sb.AppendLine("    GlobalSection(SolutionConfigurationPlatforms) = preSolution");
+            sb.AppendLine("        Debug|Any CPU = Debug|Any CPU");
+            sb.AppendLine("        Release|Any CPU = Release|Any CPU");
+            sb.AppendLine("    EndGlobalSection");
+            sb.AppendLine("    GlobalSection(ProjectConfigurationPlatforms) = postSolution");
+            sb.AppendLine("        {D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}.Debug|Any CPU.ActiveCfg = Debug|Any CPU");
+            sb.AppendLine("        {D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}.Debug|Any CPU.Build.0 = Debug|Any CPU");
+            sb.AppendLine("        {E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}.Debug|Any CPU.ActiveCfg = Debug|Any CPU");
+            sb.AppendLine("        {E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}.Debug|Any CPU.Build.0 = Debug|Any CPU");
+            sb.AppendLine("        {D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}.Release|Any CPU.ActiveCfg = Release|Any CPU");
+            sb.AppendLine("        {D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}.Release|Any CPU.Build.0 = Release|Any CPU");
+            sb.AppendLine("        {E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}.Release|Any CPU.ActiveCfg = Release|Any CPU");
+            sb.AppendLine("        {E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}.Release|Any CPU.Build.0 = Release|Any CPU");
+            sb.AppendLine("    EndGlobalSection");
+            sb.AppendLine("EndGlobal");
+            
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
+            {
+                FileName = "Beacon.sln",
+                Content = sb.ToString(),
+                Namespace = "" // Not applicable for solution file
+            };
+        }
+
+        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateRuntimeProject()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>");
+            sb.AppendLine("    <OutputType>Exe</OutputType>");
+            sb.AppendLine("    <TargetFramework>net6.0</TargetFramework>");
+            sb.AppendLine("  </PropertyGroup>\n</Project>");
+            
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
+            {
+                FileName = "Beacon.Runtime.csproj",
+                Content = sb.ToString(),
+                Namespace = "" // Not applicable for project files
+            };
+        }
+
+        private static Pulsar.Compiler.Models.GeneratedFileInfo GenerateTestsProject()
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>");
+            sb.AppendLine("    <TargetFramework>net6.0</TargetFramework>");
+            sb.AppendLine("    <IsTestProject>true</IsTestProject>");
+            sb.AppendLine("  </PropertyGroup>\n</Project>");
+            
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
+            {
+                FileName = "Beacon.Tests.csproj",
+                Content = sb.ToString(),
+                Namespace = "" // Not applicable for project files
+            };
+        }
+
+        // Modify the main generation logic to include the Beacon solution and project files in the output
+        public List<Pulsar.Compiler.Models.GeneratedFileInfo> GenerateAllFiles(List<RuleDefinition> rules, BuildConfig buildConfig)
+        {
+            var files = GenerateCSharp(rules, buildConfig);
+
+            // Add the Beacon solution and project files
+            files.Add(GenerateBeaconSolution());
+            files.Add(GenerateRuntimeProject());
+            files.Add(GenerateTestsProject());
+
+            return files;
+        }
+
+        // ----- End Beacon Project Generation Methods -----
     }
 }
