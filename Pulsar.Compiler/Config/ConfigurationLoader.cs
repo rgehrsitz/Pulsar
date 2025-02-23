@@ -4,6 +4,7 @@ using System;
 using System.Text.Json;
 using System.IO;
 using Serilog;
+using Pulsar.Runtime;
 using Pulsar.Runtime.Rules;
 
 namespace Pulsar.Compiler.Config

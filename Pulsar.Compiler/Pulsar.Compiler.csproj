@@ -47,4 +47,8 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Config\Templates\**\*.cs" />
+  </ItemGroup>
+
 </Project>

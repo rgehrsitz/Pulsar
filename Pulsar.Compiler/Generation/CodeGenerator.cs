@@ -269,7 +269,7 @@ namespace Pulsar.Compiler.Generation
             visited.Add(ruleName);
         }
 
-        private static Dictionary<string, int> GetRulesByLayer(
+        private static Dictionary<int, List<Pulsar.Compiler.Models.RuleDefinition>> GetRulesByLayer(
             List<RuleDefinition> rules,
             Dictionary<string, string> layerMap
         )
@@ -336,7 +336,7 @@ namespace Pulsar.Compiler.Generation
                 // Add rule metadata as comments
                 sb.AppendLine($"            // Rule: {rule.Name}");
                 sb.AppendLine($"            // Layer: {layerMap[rule.Name]}");
-                sb.AppendLine($"            // Source: {rule.SourceFile}:{rule.SourceLine}");
+                sb.AppendLine($"            // Source: {rule.SourceFile}:{rule.LineNumber}");
                 sb.AppendLine();
 
                 // Generate condition check
@@ -380,8 +380,7 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = $"RuleGroup{groupId}.cs",
                 Content = sb.ToString(),
-                Namespace = "Pulsar.Runtime.Generated",
-                LayerRange = rules.Select(r => layerMap[r.Name]).Distinct().ToArray()
+                Namespace = "Pulsar.Runtime.Generated"
             };
         }
 
@@ -422,15 +421,15 @@ namespace Pulsar.Compiler.Generation
 
         private static string GenerateComparisonCondition(ComparisonCondition comparison)
         {
-            var op = comparison.ComparisonOperator switch
+            var op = comparison.Operator switch
             {
                 ComparisonOperator.GreaterThan => ">",
                 ComparisonOperator.LessThan => "<",
                 ComparisonOperator.GreaterThanOrEqual => ">=",
                 ComparisonOperator.LessThanOrEqual => "<=",
-                ComparisonOperator.Equal => "==",
-                ComparisonOperator.NotEqual => "!=",
-                _ => throw new InvalidOperationException($"Unknown operator: {comparison.ComparisonOperator}")
+                ComparisonOperator.EqualTo => "==",
+                ComparisonOperator.NotEqualTo => "!=",
+                _ => throw new InvalidOperationException($"Unknown operator: {comparison.Operator}")
             };
 
             return $"Convert.ToDouble(inputs[\"{comparison.Sensor}\"]) {op} {comparison.Value}";
@@ -438,7 +437,7 @@ namespace Pulsar.Compiler.Generation
 
         private static string GenerateThresholdCondition(ThresholdOverTimeCondition threshold)
         {
-            return $"CheckThreshold(\"{threshold.Sensor}\", {threshold.Value}, TimeSpan.FromSeconds({threshold.Duration.TotalSeconds}), \"{threshold.ComparisonOperator}\")";
+            return $"CheckThreshold(\"{threshold.Sensor}\", {threshold.Threshold}, {threshold.Duration}, \"{threshold.ComparisonOperator}\")";
         }
 
         private static string GenerateAction(ActionDefinition action)
@@ -569,8 +568,7 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = "GeneratedRuleCoordinator.cs",
                 Content = sb.ToString(),
-                Namespace = "Pulsar.Runtime.Generated",
-                LayerRange = null
+                Namespace = "Pulsar.Runtime.Generated"
             };
         }
 
@@ -718,6 +716,12 @@ namespace Pulsar.Compiler.Generation
                     sensors.Add(potentialSensor);
                 }
             }
+        }
+
+        private static bool IsMathFunction(string functionName)
+        {
+            var mathFunctions = new HashSet<string> { "Sin", "Cos", "Tan", "Log", "Exp", "Sqrt", "Abs" };
+            return mathFunctions.Contains(functionName);
         }
 
         public class SerilogAdapter : Microsoft.Extensions.Logging.ILogger

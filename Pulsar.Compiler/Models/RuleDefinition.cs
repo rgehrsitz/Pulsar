@@ -202,6 +202,7 @@ namespace Pulsar.Compiler.Models
         public double Threshold { get; set; }
         public int Duration { get; set; }
         public ThresholdOverTimeMode Mode { get; set; } = ThresholdOverTimeMode.Strict;
+        public ComparisonOperator ComparisonOperator { get; set; } = ComparisonOperator.GreaterThan;
 
         public override void Validate()
         {

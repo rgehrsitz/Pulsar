@@ -137,6 +137,20 @@ namespace Pulsar.Compiler.Core
                 // Use the output path as is, assuming it's already properly configured
                 var outputPath = options.BuildConfig.OutputPath;
 
+                // Ensure the output path is external to the Pulsar.Compiler directory
+                var compilerBasePath = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                var configuredOutputPath = Path.GetFullPath(outputPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                if (configuredOutputPath.StartsWith(compilerBasePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogError("Configured output path {OutputPath} is inside the Pulsar.Compiler directory. Please specify an external directory for generated projects.", configuredOutputPath);
+                    return new CompilationResult
+                    {
+                        Success = false,
+                        Errors = new List<string> { $"Configured output path {configuredOutputPath} must be external to the Pulsar.Compiler directory." },
+                        GeneratedFiles = Array.Empty<GeneratedFileInfo>()
+                    };
+                }
+
                 if (!Directory.Exists(outputPath))
                 {
                     Directory.CreateDirectory(outputPath);
@@ -280,7 +294,7 @@ namespace Pulsar.Compiler.Core
         private Dictionary<int, List<RuleDefinition>> SplitRulesIntoGroups(List<RuleDefinition> rules, Dictionary<string, string> layerMap)
         {
             var ruleGroups = new Dictionary<int, List<RuleDefinition>>();
-            var config = new RuleGroupingConfig();
+            var config = new Pulsar.Compiler.Config.RuleGroupingConfig();
             var currentGroup = 0;
             var currentGroupRules = new List<RuleDefinition>();
 

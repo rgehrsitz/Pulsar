@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.IO;
 using Serilog;
 using YamlDotNet.Serialization;
+using Pulsar.Runtime;
 using Pulsar.Runtime.Services;
 using Pulsar.Compiler;
 
