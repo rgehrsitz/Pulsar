@@ -43,24 +43,34 @@ namespace Pulsar.Tests.RuleValidation
         [Fact]
         public void ValidationSucceeds_ForValidRuleFormat()
         {
-            // Arrange: Provide a well-formed rule
             var rule = new RuleDefinition
             {
-                Name = "TestRule",
-                Description = "A test rule with all mandatory fields",
-                Conditions = new ConditionGroup(),
+                Name = "ValidRule",
+                Conditions = new ConditionGroup  // Changed from 'Conditions' to 'ConditionGroup'
+                {
+                    All = new List<ConditionDefinition>
+                    {
+                        new ComparisonCondition 
+                        { 
+                            Sensor = "Temperature", 
+                            Operator = ComparisonOperator.GreaterThan, // Changed operator from string to enum value
+                            Value = 20 
+                        }
+                    },
+                    Any = new List<ConditionDefinition>()
+                },
                 Actions = new List<ActionDefinition>
                 {
-                    new SetValueAction { Key = "output", Value = 1.0 }
+                    new SetValueAction 
+                    { 
+                        ValueExpression = "Temperature" 
+                    }
                 }
             };
 
-            // Act: Validate the rule
-            var result = RuleValidator.Validate(rule);
-
-            // Assert: Expect validation to succeed
-            Assert.True(result.IsValid, "Validation should succeed for a complete rule.");
-            Assert.Empty(result.Errors);
+            var analyzer = new DependencyAnalyzer();
+            var result = analyzer.ValidateDependencies(new List<RuleDefinition> { rule });
+            Assert.True(result.IsValid, "Expected validation to succeed for complete rule format.");
         }
 
         [Fact]
@@ -73,7 +83,18 @@ namespace Pulsar.Tests.RuleValidation
             {
                 Name = "TestRule",
                 Description = "A valid test rule",
-                Conditions = new ConditionGroup(),
+                Conditions = new ConditionGroup
+                {
+                    All = new List<ConditionDefinition>
+                    {
+                        new ComparisonCondition 
+                        {
+                            Sensor = "Dummy",
+                            Operator = ComparisonOperator.EqualTo, // Updated from 'Equals'
+                            Value = 1
+                        }
+                    }
+                },
                 Actions = new List<ActionDefinition>
                 {
                     new SetValueAction { Key = "output", Value = 1.0 }

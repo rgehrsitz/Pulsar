@@ -5,12 +5,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using Pulsar.Compiler.Models;
-using Pulsar.Compiler.Core;
-using Pulsar.Compiler.Generation;
-using Pulsar.Compiler.Config;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Pulsar.Compiler.Config;
+using Pulsar.Compiler.Core;
+using Pulsar.Compiler.Generation;
+using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Core
 {
@@ -51,7 +52,7 @@ namespace Pulsar.Compiler.Core
                     {
                         Success = false,
                         Errors = validationResult.Errors.ToList(),
-                        GeneratedFiles = Array.Empty<GeneratedFileInfo>()
+                        GeneratedFiles = Array.Empty<GeneratedFileInfo>(),
                     };
                 }
 
@@ -64,7 +65,10 @@ namespace Pulsar.Compiler.Core
 
                 // Generate rule groups
                 var layerMap = _codeGenerator.AssignLayers(sortedRules);
-                var stringLayerMap = layerMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
+                var stringLayerMap = layerMap.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value.ToString()
+                );
                 var ruleGroups = _codeGenerator.SplitRulesIntoGroups(sortedRules, stringLayerMap);
                 _logger.LogDebug("Generated {Count} rule groups", ruleGroups.Count);
 
@@ -72,18 +76,31 @@ namespace Pulsar.Compiler.Core
                 for (int i = 0; i < ruleGroups.Count; i++)
                 {
                     _logger.LogDebug("Generating code for rule group {GroupId}", i);
-                    var groupImplementation = _codeGenerator.GenerateGroupImplementation(i, ruleGroups[i], stringLayerMap);
+                    var groupImplementation = _codeGenerator.GenerateGroupImplementation(
+                        i,
+                        ruleGroups[i],
+                        stringLayerMap,
+                        options.BuildConfig
+                    );
                     generatedFiles.Add(groupImplementation);
                     _logger.LogDebug("Generated rule group {GroupId}", i);
                 }
 
                 // Generate rule coordinator
-                var coordinator = _codeGenerator.GenerateRuleCoordinator(ruleGroups, stringLayerMap);
+                var coordinator = _codeGenerator.GenerateRuleCoordinator(
+                    ruleGroups,
+                    stringLayerMap,
+                    options.BuildConfig
+                );
                 generatedFiles.Add(coordinator);
                 _logger.LogDebug("Generated rule coordinator");
 
                 // Generate metadata file
-                var metadata = _codeGenerator.GenerateMetadataFile(sortedRules, stringLayerMap);
+                var metadata = _codeGenerator.GenerateMetadataFile(
+                    sortedRules,
+                    stringLayerMap,
+                    options.BuildConfig
+                );
                 generatedFiles.Add(metadata);
                 _logger.LogDebug("Generated metadata file");
 
@@ -92,20 +109,27 @@ namespace Pulsar.Compiler.Core
                 generatedFiles.Add(config);
                 _logger.LogDebug("Generated embedded config");
 
-                // Generate test files
-                var testFiles = _codeGenerator.GenerateTestFiles(sortedRules, stringLayerMap);
-                generatedFiles.AddRange(testFiles);
-                _logger.LogDebug("Generated test files");
-
                 // Apply any necessary post-generation fixups
                 _codeGenerator.ApplyPostGenerationFixups(generatedFiles);
+
+                // Write files to disk
+                foreach (var file in generatedFiles)
+                {
+                    var filePath = Path.Combine(options.BuildConfig.OutputPath, file.FileName);
+                    var directory = Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrEmpty(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+                    File.WriteAllText(filePath, file.Content);
+                }
 
                 _logger.LogInformation("AOT compilation completed successfully");
 
                 return new CompilationResult
                 {
                     Success = true,
-                    GeneratedFiles = generatedFiles.ToArray()
+                    GeneratedFiles = generatedFiles.ToArray(),
                 };
             }
             catch (Exception ex)
@@ -115,12 +139,15 @@ namespace Pulsar.Compiler.Core
                 {
                     Success = false,
                     Errors = new List<string> { ex.Message },
-                    GeneratedFiles = Array.Empty<GeneratedFileInfo>()
+                    GeneratedFiles = Array.Empty<GeneratedFileInfo>(),
                 };
             }
         }
 
-        private async Task<CompilationResult> CompileRulesAsync(List<RuleDefinition> rules, BuildConfig buildConfig)
+        private async Task<CompilationResult> CompileRulesAsync(
+            List<RuleDefinition> rules,
+            BuildConfig buildConfig
+        )
         {
             var result = new CompilationResult();
 
@@ -137,13 +164,16 @@ namespace Pulsar.Compiler.Core
 
                 // Assign layers to rules
                 var layerMap = _codeGenerator.AssignLayers(rules);
-                var stringLayerMap = layerMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
+                var stringLayerMap = layerMap.ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value.ToString()
+                );
 
                 // Split rules into groups
                 var ruleGroups = await SplitRulesIntoGroupsAsync(rules, stringLayerMap);
 
                 // Generate code
-                var generatedFiles = _codeGenerator.GenerateAllFiles(rules, buildConfig);
+                var generatedFiles = _codeGenerator.GenerateCSharp(rules, buildConfig);
 
                 // Write files to disk
                 foreach (var file in generatedFiles)
@@ -168,7 +198,10 @@ namespace Pulsar.Compiler.Core
             return result;
         }
 
-        private async Task<Dictionary<int, List<RuleDefinition>>> SplitRulesIntoGroupsAsync(List<RuleDefinition> rules, Dictionary<string, string> layerMap)
+        private async Task<Dictionary<int, List<RuleDefinition>>> SplitRulesIntoGroupsAsync(
+            List<RuleDefinition> rules,
+            Dictionary<string, string> layerMap
+        )
         {
             var ruleGroups = new Dictionary<int, List<RuleDefinition>>();
             var config = new Pulsar.Compiler.Config.RuleGroupingConfig();
@@ -177,10 +210,18 @@ namespace Pulsar.Compiler.Core
 
             foreach (var rule in rules)
             {
-                if (currentGroupRules.Count >= config.MaxRulesPerGroup ||
-                    (currentGroupRules.Any() && 
-                     (GetTotalConditions(currentGroupRules) + GetConditionCount(rule) > config.MaxConditionsPerGroup ||
-                      GetTotalActions(currentGroupRules) + GetActionCount(rule) > config.MaxActionsPerGroup)))
+                if (
+                    currentGroupRules.Count >= config.MaxRulesPerGroup
+                    || (
+                        currentGroupRules.Any()
+                        && (
+                            GetTotalConditions(currentGroupRules) + GetConditionCount(rule)
+                                > config.MaxConditionsPerGroup
+                            || GetTotalActions(currentGroupRules) + GetActionCount(rule)
+                                > config.MaxActionsPerGroup
+                        )
+                    )
+                )
                 {
                     ruleGroups[currentGroup] = currentGroupRules;
                     currentGroup++;

@@ -1,161 +1,99 @@
-// File: Pulsar.Compiler/Config/TemplateManager.cs
-
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 using System.Text;
-using Microsoft.Extensions.Logging;
-using Serilog;
-using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Config
 {
     public class TemplateManager
     {
-        private static readonly Serilog.ILogger _logger = LoggingConfig.GetLogger();
-        private const string TemplateDirectory = "Config/Templates";
-        private readonly string[] _templateExtensions = { ".cs", ".xml", ".csproj", ".json" };
-
-        public TemplateManager()
+        public void GenerateSolutionFile(string path)
         {
+            var content =
+                @"
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""Generated"", ""Generated.csproj"", ""{"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}""
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|Any CPU = Debug|Any CPU
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}.Release|Any CPU.Build.0 = Release|Any CPU
+    EndGlobalSection
+EndGlobal";
+
+            File.WriteAllText(path, content.TrimStart());
         }
 
-        public List<GeneratedFileInfo> CopyTemplateFiles(string outputPath)
+        public void GenerateProjectFile(string path, BuildConfig buildConfig)
         {
-            var files = new List<GeneratedFileInfo>();
-            var templatePath = FindTemplatePath();
-
-            try
+            var sb = new StringBuilder();
+            sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
+            sb.AppendLine("  <PropertyGroup>");
+            sb.AppendLine($"    <TargetFramework>{buildConfig.TargetFramework}</TargetFramework>");
+            sb.AppendLine("    <ImplicitUsings>enable</ImplicitUsings>");
+            sb.AppendLine("    <Nullable>enable</Nullable>");
+            sb.AppendLine("    <OutputType>Exe</OutputType>");
+            if (buildConfig.StandaloneExecutable)
             {
-                // Create output directory if it doesn't exist
-                Directory.CreateDirectory(outputPath);
-
-                // Get all template files
-                var templateFiles = Directory
-                    .GetFiles(templatePath, "*.*", SearchOption.AllDirectories)
-                    .Where(f =>
-                        _templateExtensions.Contains(
-                            Path.GetExtension(f),
-                            StringComparer.OrdinalIgnoreCase
-                        )
-                    );
-
-                foreach (var templateFile in templateFiles)
-                {
-                    var relativePath = Path.GetRelativePath(templatePath, templateFile);
-                    var outputFilePath = Path.Combine(outputPath, relativePath);
-                    var content = GetTemplate(relativePath);
-
-                    // Ensure directory exists for output file
-                    var dirPath = Path.GetDirectoryName(outputFilePath);
-                    if (dirPath != null)
-                    {
-                        Directory.CreateDirectory(dirPath);
-                    }
-
-                    files.Add(
-                        new GeneratedFileInfo
-                        {
-                            FileName = Path.GetFileName(templateFile),
-                            FilePath = outputFilePath,
-                            Content = content,
-                            Namespace = "Pulsar.Runtime.Rules",
-                            Version = GetTemplateVersion(templateFile)
-                        }
-                    );
-
-                    _logger.Debug("Added template file: {FileName}", relativePath);
-                }
-
-                return files;
+                sb.AppendLine("    <PublishSingleFile>true</PublishSingleFile>");
+                sb.AppendLine("    <SelfContained>true</SelfContained>");
+                sb.AppendLine($"    <RuntimeIdentifier>{buildConfig.Target}</RuntimeIdentifier>");
             }
-            catch (Exception ex)
+            if (buildConfig.OptimizeOutput)
             {
-                _logger.Error(ex, "Error copying template files");
-                throw;
+                sb.AppendLine("    <PublishReadyToRun>true</PublishReadyToRun>");
+                sb.AppendLine("    <PublishTrimmed>true</PublishTrimmed>");
+                sb.AppendLine("    <TrimMode>link</TrimMode>");
             }
+            sb.AppendLine("  </PropertyGroup>");
+            sb.AppendLine();
+            sb.AppendLine("  <ItemGroup>");
+            sb.AppendLine(
+                "    <PackageReference Include=\"Microsoft.Extensions.Logging\" Version=\"8.0.0\" />"
+            );
+            sb.AppendLine("    <PackageReference Include=\"NRedisStack\" Version=\"0.13.1\" />");
+            sb.AppendLine("    <PackageReference Include=\"Polly\" Version=\"8.3.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"prometheus-net\" Version=\"8.2.1\" />");
+            sb.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"4.2.0\" />");
+            sb.AppendLine(
+                "    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.8.16\" />"
+            );
+            sb.AppendLine("    <PackageReference Include=\"YamlDotNet\" Version=\"16.3.0\" />");
+            sb.AppendLine("  </ItemGroup>");
+            sb.AppendLine("</Project>");
+
+            File.WriteAllText(path, sb.ToString());
         }
 
-        private string FindTemplatePath()
+        public void GenerateProjectFiles(string outputPath, BuildConfig buildConfig)
         {
-            var assembly = typeof(TemplateManager).Assembly;
-            var assemblyLocation = Path.GetDirectoryName(assembly.Location);
+            // Create solution file
+            GenerateSolutionFile(Path.Combine(outputPath, "Generated.sln"));
 
-            if (assemblyLocation == null)
-            {
-                throw new InvalidOperationException("Could not determine assembly location");
-            }
+            // Create project file
+            GenerateProjectFile(Path.Combine(outputPath, "Generated.csproj"), buildConfig);
 
-            var templatePath = Path.Combine(assemblyLocation, TemplateDirectory);
-
-            if (!Directory.Exists(templatePath))
-            {
-                // Try looking in project directory
-                templatePath = Path.Combine(
-                    Directory.GetCurrentDirectory(),
-                    "Pulsar.Compiler",
-                    TemplateDirectory
-                );
-            }
-
-            if (!Directory.Exists(templatePath))
-            {
-                throw new DirectoryNotFoundException(
-                    $"Template directory not found at: {templatePath}"
-                );
-            }
-
-            return templatePath;
-        }
-
-        public static string GetTemplate(string templatePath)
-        {
-            var assembly = Assembly.GetExecutingAssembly();
-            
-            // Convert path separators to dots and prefix with assembly namespace
-            var resourcePath = templatePath.Replace('\\', '.').Replace('/', '.');
-            var resourceName = $"Pulsar.Compiler.Config.Templates.{resourcePath}";
-
-            _logger.Debug("Looking for embedded resource: {ResourceName}", resourceName);
-
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream == null)
-            {
-                // Try direct file read as fallback
-                var fullPath = Path.Combine(
-                    Path.GetDirectoryName(assembly.Location) ?? "",
-                    "Config",
-                    "Templates",
-                    templatePath
-                );
-
-                if (File.Exists(fullPath))
-                {
-                    return File.ReadAllText(fullPath);
-                }
-
-                throw new InvalidOperationException(
-                    $"Template '{templatePath}' not found as embedded resource '{resourceName}' or file. Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}"
-                );
-            }
-
-            using var reader = new StreamReader(stream, Encoding.UTF8);
-            return reader.ReadToEnd();
-        }
-
-        private string GetTemplateVersion(string templateFile)
-        {
-            // Implement logic to extract version information from the template file
-            // For example, read a version comment at the top of the file
-            var firstLine = File.ReadLines(templateFile).FirstOrDefault();
-            if (firstLine != null && firstLine.StartsWith("// Version: "))
-            {
-                return firstLine.Replace("// Version: ", "").Trim();
-            }
-
-            return "1.0.0"; // Default version if not specified
+            // Copy Program.cs template
+            var programTemplate = File.ReadAllText("Pulsar.Compiler/Config/Templates/Program.cs");
+            File.WriteAllText(Path.Combine(outputPath, "Program.cs"), programTemplate);
         }
     }
 }

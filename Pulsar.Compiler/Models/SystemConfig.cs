@@ -2,13 +2,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using System.IO;
+using System.Text.Json;
+using Pulsar.Compiler;
+using Pulsar.Runtime.Services;
 using Serilog;
 using YamlDotNet.Serialization;
-using Pulsar.Runtime;
-using Pulsar.Runtime.Services;
-using Pulsar.Compiler;
 
 namespace Pulsar.Compiler.Models
 {
@@ -36,7 +35,7 @@ namespace Pulsar.Compiler.Models
             try
             {
                 _logger.Debug("Loading system configuration from {Path}", path);
-                
+
                 if (!File.Exists(path))
                 {
                     _logger.Warning("Configuration file not found at {Path}, using defaults", path);
@@ -46,8 +45,11 @@ namespace Pulsar.Compiler.Models
                 var yaml = File.ReadAllText(path);
                 var deserializer = new DeserializerBuilder().Build();
                 var config = deserializer.Deserialize<SystemConfig>(yaml);
-                
-                _logger.Information("Successfully loaded system configuration with {SensorCount} valid sensors", config.ValidSensors.Count);
+
+                _logger.Information(
+                    "Successfully loaded system configuration with {SensorCount} valid sensors",
+                    config.ValidSensors.Count
+                );
                 return config;
             }
             catch (Exception ex)
@@ -62,7 +64,10 @@ namespace Pulsar.Compiler.Models
             try
             {
                 _logger.Debug("Saving system configuration to {Path}", path);
-                var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+                var json = JsonSerializer.Serialize(
+                    this,
+                    new JsonSerializerOptions { WriteIndented = true }
+                );
                 File.WriteAllText(path, json);
                 _logger.Information("Successfully saved system configuration");
             }

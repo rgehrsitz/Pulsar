@@ -1,11 +1,12 @@
 // File: Pulsar.Compiler/Config/ConfigurationLoader.cs
 
 using System;
-using System.Text.Json;
 using System.IO;
-using Serilog;
 using Pulsar.Runtime;
 using Pulsar.Runtime.Rules;
+using Serilog;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace Pulsar.Compiler.Config
 {
@@ -21,15 +22,22 @@ namespace Pulsar.Compiler.Config
         {
             try
             {
-                _logger.Debug("Loading configuration from {Path}", configPath ?? "default location");
+                _logger.Debug(
+                    "Loading configuration from {Path}",
+                    configPath ?? "default location"
+                );
 
                 var config = new RuntimeConfig();
 
                 if (configPath != null && File.Exists(configPath))
                 {
                     _logger.Debug("Reading configuration file");
-                    var jsonContent = File.ReadAllText(configPath);
-                    config = JsonSerializer.Deserialize<RuntimeConfig>(jsonContent) ?? new RuntimeConfig();
+                    var yamlContent = File.ReadAllText(configPath);
+                    var deserializer = new DeserializerBuilder()
+                        .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                        .Build();
+                    config =
+                        deserializer.Deserialize<RuntimeConfig>(yamlContent) ?? new RuntimeConfig();
                     _logger.Information("Configuration loaded from {Path}", configPath);
                 }
                 else

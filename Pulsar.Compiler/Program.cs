@@ -54,7 +54,10 @@ public class Program
         }
     }
 
-    public static async Task<bool> GenerateBuildableProject(Dictionary<string, string> options, ILogger logger)
+    public static async Task<bool> GenerateBuildableProject(
+        Dictionary<string, string> options,
+        ILogger logger
+    )
     {
         logger.Information("Generating buildable project...");
 
@@ -80,6 +83,18 @@ public class Program
                 new Parsers.DslParser()
             );
             var result = pipeline.ProcessRules(options["rules"], compilerOptions);
+            if (!result.Success)
+            {
+                foreach (var error in result.Errors)
+                {
+                    logger.Error(error);
+                }
+                return false;
+            }
+
+            // Generate project files
+            var templateManager = new TemplateManager();
+            templateManager.GenerateProjectFiles(buildConfig.OutputPath, buildConfig);
 
             return true;
         }
@@ -90,7 +105,10 @@ public class Program
         }
     }
 
-    public static async Task<bool> InitializeProject(Dictionary<string, string> options, ILogger logger)
+    public static async Task<bool> InitializeProject(
+        Dictionary<string, string> options,
+        ILogger logger
+    )
     {
         var outputPath = options.GetValueOrDefault("output", ".");
 
@@ -419,13 +437,13 @@ https://github.com/yourusername/pulsar/docs"
         {
             OutputPath = options.GetValueOrDefault("output", "Generated"),
             Target = options.GetValueOrDefault("target", "win-x64"),
-            ProjectName = options.GetValueOrDefault("project", "Pulsar.Compiler"),
+            ProjectName = "Generated",
             TargetFramework = options.GetValueOrDefault("targetframework", "net9.0"),
             RulesPath = options.GetValueOrDefault("rules", "Rules"),
             MaxRulesPerFile = int.Parse(options.GetValueOrDefault("max-rules", "100")),
             GenerateDebugInfo = options.GetValueOrDefault("debug") == "true",
             StandaloneExecutable = true,
-            Namespace = "Pulsar.Runtime.Rules",
+            Namespace = "Generated",
             GroupParallelRules = options.GetValueOrDefault("parallel") == "true",
             OptimizeOutput = options.GetValueOrDefault("aot") == "true",
             ComplexityThreshold = int.Parse(

@@ -1,14 +1,32 @@
+version: 1
+validSensors:
+  - test:input
+  - test:output
+
+cycleTime: 100  # ms
+
 redis:
-  host: "localhost"
-  port: 6379
-  database: 0
-  keyPrefix: "test:"
+  endpoints: 
+    - localhost:6379
+  poolSize: 8
+  retryCount: 3
+  retryBaseDelayMs: 100
+  connectTimeout: 5000
+  syncTimeout: 1000
+  keepAlive: 60
+  ssl: false
+  allowAdmin: false
+  healthCheck:
+    enabled: true
+    intervalSeconds: 30
+    failureThreshold: 5
+    timeoutMs: 2000
+  metrics:
+    enabled: true
+    instanceName: default
+    samplingIntervalSeconds: 60
 
-logging:
-  level: "Information"
-  file: "logs/pulsar.log"
+bufferCapacity: 100
 
-monitoring:
-  enabled: true
-  port: 9090
-  path: "/metrics"
+logLevel: Information
+logFile: logs/pulsar.log

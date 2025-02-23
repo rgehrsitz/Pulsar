@@ -2,33 +2,40 @@
 // Version: 1.0.0
 
 using System;
-using Serilog.Events;
-using System.Text.Json;
 using System.ComponentModel;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Pulsar.Runtime.Services;
+using Serilog.Events;
+using YamlDotNet.Serialization;
 
 namespace Pulsar.Runtime.Rules
 {
     public class RuntimeConfig
     {
-        [JsonPropertyName("Redis")]
+        [JsonPropertyName("redis")]
+        [YamlMember(Alias = "redis")]
         public RedisConfiguration Redis { get; set; } = new();
 
-        [JsonPropertyName("CycleTime")]
+        [JsonPropertyName("cycleTime")]
+        [YamlMember(Alias = "cycleTime")]
         [JsonConverter(typeof(TimeSpanConverter))]
         public TimeSpan? CycleTime { get; set; }
 
-        [JsonPropertyName("LogLevel")]
+        [JsonPropertyName("logLevel")]
+        [YamlMember(Alias = "logLevel")]
         public LogEventLevel LogLevel { get; set; } = LogEventLevel.Information;
 
-        [JsonPropertyName("BufferCapacity")]
+        [JsonPropertyName("bufferCapacity")]
+        [YamlMember(Alias = "bufferCapacity")]
         public int BufferCapacity { get; set; } = 100;
 
-        [JsonPropertyName("LogFile")]
+        [JsonPropertyName("logFile")]
+        [YamlMember(Alias = "logFile")]
         public string? LogFile { get; set; }
 
-        [JsonPropertyName("RequiredSensors")]
+        [JsonPropertyName("validSensors")]
+        [YamlMember(Alias = "validSensors")]
         public string[] RequiredSensors { get; set; } = Array.Empty<string>();
     }
 }

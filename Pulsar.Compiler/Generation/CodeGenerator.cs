@@ -7,11 +7,11 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using Pulsar.Compiler.Config;
-using Pulsar.Compiler.Models;
-using Pulsar.Compiler.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Pulsar.Compiler.Config;
+using Pulsar.Compiler.Core;
+using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Generation
 {
@@ -39,7 +39,8 @@ namespace Pulsar.Compiler.Generation
 
         public List<Pulsar.Compiler.Models.GeneratedFileInfo> GenerateCSharp(
             List<RuleDefinition> rules,
-            BuildConfig buildConfig)
+            BuildConfig buildConfig
+        )
         {
             if (buildConfig == null)
             {
@@ -54,18 +55,23 @@ namespace Pulsar.Compiler.Generation
             // Generate rule groups
             for (int i = 0; i < ruleGroups.Count; i++)
             {
-                var groupImplementation = GenerateGroupImplementation(i, ruleGroups[i], layerMap);
+                var groupImplementation = GenerateGroupImplementation(
+                    i,
+                    ruleGroups[i],
+                    layerMap,
+                    buildConfig
+                );
                 groupImplementation.Namespace = buildConfig.Namespace;
                 generatedFiles.Add(groupImplementation);
             }
 
             // Generate rule coordinator
-            var coordinator = GenerateRuleCoordinator(ruleGroups, layerMap);
+            var coordinator = GenerateRuleCoordinator(ruleGroups, layerMap, buildConfig);
             coordinator.Namespace = buildConfig.Namespace;
             generatedFiles.Add(coordinator);
 
             // Generate metadata file
-            var metadata = GenerateMetadataFile(rules, layerMap);
+            var metadata = GenerateMetadataFile(rules, layerMap, buildConfig);
             metadata.Namespace = buildConfig.Namespace;
             generatedFiles.Add(metadata);
 
@@ -123,7 +129,10 @@ namespace Pulsar.Compiler.Generation
             return graph;
         }
 
-        private List<string> GetDependencies(RuleDefinition rule, Dictionary<string, string> outputRules)
+        private List<string> GetDependencies(
+            RuleDefinition rule,
+            Dictionary<string, string> outputRules
+        )
         {
             var dependencies = new HashSet<string>();
 
@@ -177,7 +186,9 @@ namespace Pulsar.Compiler.Generation
         {
             if (visiting.Contains(ruleName))
             {
-                throw new InvalidOperationException($"Cyclic dependency detected involving rule '{ruleName}'");
+                throw new InvalidOperationException(
+                    $"Cyclic dependency detected involving rule '{ruleName}'"
+                );
             }
 
             if (visited.Contains(ruleName))
@@ -225,7 +236,9 @@ namespace Pulsar.Compiler.Generation
         public GeneratedFileInfo GenerateGroupImplementation(
             int groupId,
             List<RuleDefinition> rules,
-            Dictionary<string, string> layerMap)
+            Dictionary<string, string> layerMap,
+            BuildConfig buildConfig
+        )
         {
             var sb = new StringBuilder();
             sb.AppendLine("// Auto-generated rule group");
@@ -243,7 +256,7 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("using Pulsar.Runtime.Interfaces;");
             sb.AppendLine();
 
-            sb.AppendLine("namespace Beacon.Runtime.Generated");
+            sb.AppendLine($"namespace {buildConfig.Namespace}");
             sb.AppendLine("{");
 
             // Class declaration
@@ -326,7 +339,7 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = $"RuleGroup{groupId}.cs",
                 Content = sb.ToString(),
-                Namespace = "Beacon.Runtime.Generated"
+                Namespace = buildConfig.Namespace,
             };
         }
 
@@ -361,7 +374,9 @@ namespace Pulsar.Compiler.Generation
                 ComparisonCondition comparison => GenerateComparisonCondition(comparison),
                 ExpressionCondition expression => FixupExpression(expression.Expression),
                 ThresholdOverTimeCondition threshold => GenerateThresholdCondition(threshold),
-                _ => throw new InvalidOperationException($"Unknown condition type: {condition.GetType().Name}")
+                _ => throw new InvalidOperationException(
+                    $"Unknown condition type: {condition.GetType().Name}"
+                ),
             };
         }
 
@@ -375,7 +390,9 @@ namespace Pulsar.Compiler.Generation
                 ComparisonOperator.LessThanOrEqual => "<=",
                 ComparisonOperator.EqualTo => "==",
                 ComparisonOperator.NotEqualTo => "!=",
-                _ => throw new InvalidOperationException($"Unknown operator: {comparison.Operator}")
+                _ => throw new InvalidOperationException(
+                    $"Unknown operator: {comparison.Operator}"
+                ),
             };
 
             return $"Convert.ToDouble(inputs[\"{comparison.Sensor}\"]) {op} {comparison.Value}";
@@ -391,7 +408,9 @@ namespace Pulsar.Compiler.Generation
             return action switch
             {
                 SetValueAction setValue => GenerateSetValueAction(setValue),
-                _ => throw new InvalidOperationException($"Unknown action type: {action.GetType().Name}")
+                _ => throw new InvalidOperationException(
+                    $"Unknown action type: {action.GetType().Name}"
+                ),
             };
         }
 
@@ -416,7 +435,9 @@ namespace Pulsar.Compiler.Generation
 
         public GeneratedFileInfo GenerateRuleCoordinator(
             List<List<RuleDefinition>> ruleGroups,
-            Dictionary<string, string> layerMap)
+            Dictionary<string, string> layerMap,
+            BuildConfig buildConfig
+        )
         {
             var sb = new StringBuilder();
             sb.AppendLine("// Auto-generated rule coordinator");
@@ -435,7 +456,7 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("using Pulsar.Runtime.Interfaces;");
             sb.AppendLine();
 
-            sb.AppendLine("namespace Beacon.Runtime.Generated");
+            sb.AppendLine($"namespace {buildConfig.Namespace}");
             sb.AppendLine("{");
             sb.AppendLine("    public class RuleCoordinator : IRuleCoordinator");
             sb.AppendLine("    {");
@@ -447,25 +468,41 @@ namespace Pulsar.Compiler.Generation
 
             // Add Prometheus metrics
             sb.AppendLine("        private static readonly Counter RuleEvaluationsTotal = Metrics");
-            sb.AppendLine("            .CreateCounter(\"pulsar_rule_evaluations_total\", \"Total number of rule evaluations\");");
+            sb.AppendLine(
+                "            .CreateCounter(\"pulsar_rule_evaluations_total\", \"Total number of rule evaluations\");"
+            );
             sb.AppendLine();
-            sb.AppendLine("        private static readonly Histogram RuleEvaluationDuration = Metrics");
-            sb.AppendLine("            .CreateHistogram(\"pulsar_rule_evaluation_duration_seconds\", \"Duration of rule evaluations\");");
+            sb.AppendLine(
+                "        private static readonly Histogram RuleEvaluationDuration = Metrics"
+            );
+            sb.AppendLine(
+                "            .CreateHistogram(\"pulsar_rule_evaluation_duration_seconds\", \"Duration of rule evaluations\");"
+            );
             sb.AppendLine();
 
             // Constructor
-            sb.AppendLine("        public RuleCoordinator(IRedisService redis, ILogger logger, RingBufferManager bufferManager)");
+            sb.AppendLine(
+                "        public RuleCoordinator(IRedisService redis, ILogger logger, RingBufferManager bufferManager)"
+            );
             sb.AppendLine("        {");
-            sb.AppendLine("            _redis = redis ?? throw new ArgumentNullException(nameof(redis));");
-            sb.AppendLine("            _logger = logger ?? throw new ArgumentNullException(nameof(logger));");
-            sb.AppendLine("            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));");
+            sb.AppendLine(
+                "            _redis = redis ?? throw new ArgumentNullException(nameof(redis));"
+            );
+            sb.AppendLine(
+                "            _logger = logger ?? throw new ArgumentNullException(nameof(logger));"
+            );
+            sb.AppendLine(
+                "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
+            );
             sb.AppendLine("            _ruleGroups = new List<TemplateRuleGroup>();");
             sb.AppendLine();
 
             // Initialize rule groups
             for (int i = 0; i < ruleGroups.Count; i++)
             {
-                sb.AppendLine($"            _ruleGroups.Add(new RuleGroup{i}(_redis, _logger, _bufferManager));");
+                sb.AppendLine(
+                    $"            _ruleGroups.Add(new RuleGroup{i}(_redis, _logger, _bufferManager));"
+                );
             }
 
             sb.AppendLine("        }");
@@ -485,7 +522,9 @@ namespace Pulsar.Compiler.Generation
             for (int i = 0; i < ruleGroups.Count; i++)
             {
                 sb.AppendLine($"                _logger.LogDebug(\"Evaluating rule group {i}\");");
-                sb.AppendLine($"                await _ruleGroups[{i}].EvaluateRulesAsync(inputs, outputs);");
+                sb.AppendLine(
+                    $"                await _ruleGroups[{i}].EvaluateRulesAsync(inputs, outputs);"
+                );
                 sb.AppendLine($"                RuleEvaluationsTotal.Inc();");
             }
 
@@ -505,11 +544,15 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = "RuleCoordinator.cs",
                 Content = sb.ToString(),
-                Namespace = "Beacon.Runtime.Generated"
+                Namespace = buildConfig.Namespace,
             };
         }
 
-        public GeneratedFileInfo GenerateMetadataFile(List<RuleDefinition> rules, Dictionary<string, string> layerMap)
+        public GeneratedFileInfo GenerateMetadataFile(
+            List<RuleDefinition> rules,
+            Dictionary<string, string> layerMap,
+            BuildConfig buildConfig
+        )
         {
             var sb = new StringBuilder();
             sb.AppendLine("// Auto-generated metadata file");
@@ -520,13 +563,15 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine();
 
-            sb.AppendLine("namespace Beacon.Runtime.Generated");
+            sb.AppendLine($"namespace {buildConfig.Namespace}");
             sb.AppendLine("{");
             sb.AppendLine("    public static class RuleMetadata");
             sb.AppendLine("    {");
-            
+
             // Rule information
-            sb.AppendLine("        public static readonly Dictionary<string, RuleInfo> Rules = new()");
+            sb.AppendLine(
+                "        public static readonly Dictionary<string, RuleInfo> Rules = new()"
+            );
             sb.AppendLine("        {");
             foreach (var rule in rules)
             {
@@ -537,9 +582,19 @@ namespace Pulsar.Compiler.Generation
                 sb.AppendLine($"                Layer = {layerMap[rule.Name]},");
                 sb.AppendLine($"                SourceFile = \"{rule.SourceFile}\",");
                 sb.AppendLine($"                LineNumber = {rule.LineNumber},");
-                sb.AppendLine("                InputSensors = new[] { " + string.Join(", ", GetInputSensors(rule).Select(s => $"\"{s}\"")) + " },");
-                sb.AppendLine("                OutputSensors = new[] { " + string.Join(", ", GetOutputSensors(rule).Select(s => $"\"{s}\"")) + " },");
-                sb.AppendLine($"                HasTemporalConditions = {HasTemporalConditions(rule).ToString().ToLower()}");
+                sb.AppendLine(
+                    "                InputSensors = new[] { "
+                        + string.Join(", ", GetInputSensors(rule).Select(s => $"\"{s}\""))
+                        + " },"
+                );
+                sb.AppendLine(
+                    "                OutputSensors = new[] { "
+                        + string.Join(", ", GetOutputSensors(rule).Select(s => $"\"{s}\""))
+                        + " },"
+                );
+                sb.AppendLine(
+                    $"                HasTemporalConditions = {HasTemporalConditions(rule).ToString().ToLower()}"
+                );
                 sb.AppendLine("            },");
             }
             sb.AppendLine("        };");
@@ -564,7 +619,7 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = "RuleMetadata.cs",
                 Content = sb.ToString(),
-                Namespace = "Beacon.Runtime.Generated"
+                Namespace = buildConfig.Namespace,
             };
         }
 
@@ -574,7 +629,7 @@ namespace Pulsar.Compiler.Generation
             return new Pulsar.Compiler.Models.GeneratedFileInfo
             {
                 FileName = System.IO.Path.Combine(buildConfig.OutputPath, "EmbeddedConfig.cs"),
-                Content = content
+                Content = content,
             };
         }
 
@@ -681,13 +736,23 @@ namespace Pulsar.Compiler.Generation
 
         private bool IsMathFunction(string functionName)
         {
-            var mathFunctions = new HashSet<string> { "Sin", "Cos", "Tan", "Log", "Exp", "Sqrt", "Abs" };
+            var mathFunctions = new HashSet<string>
+            {
+                "Sin",
+                "Cos",
+                "Tan",
+                "Log",
+                "Exp",
+                "Sqrt",
+                "Abs",
+            };
             return mathFunctions.Contains(functionName);
         }
 
         public List<List<RuleDefinition>> SplitRulesIntoGroups(
             List<RuleDefinition> rules,
-            Dictionary<string, string> layerMap)
+            Dictionary<string, string> layerMap
+        )
         {
             if (rules == null || !rules.Any())
             {
@@ -718,228 +783,5 @@ namespace Pulsar.Compiler.Generation
 
             return groups;
         }
-
-        // ----- Begin Beacon Project Generation Methods -----
-        
-        private GeneratedFileInfo GenerateBeaconSolution()
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("Microsoft Visual Studio Solution File, Format Version 12.00");
-            sb.AppendLine("# Visual Studio Version 17\nVisualStudioVersion = 17.0.31903.59");
-            sb.AppendLine("MinimumVisualStudioVersion = 10.0.40219.1");
-            // Add project entries for Beacon.Runtime and Beacon.Tests
-            sb.AppendLine("Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Beacon.Runtime\", \"Beacon.Runtime.csproj\", \"{D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}\"");
-            sb.AppendLine("EndProject");
-            sb.AppendLine("Project(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Beacon.Tests\", \"Beacon.Tests.csproj\", \"{E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}\"");
-            sb.AppendLine("EndProject");
-            sb.AppendLine("Global");
-            sb.AppendLine("    GlobalSection(SolutionConfigurationPlatforms) = preSolution");
-            sb.AppendLine("        Debug|Any CPU = Debug|Any CPU");
-            sb.AppendLine("        Release|Any CPU = Release|Any CPU");
-            sb.AppendLine("    EndGlobalSection");
-            sb.AppendLine("    GlobalSection(ProjectConfigurationPlatforms) = postSolution");
-            sb.AppendLine("        {D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}.Debug|Any CPU.ActiveCfg = Debug|Any CPU");
-            sb.AppendLine("        {D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}.Debug|Any CPU.Build.0 = Debug|Any CPU");
-            sb.AppendLine("        {E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}.Debug|Any CPU.ActiveCfg = Debug|Any CPU");
-            sb.AppendLine("        {E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}.Debug|Any CPU.Build.0 = Debug|Any CPU");
-            sb.AppendLine("        {D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}.Release|Any CPU.ActiveCfg = Release|Any CPU");
-            sb.AppendLine("        {D1E3FBE2-1234-4F6E-9CDE-ABCDE1234567}.Release|Any CPU.Build.0 = Release|Any CPU");
-            sb.AppendLine("        {E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}.Release|Any CPU.ActiveCfg = Release|Any CPU");
-            sb.AppendLine("        {E2F4CBE3-2345-5G7F-ADFE-BCDEF2345678}.Release|Any CPU.Build.0 = Release|Any CPU");
-            sb.AppendLine("    EndGlobalSection");
-            sb.AppendLine("EndGlobal");
-            
-            return new Pulsar.Compiler.Models.GeneratedFileInfo
-            {
-                FileName = "Beacon.sln",
-                Content = sb.ToString(),
-                Namespace = "" // Not applicable for solution file
-            };
-        }
-
-        public List<GeneratedFileInfo> GenerateAllFiles(List<RuleDefinition> rules, BuildConfig buildConfig)
-        {
-            if (buildConfig == null)
-                throw new ArgumentNullException(nameof(buildConfig));
-
-            var generatedFiles = new List<GeneratedFileInfo>();
-
-            // Create solution and project files
-            generatedFiles.Add(GenerateBeaconSolution());
-            generatedFiles.Add(GenerateRuntimeProject(buildConfig));
-            generatedFiles.Add(GenerateTestsProject(buildConfig));
-
-            // Group rules and assign layers
-            var layerMap = AssignLayers(rules);
-            var stringLayerMap = layerMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
-            var ruleGroups = SplitRulesIntoGroups(rules, stringLayerMap);
-
-            // Generate rule group files
-            for (int i = 0; i < ruleGroups.Count; i++)
-            {
-                var groupImplementation = GenerateGroupImplementation(i, ruleGroups[i], stringLayerMap);
-                generatedFiles.Add(groupImplementation);
-            }
-
-            // Generate coordinator
-            var coordinator = GenerateRuleCoordinator(ruleGroups, stringLayerMap);
-            generatedFiles.Add(coordinator);
-
-            // Generate metadata file
-            var metadata = GenerateMetadataFile(rules, stringLayerMap);
-            generatedFiles.Add(metadata);
-
-            // Generate embedded config
-            var config = GenerateEmbeddedConfig(buildConfig);
-            generatedFiles.Add(config);
-
-            // Generate test files
-            var testFiles = GenerateTestFiles(rules, stringLayerMap);
-            generatedFiles.AddRange(testFiles);
-
-            // Apply any necessary post-generation fixups
-            ApplyPostGenerationFixups(generatedFiles);
-
-            return generatedFiles;
-        }
-
-        private GeneratedFileInfo GenerateRuntimeProject(BuildConfig buildConfig)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
-            sb.AppendLine("  <PropertyGroup>");
-            sb.AppendLine($"    <OutputType>{(buildConfig.StandaloneExecutable ? "Exe" : "Library")}</OutputType>");
-            sb.AppendLine($"    <TargetFramework>{buildConfig.TargetFramework}</TargetFramework>");
-            sb.AppendLine("    <ImplicitUsings>enable</ImplicitUsings>");
-            sb.AppendLine("    <Nullable>enable</Nullable>");
-            sb.AppendLine("    <PublishAot>true</PublishAot>");
-            sb.AppendLine("  </PropertyGroup>");
-            
-            sb.AppendLine("  <ItemGroup>");
-            sb.AppendLine("    <PackageReference Include=\"Microsoft.Extensions.Logging\" Version=\"8.0.0\" />");
-            sb.AppendLine("    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.7.10\" />");
-            sb.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"3.1.1\" />");
-            sb.AppendLine("    <PackageReference Include=\"prometheus-net\" Version=\"8.2.1\" />");
-            sb.AppendLine("  </ItemGroup>");
-            
-            sb.AppendLine("</Project>");
-
-            return new Pulsar.Compiler.Models.GeneratedFileInfo
-            {
-                FileName = "Beacon.Runtime.csproj",
-                Content = sb.ToString(),
-                Namespace = "Beacon.Runtime"
-            };
-        }
-
-        private GeneratedFileInfo GenerateTestsProject(BuildConfig buildConfig)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
-            sb.AppendLine("  <PropertyGroup>");
-            sb.AppendLine($"    <TargetFramework>{buildConfig.TargetFramework}</TargetFramework>");
-            sb.AppendLine("    <ImplicitUsings>enable</ImplicitUsings>");
-            sb.AppendLine("    <Nullable>enable</Nullable>");
-            sb.AppendLine("    <IsTestProject>true</IsTestProject>");
-            sb.AppendLine("  </PropertyGroup>");
-            
-            sb.AppendLine("  <ItemGroup>");
-            sb.AppendLine("    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.9.0\" />");
-            sb.AppendLine("    <PackageReference Include=\"xunit\" Version=\"2.7.0\" />");
-            sb.AppendLine("    <PackageReference Include=\"xunit.runner.visualstudio\" Version=\"2.5.7\">");
-            sb.AppendLine("      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>");
-            sb.AppendLine("      <PrivateAssets>all</PrivateAssets>");
-            sb.AppendLine("    </PackageReference>");
-            sb.AppendLine("  </ItemGroup>");
-            
-            sb.AppendLine("  <ItemGroup>");
-            sb.AppendLine("    <ProjectReference Include=\"../Beacon.Runtime/Beacon.Runtime.csproj\" />");
-            sb.AppendLine("  </ItemGroup>");
-            
-            sb.AppendLine("</Project>");
-
-            return new Pulsar.Compiler.Models.GeneratedFileInfo
-            {
-                FileName = "Beacon.Tests.csproj",
-                Content = sb.ToString(),
-                Namespace = "Beacon.Tests"
-            };
-        }
-
-        public List<GeneratedFileInfo> GenerateTestFiles(List<RuleDefinition> rules, Dictionary<string, string> layerMap)
-        {
-            var testFiles = new List<GeneratedFileInfo>();
-            var ruleGroups = SplitRulesIntoGroups(rules, layerMap);
-
-            for (int i = 0; i < ruleGroups.Count; i++)
-            {
-                var groupTests = GenerateRuleGroupTests(i, ruleGroups[i], layerMap);
-                testFiles.Add(groupTests);
-            }
-
-            return testFiles;
-        }
-
-        private GeneratedFileInfo GenerateRuleGroupTests(int layerId, List<RuleDefinition> rules, Dictionary<string, string> layerMap)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("using System;");
-            sb.AppendLine("using System.Collections.Generic;");
-            sb.AppendLine("using System.Threading.Tasks;");
-            sb.AppendLine("using Xunit;");
-            sb.AppendLine("using Beacon.Runtime.Generated;");
-            sb.AppendLine();
-
-            sb.AppendLine("namespace Beacon.Tests.Generated");
-            sb.AppendLine("{");
-            sb.AppendLine($"    public class RuleGroup{layerId}Tests");
-            sb.AppendLine("    {");
-
-            foreach (var rule in rules)
-            {
-                sb.AppendLine($"        [Fact]");
-                sb.AppendLine($"        public async Task {rule.Name}_ExecutesCorrectly()");
-                sb.AppendLine("        {");
-                sb.AppendLine("            // Arrange");
-                sb.AppendLine("            var inputs = new Dictionary<string, object>();");
-                sb.AppendLine("            var outputs = new Dictionary<string, object>();");
-
-                // Add test inputs based on rule conditions
-                if (rule.Conditions != null)
-                {
-                    foreach (var sensor in GetInputSensors(rule))
-                    {
-                        sb.AppendLine($"            inputs[\"{sensor}\"] = 42.0; // TODO: Generate appropriate test values");
-                    }
-                }
-
-                sb.AppendLine();
-                sb.AppendLine("            // Act");
-                sb.AppendLine($"            var ruleGroup = new RuleGroup{layerId}(null, null, null);");
-                sb.AppendLine("            await ruleGroup.EvaluateRulesAsync(inputs, outputs);");
-                sb.AppendLine();
-                sb.AppendLine("            // Assert");
-
-                // Add assertions based on rule actions
-                foreach (var sensor in GetOutputSensors(rule))
-                {
-                    sb.AppendLine($"            Assert.True(outputs.ContainsKey(\"{sensor}\"));");
-                }
-
-                sb.AppendLine("        }");
-                sb.AppendLine();
-            }
-
-            sb.AppendLine("    }");
-            sb.AppendLine("}");
-
-            return new Pulsar.Compiler.Models.GeneratedFileInfo
-            {
-                FileName = $"RuleGroup{layerId}Tests.cs",
-                Content = sb.ToString(),
-                Namespace = "Beacon.Tests.Generated"
-            };
-        }
-        // ----- End Beacon Project Generation Methods -----
     }
 }

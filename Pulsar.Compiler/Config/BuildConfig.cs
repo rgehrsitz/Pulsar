@@ -15,7 +15,7 @@ namespace Pulsar.Compiler.Config
         public required string TargetFramework { get; set; }
         public required string RulesPath { get; set; } = string.Empty;
 
-        public string Namespace { get; set; } = "Pulsar.Runtime.Rules";
+        public string Namespace { get; set; } = "Generated";
         public bool Parallel { get; set; } = true;
         public bool GenerateDebugInfo { get; set; }
         public bool StandaloneExecutable { get; set; }

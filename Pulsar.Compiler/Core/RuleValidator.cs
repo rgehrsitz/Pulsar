@@ -2,8 +2,8 @@
 
 using System;
 using System.Collections.Generic;
-using Pulsar.Compiler.Models;
 using Pulsar.Compiler;
+using Pulsar.Compiler.Models;
 using Serilog;
 
 namespace Pulsar.Compiler.Core
@@ -21,7 +21,11 @@ namespace Pulsar.Compiler.Core
                 if (string.IsNullOrEmpty(rule.Name))
                 {
                     _logger.Error("Rule name is empty");
-                    return new ValidationResult { IsValid = false, Errors = new[] { "Rule name cannot be empty" } };
+                    return new ValidationResult
+                    {
+                        IsValid = false,
+                        Errors = new[] { "Rule name cannot be empty" },
+                    };
                 }
 
                 var errors = new List<string>();
@@ -31,14 +35,13 @@ namespace Pulsar.Compiler.Core
                     _logger.Warning("Rule {RuleName} is missing description", rule.Name);
                 }
 
+                // Validate actions
                 if (rule.Actions == null || rule.Actions.Count == 0)
                 {
                     _logger.Error("Rule {RuleName} has no actions", rule.Name);
                     errors.Add("Rule must have at least one action");
                 }
-
-                // Validate actions
-                if (rule.Actions != null)
+                else
                 {
                     foreach (var action in rule.Actions)
                     {
@@ -52,14 +55,27 @@ namespace Pulsar.Compiler.Core
                     ValidateConditionGroup(rule.Conditions, rule.Name, errors);
                 }
 
+                // NEW: Validate for circular dependencies using DependencyAnalyzer
+                var analyzer = new DependencyAnalyzer();
+                var depResult = analyzer.ValidateDependencies(new List<RuleDefinition> { rule });
+                
+                // Added: Log dependency analysis result for debugging
+                _logger.Debug("Dependency analysis result for rule {RuleName}: IsValid={IsValid}, Cycles={Cycles}",
+                    rule.Name,
+                    depResult.IsValid,
+                    string.Join(" | ", depResult.CircularDependencies.Select(cycle => string.Join(" -> ", cycle))));
+                
+                if (!depResult.IsValid)
+                {
+                    errors.Add("Circular dependency detected in rule: " 
+                               + rule.Name 
+                               + " (" + string.Join(" -> ", depResult.CircularDependencies.First()) + ")");
+                }
+
                 bool isValid = errors.Count == 0;
                 _logger.Debug("Rule validation completed. IsValid: {IsValid}", isValid);
 
-                return new ValidationResult
-                {
-                    IsValid = isValid,
-                    Errors = errors.ToArray()
-                };
+                return new ValidationResult { IsValid = isValid, Errors = errors.ToArray() };
             }
             catch (Exception ex)
             {
@@ -67,12 +83,16 @@ namespace Pulsar.Compiler.Core
                 return new ValidationResult
                 {
                     IsValid = false,
-                    Errors = new[] { $"Validation error: {ex.Message}" }
+                    Errors = new[] { $"Validation error: {ex.Message}" },
                 };
             }
         }
 
-        private static void ValidateAction(ActionDefinition action, string ruleName, List<string> errors)
+        private static void ValidateAction(
+            ActionDefinition action,
+            string ruleName,
+            List<string> errors
+        )
         {
             if (action == null)
             {
@@ -89,12 +109,18 @@ namespace Pulsar.Compiler.Core
                     }
                     break;
                 default:
-                    errors.Add($"Rule '{ruleName}' has an unsupported action type: {action.GetType().Name}");
+                    errors.Add(
+                        $"Rule '{ruleName}' has an unsupported action type: {action.GetType().Name}"
+                    );
                     break;
             }
         }
 
-        private static void ValidateConditionGroup(ConditionGroup conditions, string ruleName, List<string> errors)
+        private static void ValidateConditionGroup(
+            ConditionGroup conditions,
+            string ruleName,
+            List<string> errors
+        )
         {
             if (conditions.All != null)
             {
@@ -112,14 +138,20 @@ namespace Pulsar.Compiler.Core
                 }
             }
 
-            if ((conditions.All == null || !conditions.All.Any()) && 
-                (conditions.Any == null || !conditions.Any.Any()))
+            if (
+                (conditions.All == null || !conditions.All.Any())
+                && (conditions.Any == null || !conditions.Any.Any())
+            )
             {
                 errors.Add($"Rule '{ruleName}' has an empty condition group");
             }
         }
 
-        private static void ValidateCondition(ConditionDefinition condition, string ruleName, List<string> errors)
+        private static void ValidateCondition(
+            ConditionDefinition condition,
+            string ruleName,
+            List<string> errors
+        )
         {
             if (condition == null)
             {
@@ -132,27 +164,37 @@ namespace Pulsar.Compiler.Core
                 case ComparisonCondition comparison:
                     if (string.IsNullOrWhiteSpace(comparison.Sensor))
                     {
-                        errors.Add($"Rule '{ruleName}' has a comparison condition with an empty sensor");
+                        errors.Add(
+                            $"Rule '{ruleName}' has a comparison condition with an empty sensor"
+                        );
                     }
                     break;
                 case ThresholdOverTimeCondition threshold:
                     if (string.IsNullOrWhiteSpace(threshold.Sensor))
                     {
-                        errors.Add($"Rule '{ruleName}' has a threshold condition with an empty sensor");
+                        errors.Add(
+                            $"Rule '{ruleName}' has a threshold condition with an empty sensor"
+                        );
                     }
                     if (threshold.Duration <= 0)
                     {
-                        errors.Add($"Rule '{ruleName}' has a threshold condition with an invalid duration");
+                        errors.Add(
+                            $"Rule '{ruleName}' has a threshold condition with an invalid duration"
+                        );
                     }
                     break;
                 case ExpressionCondition expression:
                     if (string.IsNullOrWhiteSpace(expression.Expression))
                     {
-                        errors.Add($"Rule '{ruleName}' has an expression condition with an empty expression");
+                        errors.Add(
+                            $"Rule '{ruleName}' has an expression condition with an empty expression"
+                        );
                     }
                     break;
                 default:
-                    errors.Add($"Rule '{ruleName}' has an unsupported condition type: {condition.GetType().Name}");
+                    errors.Add(
+                        $"Rule '{ruleName}' has an unsupported condition type: {condition.GetType().Name}"
+                    );
                     break;
             }
         }
@@ -184,7 +226,9 @@ namespace Pulsar.Compiler.Core
                     {
                         if (outputSensors.TryGetValue(action.Key, out var existingRule))
                         {
-                            errors.Add($"Sensor '{action.Key}' is written by multiple rules: '{existingRule}' and '{rule.Name}'");
+                            errors.Add(
+                                $"Sensor '{action.Key}' is written by multiple rules: '{existingRule}' and '{rule.Name}'"
+                            );
                         }
                         outputSensors[action.Key] = rule.Name;
                     }
@@ -193,22 +237,26 @@ namespace Pulsar.Compiler.Core
                 // Check for circular dependencies
                 foreach (var rule in rules)
                 {
-                    CheckCircularDependencies(rule, rules.ToList(), outputSensors, new HashSet<string>(), circularDependencies);
+                    CheckCircularDependencies(
+                        rule,
+                        rules.ToList(),
+                        outputSensors,
+                        new HashSet<string>(),
+                        circularDependencies
+                    );
                 }
 
                 if (circularDependencies.Any())
                 {
-                    errors.Add($"Circular dependencies detected in rules: {string.Join(", ", circularDependencies)}");
+                    errors.Add(
+                        $"Circular dependencies detected in rules: {string.Join(", ", circularDependencies)}"
+                    );
                 }
 
                 bool isValid = errors.Count == 0;
                 _logger.Debug("Rule dependency validation completed. IsValid: {IsValid}", isValid);
 
-                return new ValidationResult
-                {
-                    IsValid = isValid,
-                    Errors = errors.ToArray()
-                };
+                return new ValidationResult { IsValid = isValid, Errors = errors.ToArray() };
             }
             catch (Exception ex)
             {
@@ -216,7 +264,7 @@ namespace Pulsar.Compiler.Core
                 return new ValidationResult
                 {
                     IsValid = false,
-                    Errors = new[] { $"Validation error: {ex.Message}" }
+                    Errors = new[] { $"Validation error: {ex.Message}" },
                 };
             }
         }
@@ -226,7 +274,8 @@ namespace Pulsar.Compiler.Core
             List<RuleDefinition> allRules,
             Dictionary<string, string> outputSensors,
             HashSet<string> visited,
-            HashSet<string> circularDependencies)
+            HashSet<string> circularDependencies
+        )
         {
             if (visited.Contains(rule.Name))
             {
@@ -239,13 +288,22 @@ namespace Pulsar.Compiler.Core
             var dependencies = GetRuleDependencies(rule, outputSensors);
             foreach (var dependencyRule in allRules.Where(r => dependencies.Contains(r.Name)))
             {
-                CheckCircularDependencies(dependencyRule, allRules, outputSensors, visited, circularDependencies);
+                CheckCircularDependencies(
+                    dependencyRule,
+                    allRules,
+                    outputSensors,
+                    visited,
+                    circularDependencies
+                );
             }
 
             visited.Remove(rule.Name);
         }
 
-        private static HashSet<string> GetRuleDependencies(RuleDefinition rule, Dictionary<string, string> outputSensors)
+        private static HashSet<string> GetRuleDependencies(
+            RuleDefinition rule,
+            Dictionary<string, string> outputSensors
+        )
         {
             var dependencies = new HashSet<string>();
 
@@ -274,7 +332,8 @@ namespace Pulsar.Compiler.Core
         private static void AddConditionDependencies(
             ConditionDefinition condition,
             Dictionary<string, string> outputSensors,
-            HashSet<string> dependencies)
+            HashSet<string> dependencies
+        )
         {
             switch (condition)
             {
@@ -322,7 +381,16 @@ namespace Pulsar.Compiler.Core
             if (string.IsNullOrWhiteSpace(functionName))
                 return false;
 
-            var mathFunctions = new HashSet<string> { "Sin", "Cos", "Tan", "Log", "Exp", "Sqrt", "Abs" };
+            var mathFunctions = new HashSet<string>
+            {
+                "Sin",
+                "Cos",
+                "Tan",
+                "Log",
+                "Exp",
+                "Sqrt",
+                "Abs",
+            };
             return mathFunctions.Contains(functionName);
         }
     }

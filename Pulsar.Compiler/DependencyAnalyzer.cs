@@ -8,26 +8,42 @@ using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Core
 {
-    public class DependencyAnalyzer
+    public class DependencyAnalyzer : IDisposable
     {
         private readonly ILogger<DependencyAnalyzer> _logger;
-        private Dictionary<string, RuleDefinition> _outputs = new();
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+                GC.SuppressFinalize(this);
+            }
+        }
+
         private readonly int _maxDependencyDepth;
         private readonly Dictionary<string, HashSet<string>> _temporalDependencies = new();
+        private static readonly HashSet<string> _mathFunctions = new()
+        {
+            "Sin",
+            "Cos",
+            "Tan",
+            "Log",
+            "Exp",
+            "Sqrt",
+            "Abs",
+            "Max",
+            "Min",
+        };
 
-        public DependencyAnalyzer(int maxDependencyDepth = 10, ILogger<DependencyAnalyzer>? logger = null)
+        public DependencyAnalyzer(
+            int maxDependencyDepth = 10,
+            ILogger<DependencyAnalyzer>? logger = null
+        )
         {
             _logger = logger ?? NullLogger<DependencyAnalyzer>.Instance;
             _maxDependencyDepth = maxDependencyDepth;
-        }
-
-        public class DependencyValidationResult
-        {
-            public bool IsValid { get; set; }
-            public List<List<string>> CircularDependencies { get; set; } = new();
-            public List<List<string>> DeepDependencyChains { get; set; } = new();
-            public Dictionary<string, int> RuleComplexityScores { get; set; } = new();
-            public Dictionary<string, HashSet<string>> TemporalDependencies { get; set; } = new();
         }
 
         public DependencyValidationResult ValidateDependencies(List<RuleDefinition> rules)
@@ -43,7 +59,10 @@ namespace Pulsar.Compiler.Core
                 result.CircularDependencies = cycles;
                 foreach (var cycle in cycles)
                 {
-                    _logger.LogError("Circular dependency detected: {Path}", string.Join(" -> ", cycle));
+                    _logger.LogError(
+                        "Circular dependency detected: {Path}",
+                        string.Join(" -> ", cycle)
+                    );
                 }
             }
 
@@ -54,7 +73,10 @@ namespace Pulsar.Compiler.Core
                 result.DeepDependencyChains = deepChains;
                 foreach (var chain in deepChains)
                 {
-                    _logger.LogWarning("Deep dependency chain detected: {Path}", string.Join(" -> ", chain));
+                    _logger.LogWarning(
+                        "Deep dependency chain detected: {Path}",
+                        string.Join(" -> ", chain)
+                    );
                 }
             }
 
@@ -98,7 +120,11 @@ namespace Pulsar.Compiler.Core
                 {
                     if (!rules.Any(r => r.Name == dependency))
                     {
-                        _logger.LogWarning("Rule {RuleName} depends on non-existent rule {DependencyName}", rule.Name, dependency);
+                        _logger.LogWarning(
+                            "Rule {RuleName} depends on non-existent rule {DependencyName}",
+                            rule.Name,
+                            dependency
+                        );
                         continue;
                     }
 
@@ -109,7 +135,9 @@ namespace Pulsar.Compiler.Core
             return graph;
         }
 
-        private List<List<string>> FindCircularDependencies(Dictionary<string, HashSet<string>> graph)
+        private List<List<string>> FindCircularDependencies(
+            Dictionary<string, HashSet<string>> graph
+        )
         {
             var cycles = new List<List<string>>();
             var visited = new HashSet<string>();
@@ -131,14 +159,13 @@ namespace Pulsar.Compiler.Core
             Dictionary<string, HashSet<string>> graph,
             HashSet<string> visited,
             List<string> path,
-            List<List<string>> cycles)
+            List<List<string>> cycles
+        )
         {
             if (path.Contains(current))
             {
                 var cycleStart = path.IndexOf(current);
-                var cycle = path.Skip(cycleStart)
-                               .Concat(new[] { current })
-                               .ToList();
+                var cycle = path.Skip(cycleStart).Concat(new[] { current }).ToList();
                 cycles.Add(cycle);
                 return;
             }
@@ -159,7 +186,9 @@ namespace Pulsar.Compiler.Core
             path.RemoveAt(path.Count - 1);
         }
 
-        private List<List<string>> FindDeepDependencyChains(Dictionary<string, HashSet<string>> graph)
+        private List<List<string>> FindDeepDependencyChains(
+            Dictionary<string, HashSet<string>> graph
+        )
         {
             var deepChains = new List<List<string>>();
             var visited = new HashSet<string>();
@@ -181,7 +210,8 @@ namespace Pulsar.Compiler.Core
             Dictionary<string, HashSet<string>> graph,
             HashSet<string> visited,
             List<string> path,
-            List<List<string>> deepChains)
+            List<List<string>> deepChains
+        )
         {
             path.Add(current);
 
@@ -207,7 +237,8 @@ namespace Pulsar.Compiler.Core
 
         private Dictionary<string, int> CalculateRuleComplexity(
             List<RuleDefinition> rules,
-            Dictionary<string, HashSet<string>> graph)
+            Dictionary<string, HashSet<string>> graph
+        )
         {
             var scores = new Dictionary<string, int>();
 
@@ -231,7 +262,8 @@ namespace Pulsar.Compiler.Core
 
         private int CalculateDependencyDepth(
             RuleDefinition rule,
-            Dictionary<string, HashSet<string>> graph)
+            Dictionary<string, HashSet<string>> graph
+        )
         {
             var visited = new HashSet<string>();
             var depth = 0;
@@ -260,12 +292,9 @@ namespace Pulsar.Compiler.Core
         public Dictionary<string, string> GetDependencyMap(List<RuleDefinition> rules)
         {
             var layerMap = BuildDependencyGraph(rules);
-            
+
             // Convert int values to strings for AOT compatibility
-            return layerMap.ToDictionary(
-                kvp => kvp.Key,
-                kvp => kvp.Value.ToString()
-            );
+            return layerMap.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ToString());
         }
 
         private Dictionary<string, int> BuildDependencyGraph(List<RuleDefinition> rules)
@@ -291,12 +320,15 @@ namespace Pulsar.Compiler.Core
             Dictionary<string, HashSet<string>> graph,
             Dictionary<string, int> layerMap,
             HashSet<string> visited,
-            HashSet<string> visiting)
+            HashSet<string> visiting
+        )
         {
             if (visiting.Contains(ruleName))
             {
                 _logger.LogError("Cyclic dependency detected involving rule {RuleName}", ruleName);
-                throw new InvalidOperationException($"Cyclic dependency detected involving rule '{ruleName}'");
+                throw new InvalidOperationException(
+                    $"Cyclic dependency detected involving rule '{ruleName}'"
+                );
             }
 
             if (visited.Contains(ruleName))
@@ -321,7 +353,10 @@ namespace Pulsar.Compiler.Core
             visited.Add(ruleName);
         }
 
-        private List<RuleDefinition> TopologicalSort(Dictionary<string, HashSet<string>> graph, List<RuleDefinition> rules)
+        private List<RuleDefinition> TopologicalSort(
+            Dictionary<string, HashSet<string>> graph,
+            List<RuleDefinition> rules
+        )
         {
             var visited = new HashSet<string>();
             var visiting = new HashSet<string>();
@@ -344,12 +379,15 @@ namespace Pulsar.Compiler.Core
             Dictionary<string, HashSet<string>> graph,
             HashSet<string> visited,
             HashSet<string> visiting,
-            List<string> sorted)
+            List<string> sorted
+        )
         {
             if (visiting.Contains(ruleName))
             {
                 _logger.LogError("Cyclic dependency detected involving rule {RuleName}", ruleName);
-                throw new InvalidOperationException($"Cyclic dependency detected involving rule '{ruleName}'");
+                throw new InvalidOperationException(
+                    $"Cyclic dependency detected involving rule '{ruleName}'"
+                );
             }
 
             if (visited.Contains(ruleName))
@@ -369,7 +407,10 @@ namespace Pulsar.Compiler.Core
             sorted.Add(ruleName);
         }
 
-        private HashSet<string> GetDependencies(RuleDefinition rule, Dictionary<string, RuleDefinition> rules)
+        private HashSet<string> GetDependencies(
+            RuleDefinition rule,
+            Dictionary<string, RuleDefinition> rules
+        )
         {
             var dependencies = new HashSet<string>();
 
@@ -405,7 +446,10 @@ namespace Pulsar.Compiler.Core
             return dependencies;
         }
 
-        private HashSet<string> GetConditionDependencies(ConditionDefinition condition, Dictionary<string, RuleDefinition> rules)
+        private HashSet<string> GetConditionDependencies(
+            ConditionDefinition condition,
+            Dictionary<string, RuleDefinition> rules
+        )
         {
             var dependencies = new HashSet<string>();
 
@@ -428,7 +472,10 @@ namespace Pulsar.Compiler.Core
             return dependencies;
         }
 
-        private HashSet<string> GetActionDependencies(ActionDefinition action, Dictionary<string, RuleDefinition> rules)
+        private HashSet<string> GetActionDependencies(
+            ActionDefinition action,
+            Dictionary<string, RuleDefinition> rules
+        )
         {
             var dependencies = new HashSet<string>();
 
@@ -448,14 +495,15 @@ namespace Pulsar.Compiler.Core
         private HashSet<string> ExtractSensorsFromExpression(string expression)
         {
             var sensors = new HashSet<string>();
-            var sensorPattern = @"sensor\[([^\]]+)\]";
+            var sensorPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b";
             var matches = Regex.Matches(expression, sensorPattern);
 
             foreach (Match match in matches)
             {
-                if (match.Groups.Count > 1)
+                var potentialSensor = match.Value;
+                if (!_mathFunctions.Contains(potentialSensor))
                 {
-                    sensors.Add(match.Groups[1].Value.Trim());
+                    sensors.Add(potentialSensor);
                 }
             }
 
