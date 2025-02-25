@@ -2,14 +2,14 @@
 // Version: 1.0.0
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
+using Beacon.Runtime.Interfaces;
+using Beacon.Runtime.Services;
 using Microsoft.Extensions.Logging;
-using Pulsar.Runtime.Services;
-using Pulsar.Runtime.Interfaces;
 
-namespace Pulsar.Runtime.Rules
+namespace Beacon.Runtime.Rules
 {
     public class RuntimeOrchestrator
     {
@@ -22,7 +22,8 @@ namespace Pulsar.Runtime.Rules
         public RuntimeOrchestrator(
             IRedisService redis,
             ILogger logger,
-            IRuleCoordinator coordinator)
+            IRuleCoordinator coordinator
+        )
         {
             _redis = redis ?? throw new ArgumentNullException(nameof(redis));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -62,7 +63,9 @@ namespace Pulsar.Runtime.Rules
                 try
                 {
                     // Get all required sensor values from Redis
-                    var sensorValues = await _redis.GetSensorValuesAsync(_coordinator.RequiredSensors);
+                    var sensorValues = await _redis.GetSensorValuesAsync(
+                        _coordinator.RequiredSensors
+                    );
                     var inputs = new Dictionary<string, object>();
                     var outputs = new Dictionary<string, object>();
 
@@ -106,7 +109,7 @@ namespace Pulsar.Runtime.Rules
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error during rule evaluation cycle");
-                    
+
                     // Brief delay before retry
                     await Task.Delay(1000, cancellationToken);
                 }

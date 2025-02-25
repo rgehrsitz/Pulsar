@@ -5,10 +5,10 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using Serilog;
 using Pulsar.Compiler;
+using Serilog;
 
-namespace Pulsar.Runtime.Buffers;
+namespace Beacon.Runtime.Buffers;
 
 /// <summary>
 /// Represents a single value with its timestamp
@@ -357,7 +357,8 @@ public class RingBufferManager : IDisposable
     {
         var buffer = _buffers.GetOrAdd(
             sensor,
-            _ => {
+            _ =>
+            {
                 _logger.Debug("Creating new buffer for sensor: {Sensor}", sensor);
                 return new CircularBuffer(_capacity, _dateTimeProvider);
             }
@@ -368,7 +369,11 @@ public class RingBufferManager : IDisposable
     public void UpdateBuffers(Dictionary<string, double> currentValues)
     {
         var timestamp = _dateTimeProvider.UtcNow;
-        _logger.Debug("Updating buffers with {Count} values at {Timestamp}", currentValues.Count, timestamp);
+        _logger.Debug(
+            "Updating buffers with {Count} values at {Timestamp}",
+            currentValues.Count,
+            timestamp
+        );
         foreach (var (sensor, value) in currentValues)
         {
             UpdateBuffer(sensor, value, timestamp);

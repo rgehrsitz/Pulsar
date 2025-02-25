@@ -4,7 +4,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Pulsar.Runtime.Interfaces
+namespace Beacon.Runtime.Interfaces
 {
     /// <summary>
     /// Represents a group of rules that can be evaluated together
@@ -21,6 +21,9 @@ namespace Pulsar.Runtime.Interfaces
         /// </summary>
         /// <param name="inputs">Dictionary of sensor values</param>
         /// <param name="outputs">Dictionary of output values</param>
-        Task EvaluateRulesAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs);
+        Task EvaluateRulesAsync(
+            Dictionary<string, object> inputs,
+            Dictionary<string, object> outputs
+        );
     }
 }

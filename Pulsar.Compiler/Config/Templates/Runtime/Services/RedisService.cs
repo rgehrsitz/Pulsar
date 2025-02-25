@@ -3,13 +3,13 @@
 using System.Collections.Concurrent;
 using NRedisStack;
 using NRedisStack.RedisStackCommands;
-using Serilog;
-using StackExchange.Redis;
 using Polly;
 using Polly.Retry;
 using Pulsar.Compiler;
+using Serilog;
+using StackExchange.Redis;
 
-namespace Pulsar.Runtime.Services;
+namespace Beacon.Runtime.Services;
 
 public interface IRedisService
 {
@@ -39,15 +39,15 @@ public class RedisService : IRedisService, IDisposable
     {
         RedisLoggingConfiguration.EnsureLogDirectories();
         _logger = RedisLoggingConfiguration.ConfigureRedisLogger(config, logPath);
-        
+
         _poolSize = config.PoolSize;
         _connectionPool = new ConnectionMultiplexer[_poolSize];
         _metrics = new RedisMetrics(config.Metrics.InstanceName);
-        
+
         try
         {
             _redisOptions = config.ToRedisOptions();
-            
+
             // Initialize connection pool
             for (int i = 0; i < _poolSize; i++)
             {
@@ -63,7 +63,9 @@ public class RedisService : IRedisService, IDisposable
                     config.RetryCount,
                     retryAttempt =>
                     {
-                        var delay = TimeSpan.FromMilliseconds(Math.Pow(2, retryAttempt) * config.RetryBaseDelayMs);
+                        var delay = TimeSpan.FromMilliseconds(
+                            Math.Pow(2, retryAttempt) * config.RetryBaseDelayMs
+                        );
                         _logger.Debug(
                             "Retry {RetryAttempt}/{MaxRetries} after {Delay}ms",
                             retryAttempt,
@@ -114,7 +116,10 @@ public class RedisService : IRedisService, IDisposable
             if (sender is ConnectionMultiplexer multiplexer)
             {
                 var endpoint = multiplexer.Configuration.Split(',')[0];
-                _metrics.UpdateConnectionCount(endpoint, (int)multiplexer.GetCounters().TotalOutstanding);
+                _metrics.UpdateConnectionCount(
+                    endpoint,
+                    (int)multiplexer.GetCounters().TotalOutstanding
+                );
             }
         };
 
@@ -124,7 +129,10 @@ public class RedisService : IRedisService, IDisposable
             if (sender is ConnectionMultiplexer multiplexer)
             {
                 var endpoint = multiplexer.Configuration.Split(',')[0];
-                _metrics.UpdateConnectionCount(endpoint, (int)multiplexer.GetCounters().TotalOutstanding);
+                _metrics.UpdateConnectionCount(
+                    endpoint,
+                    (int)multiplexer.GetCounters().TotalOutstanding
+                );
             }
         };
 
@@ -285,8 +293,7 @@ public class RedisService : IRedisService, IDisposable
 
     public RedisHealthCheck.ConnectionHealth GetEndpointHealth(string endpoint)
     {
-        return _healthCheck?.GetEndpointHealth(endpoint) 
-            ?? new RedisHealthCheck.ConnectionHealth();
+        return _healthCheck?.GetEndpointHealth(endpoint) ?? new RedisHealthCheck.ConnectionHealth();
     }
 
     private void LogThrottledWarning(string message)

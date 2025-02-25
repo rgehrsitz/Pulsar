@@ -49,7 +49,19 @@ namespace Pulsar.Compiler.Core
         public DependencyValidationResult ValidateDependencies(List<RuleDefinition> rules)
         {
             var result = new DependencyValidationResult { IsValid = true };
+
+            // Build a graph of rule dependencies
             var graph = BuildGraph(rules);
+
+            // Create a map of sensor outputs to rules
+            var sensorToRuleMap = new Dictionary<string, string>();
+            foreach (var rule in rules)
+            {
+                foreach (var action in rule.Actions.OfType<SetValueAction>())
+                {
+                    sensorToRuleMap[action.Key] = rule.Name;
+                }
+            }
 
             // Check for circular dependencies
             var cycles = FindCircularDependencies(graph);
@@ -83,8 +95,55 @@ namespace Pulsar.Compiler.Core
             // Calculate complexity scores
             result.RuleComplexityScores = CalculateRuleComplexity(rules, graph);
 
-            // Track temporal dependencies
-            result.TemporalDependencies = _temporalDependencies;
+            // Process temporal dependencies
+            var temporalDependencies = new Dictionary<string, HashSet<string>>();
+
+            foreach (var rule in rules)
+            {
+                // Process "All" conditions for temporal dependencies
+                if (rule.Conditions?.All != null)
+                {
+                    foreach (
+                        var condition in rule.Conditions.All.OfType<ThresholdOverTimeCondition>()
+                    )
+                    {
+                        if (!temporalDependencies.ContainsKey(rule.Name))
+                        {
+                            temporalDependencies[rule.Name] = new HashSet<string>();
+                        }
+                        temporalDependencies[rule.Name].Add(condition.Sensor);
+
+                        _logger.LogDebug(
+                            "Added temporal dependency: Rule {Rule} depends on sensor {Sensor}",
+                            rule.Name,
+                            condition.Sensor
+                        );
+                    }
+                }
+
+                // Process "Any" conditions for temporal dependencies
+                if (rule.Conditions?.Any != null)
+                {
+                    foreach (
+                        var condition in rule.Conditions.Any.OfType<ThresholdOverTimeCondition>()
+                    )
+                    {
+                        if (!temporalDependencies.ContainsKey(rule.Name))
+                        {
+                            temporalDependencies[rule.Name] = new HashSet<string>();
+                        }
+                        temporalDependencies[rule.Name].Add(condition.Sensor);
+
+                        _logger.LogDebug(
+                            "Added temporal dependency: Rule {Rule} depends on sensor {Sensor}",
+                            rule.Name,
+                            condition.Sensor
+                        );
+                    }
+                }
+            }
+
+            result.TemporalDependencies = temporalDependencies;
 
             return result;
         }
@@ -107,7 +166,18 @@ namespace Pulsar.Compiler.Core
         private Dictionary<string, HashSet<string>> BuildGraph(List<RuleDefinition> rules)
         {
             var graph = new Dictionary<string, HashSet<string>>();
+            var sensorToRuleMap = new Dictionary<string, string>();
 
+            // First, build a map of sensors to the rules that produce them
+            foreach (var rule in rules)
+            {
+                foreach (var action in rule.Actions.OfType<SetValueAction>())
+                {
+                    sensorToRuleMap[action.Key] = rule.Name;
+                }
+            }
+
+            // Then, build the dependency graph
             foreach (var rule in rules)
             {
                 if (!graph.ContainsKey(rule.Name))
@@ -115,24 +185,84 @@ namespace Pulsar.Compiler.Core
                     graph[rule.Name] = new HashSet<string>();
                 }
 
-                var dependencies = GetDependencies(rule, rules.ToDictionary(r => r.Name, r => r));
-                foreach (var dependency in dependencies)
+                // Check condition dependencies
+                if (rule.Conditions != null)
                 {
-                    if (!rules.Any(r => r.Name == dependency))
+                    // Process "All" conditions
+                    if (rule.Conditions.All != null)
                     {
-                        _logger.LogWarning(
-                            "Rule {RuleName} depends on non-existent rule {DependencyName}",
-                            rule.Name,
-                            dependency
-                        );
-                        continue;
+                        foreach (var condition in rule.Conditions.All)
+                        {
+                            AddConditionDependencies(condition, rule.Name, sensorToRuleMap, graph);
+                        }
                     }
 
-                    graph[rule.Name].Add(dependency);
+                    // Process "Any" conditions
+                    if (rule.Conditions.Any != null)
+                    {
+                        foreach (var condition in rule.Conditions.Any)
+                        {
+                            AddConditionDependencies(condition, rule.Name, sensorToRuleMap, graph);
+                        }
+                    }
                 }
             }
 
             return graph;
+        }
+
+        private void AddConditionDependencies(
+            ConditionDefinition condition,
+            string ruleName,
+            Dictionary<string, string> sensorToRuleMap,
+            Dictionary<string, HashSet<string>> graph
+        )
+        {
+            switch (condition)
+            {
+                case ComparisonCondition comparison:
+                    if (sensorToRuleMap.TryGetValue(comparison.Sensor, out var producerRule))
+                    {
+                        graph[ruleName].Add(producerRule);
+                        _logger.LogDebug(
+                            "Rule {RuleName} depends on rule {DependencyName} via sensor {Sensor}",
+                            ruleName,
+                            producerRule,
+                            comparison.Sensor
+                        );
+                    }
+                    break;
+
+                case ExpressionCondition expression:
+                    var sensors = ExtractSensorsFromExpression(expression.Expression);
+                    foreach (var sensor in sensors)
+                    {
+                        if (sensorToRuleMap.TryGetValue(sensor, out var producer))
+                        {
+                            graph[ruleName].Add(producer);
+                            _logger.LogDebug(
+                                "Rule {RuleName} depends on rule {DependencyName} via sensor {Sensor} in expression",
+                                ruleName,
+                                producer,
+                                sensor
+                            );
+                        }
+                    }
+                    break;
+
+                case ThresholdOverTimeCondition threshold:
+                    if (sensorToRuleMap.TryGetValue(threshold.Sensor, out var thresholdProducer))
+                    {
+                        graph[ruleName].Add(thresholdProducer);
+                        _logger.LogDebug(
+                            "Rule {RuleName} depends on rule {DependencyName} via temporal sensor {Sensor}",
+                            ruleName,
+                            thresholdProducer,
+                            threshold.Sensor
+                        );
+                    }
+                    break;
+            }
         }
 
         private List<List<string>> FindCircularDependencies(
@@ -162,10 +292,25 @@ namespace Pulsar.Compiler.Core
             List<List<string>> cycles
         )
         {
-            if (path.Contains(current))
+            // Added debug output for cycle detection
+            _logger.LogDebug(
+                "DetectCycle called: current={Current}, path={Path}",
+                current,
+                string.Join("->", path)
+            );
+            Console.WriteLine(
+                $"[DEBUG] DetectCycle: current={current} path={string.Join("->", path)}"
+            );
+
+            // Use a separate set for tracking the current path to detect cycles
+            var currentPath = new HashSet<string>(path);
+
+            if (currentPath.Contains(current))
             {
                 var cycleStart = path.IndexOf(current);
                 var cycle = path.Skip(cycleStart).Concat(new[] { current }).ToList();
+                _logger.LogError("Cycle found: {Cycle}", string.Join(" -> ", cycle));
+                Console.WriteLine($"[DEBUG] Cycle found: {string.Join(" -> ", cycle)}");
                 cycles.Add(cycle);
                 return;
             }
@@ -178,9 +323,12 @@ namespace Pulsar.Compiler.Core
             visited.Add(current);
             path.Add(current);
 
-            foreach (var dependency in graph[current])
+            if (graph.ContainsKey(current))
             {
-                DetectCycle(dependency, graph, visited, path, cycles);
+                foreach (var dependency in graph[current])
+                {
+                    DetectCycle(dependency, graph, visited, path, cycles);
+                }
             }
 
             path.RemoveAt(path.Count - 1);
@@ -215,23 +363,36 @@ namespace Pulsar.Compiler.Core
         {
             path.Add(current);
 
+            // Check if the current path exceeds the maximum depth
             if (path.Count > _maxDependencyDepth)
             {
-                deepChains.Add(path.ToList());
+                _logger.LogWarning(
+                    "Deep dependency chain detected: {Path}",
+                    string.Join(" -> ", path)
+                );
+                deepChains.Add(new List<string>(path)); // Create a copy of the path
             }
 
+            // Only continue if the current node is not already visited
             if (!visited.Contains(current))
             {
+                // Mark as visited for this path
                 visited.Add(current);
 
-                foreach (var dependency in graph[current])
+                // Process dependencies if they exist
+                if (graph.ContainsKey(current))
                 {
-                    FindLongPaths(dependency, graph, visited, path, deepChains);
+                    foreach (var dependency in graph[current])
+                    {
+                        FindLongPaths(dependency, graph, visited, path, deepChains);
+                    }
                 }
 
+                // Backtrack: remove from visited to allow this node in other paths
                 visited.Remove(current);
             }
 
+            // Backtrack: remove from current path
             path.RemoveAt(path.Count - 1);
         }
 
@@ -465,7 +626,29 @@ namespace Pulsar.Compiler.Core
 
                 case ThresholdOverTimeCondition threshold:
                     dependencies.Add(threshold.Sensor);
-                    _temporalDependencies[threshold.Sensor] = new HashSet<string>();
+
+                    // Track temporal dependencies properly
+                    if (!_temporalDependencies.ContainsKey(threshold.Sensor))
+                    {
+                        _temporalDependencies[threshold.Sensor] = new HashSet<string>();
+                    }
+
+                    // Find the rule that produces this sensor
+                    foreach (var rule in rules.Values)
+                    {
+                        foreach (var action in rule.Actions.OfType<SetValueAction>())
+                        {
+                            if (action.Key == threshold.Sensor)
+                            {
+                                _temporalDependencies[threshold.Sensor].Add(rule.Name);
+                                _logger.LogDebug(
+                                    "Added temporal dependency: {Sensor} depends on rule {Rule}",
+                                    threshold.Sensor,
+                                    rule.Name
+                                );
+                            }
+                        }
+                    }
                     break;
             }
 

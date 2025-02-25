@@ -3,10 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using YamlDotNet.Serialization;
 using StackExchange.Redis;
+using YamlDotNet.Serialization;
 
-namespace Pulsar.Runtime.Services
+namespace Beacon.Runtime.Services
 {
     public class RedisConfiguration
     {
@@ -69,7 +69,7 @@ namespace Pulsar.Runtime.Services
                 Password = Password,
                 Ssl = UseSsl,
                 AllowAdmin = AllowAdmin,
-                ReconnectRetryPolicy = new ExponentialRetry(RetryBaseDelayMs)
+                ReconnectRetryPolicy = new ExponentialRetry(RetryBaseDelayMs),
             };
 
             foreach (var endpoint in Endpoints)
@@ -86,12 +86,10 @@ namespace Pulsar.Runtime.Services
                 options.ServiceName = "PulsarRedisCluster";
             }
 
-            options.CommandMap = CommandMap.Create(new HashSet<string>
-            {
-                "SUBSCRIBE",
-                "UNSUBSCRIBE",
-                "PUBLISH"
-            }, false);
+            options.CommandMap = CommandMap.Create(
+                new HashSet<string> { "SUBSCRIBE", "UNSUBSCRIBE", "PUBLISH" },
+                false
+            );
 
             return options;
         }

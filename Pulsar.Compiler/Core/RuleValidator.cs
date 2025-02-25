@@ -4,13 +4,16 @@ using System;
 using System.Collections.Generic;
 using Pulsar.Compiler;
 using Pulsar.Compiler.Models;
-using Serilog;
+using Microsoft.Extensions.Logging; // For MS logging
+using Serilog; // For Serilog logging
+using Serilog.Extensions.Logging; // Added to enable AddSerilog extension
 
 namespace Pulsar.Compiler.Core
 {
     public static class RuleValidator
     {
-        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+        // Explicitly use Serilog.ILogger to avoid ambiguity
+        private static readonly Serilog.ILogger _logger = LoggingConfig.GetLogger();
 
         public static ValidationResult Validate(RuleDefinition rule)
         {
@@ -56,10 +59,12 @@ namespace Pulsar.Compiler.Core
                 }
 
                 // NEW: Validate for circular dependencies using DependencyAnalyzer
-                var analyzer = new DependencyAnalyzer();
+                // Create a Microsoft.Extensions.Logging logger from our Serilog logger
+                var loggerFactory = LoggerFactory.Create(builder => builder.AddSerilog(_logger));
+                var msLogger = loggerFactory.CreateLogger<DependencyAnalyzer>();
+                var analyzer = new DependencyAnalyzer(logger: msLogger);
                 var depResult = analyzer.ValidateDependencies(new List<RuleDefinition> { rule });
                 
-                // Added: Log dependency analysis result for debugging
                 _logger.Debug("Dependency analysis result for rule {RuleName}: IsValid={IsValid}, Cycles={Cycles}",
                     rule.Name,
                     depResult.IsValid,

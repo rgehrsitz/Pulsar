@@ -4,7 +4,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace Pulsar.Runtime.Interfaces
+namespace Beacon.Runtime.Interfaces
 {
     public interface IRuleCoordinator
     {
@@ -19,6 +19,9 @@ namespace Pulsar.Runtime.Interfaces
         /// <param name="inputs">Dictionary of sensor values</param>
         /// <param name="outputs">Dictionary of output values</param>
         /// <returns></returns>
-        Task EvaluateRulesAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs);
+        Task EvaluateRulesAsync(
+            Dictionary<string, object> inputs,
+            Dictionary<string, object> outputs
+        );
     }
 }

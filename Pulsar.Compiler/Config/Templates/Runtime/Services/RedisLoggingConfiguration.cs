@@ -5,13 +5,16 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Compact;
 
-namespace Pulsar.Runtime.Services
+namespace Beacon.Runtime.Services
 {
     public static class RedisLoggingConfiguration
     {
         private const string DefaultLogPath = "logs/redis/redis-{Date}.log";
 
-        public static ILogger ConfigureRedisLogger(RedisConfiguration config, string? logPath = null)
+        public static ILogger ConfigureRedisLogger(
+            RedisConfiguration config,
+            string? logPath = null
+        )
         {
             var loggerConfig = new LoggerConfiguration()
                 .MinimumLevel.Debug()
@@ -42,13 +45,13 @@ namespace Pulsar.Runtime.Services
             );
 
             // Add separate error log
-            loggerConfig.WriteTo.Logger(lc => lc
-                .Filter.ByIncludingOnly(e => e.Level >= LogEventLevel.Error)
-                .WriteTo.File(
-                    "logs/redis/errors/error-{Date}.log",
-                    rollingInterval: RollingInterval.Day,
-                    retainedFileCountLimit: 30
-                )
+            loggerConfig.WriteTo.Logger(lc =>
+                lc.Filter.ByIncludingOnly(e => e.Level >= LogEventLevel.Error)
+                    .WriteTo.File(
+                        "logs/redis/errors/error-{Date}.log",
+                        rollingInterval: RollingInterval.Day,
+                        retainedFileCountLimit: 30
+                    )
             );
 
             return loggerConfig.CreateLogger();
@@ -56,12 +59,7 @@ namespace Pulsar.Runtime.Services
 
         public static void EnsureLogDirectories()
         {
-            var directories = new[]
-            {
-                "logs/redis",
-                "logs/redis/metrics",
-                "logs/redis/errors"
-            };
+            var directories = new[] { "logs/redis", "logs/redis/metrics", "logs/redis/errors" };
 
             foreach (var dir in directories)
             {

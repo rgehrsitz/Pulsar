@@ -92,8 +92,139 @@ EndGlobal";
             GenerateProjectFile(Path.Combine(outputPath, "Generated.csproj"), buildConfig);
 
             // Copy Program.cs template
-            var programTemplate = File.ReadAllText("Pulsar.Compiler/Config/Templates/Program.cs");
-            File.WriteAllText(Path.Combine(outputPath, "Program.cs"), programTemplate);
+            CopyTemplateFile("Program.cs", outputPath);
+
+            // Copy RuntimeOrchestrator.cs template
+            CopyTemplateFile(
+                "Runtime/RuntimeOrchestrator.cs",
+                outputPath,
+                "RuntimeOrchestrator.cs"
+            );
+
+            // Copy other necessary template files
+            CopyTemplateFile("RuntimeConfig.cs", outputPath);
+
+            // Create directories for additional files
+            Directory.CreateDirectory(Path.Combine(outputPath, "Services"));
+            Directory.CreateDirectory(Path.Combine(outputPath, "Buffers"));
+
+            // Copy service templates
+            CopyTemplateFile(
+                "Runtime/Services/RedisConfiguration.cs",
+                outputPath,
+                "Services/RedisConfiguration.cs"
+            );
+            CopyTemplateFile(
+                "Runtime/Services/RedisService.cs",
+                outputPath,
+                "Services/RedisService.cs"
+            );
+            CopyTemplateFile(
+                "Runtime/Services/RedisMonitoring.cs",
+                outputPath,
+                "Services/RedisMonitoring.cs"
+            );
+
+            // Copy buffer templates
+            CopyTemplateFile(
+                "Runtime/Buffers/CircularBuffer.cs",
+                outputPath,
+                "Buffers/CircularBuffer.cs"
+            );
+            CopyTemplateFile(
+                "Runtime/Buffers/IDateTimeProvider.cs",
+                outputPath,
+                "Buffers/IDateTimeProvider.cs"
+            );
+            CopyTemplateFile(
+                "Runtime/Buffers/SystemDateTimeProvider.cs",
+                outputPath,
+                "Buffers/SystemDateTimeProvider.cs"
+            );
+        }
+
+        private void CopyTemplateFile(
+            string templateRelativePath,
+            string outputPath,
+            string? outputRelativePath = null
+        )
+        {
+            try
+            {
+                var templatePath = GetTemplatePath(templateRelativePath);
+                var destinationPath = Path.Combine(
+                    outputPath,
+                    outputRelativePath ?? Path.GetFileName(templateRelativePath)
+                );
+
+                // Create directory if it doesn't exist
+                Directory.CreateDirectory(Path.GetDirectoryName(destinationPath) ?? outputPath);
+
+                // Copy the template file
+                var templateContent = File.ReadAllText(templatePath);
+                File.WriteAllText(destinationPath, templateContent);
+            }
+            catch (FileNotFoundException ex)
+            {
+                // Log the error but continue - some templates might be optional
+                Console.Error.WriteLine(
+                    $"Warning: Could not find template file: {templateRelativePath}. {ex.Message}"
+                );
+            }
+        }
+
+        private string GetTemplatePath(string templateFileName)
+        {
+            // Try multiple possible locations for the template files
+            var possiblePaths = new[]
+            {
+                // Direct path from working directory
+                Path.Combine("Pulsar.Compiler", "Config", "Templates", templateFileName),
+                // Path relative to assembly location
+                Path.Combine(
+                    Path.GetDirectoryName(typeof(TemplateManager).Assembly.Location) ?? "",
+                    "Pulsar.Compiler",
+                    "Config",
+                    "Templates",
+                    templateFileName
+                ),
+                // Path relative to project root (go up from bin directory)
+                Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    "..",
+                    "..",
+                    "..",
+                    "Pulsar.Compiler",
+                    "Config",
+                    "Templates",
+                    templateFileName
+                ),
+                // Absolute path based on solution directory structure
+                Path.Combine(
+                    Directory.GetCurrentDirectory(),
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "Pulsar.Compiler",
+                    "Config",
+                    "Templates",
+                    templateFileName
+                ),
+            };
+
+            foreach (var path in possiblePaths)
+            {
+                var normalizedPath = Path.GetFullPath(path);
+                if (File.Exists(normalizedPath))
+                {
+                    return normalizedPath;
+                }
+            }
+
+            throw new FileNotFoundException(
+                $"Template file not found: {templateFileName}. Searched in: {string.Join(", ", possiblePaths)}"
+            );
         }
     }
 }

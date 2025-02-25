@@ -11,7 +11,7 @@ using Polly;
 using Polly.CircuitBreaker;
 using Serilog;
 
-namespace Pulsar.Runtime.Services
+namespace Beacon.Runtime.Services
 {
     public class RedisMetrics
     {

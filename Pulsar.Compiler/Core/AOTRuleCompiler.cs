@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
+using Pulsar.Compiler.Generation.Generators;
 using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Core
@@ -19,11 +20,17 @@ namespace Pulsar.Compiler.Core
     {
         private readonly ILogger<AOTRuleCompiler> _logger;
         private readonly CodeGenerator _codeGenerator;
+        private readonly RuleGroupGenerator _ruleGroupGenerator;
+        private readonly RuleCoordinatorGenerator _ruleCoordinatorGenerator;
+        private readonly MetadataGenerator _metadataGenerator;
 
         public AOTRuleCompiler(ILogger<AOTRuleCompiler>? logger = null)
         {
             _logger = logger ?? NullLogger<AOTRuleCompiler>.Instance;
             _codeGenerator = new CodeGenerator();
+            _ruleGroupGenerator = new RuleGroupGenerator();
+            _ruleCoordinatorGenerator = new RuleCoordinatorGenerator();
+            _metadataGenerator = new MetadataGenerator();
         }
 
         public CompilationResult Compile(RuleDefinition[] rules, CompilerOptions options)
@@ -76,7 +83,7 @@ namespace Pulsar.Compiler.Core
                 for (int i = 0; i < ruleGroups.Count; i++)
                 {
                     _logger.LogDebug("Generating code for rule group {GroupId}", i);
-                    var groupImplementation = _codeGenerator.GenerateGroupImplementation(
+                    var groupImplementation = _ruleGroupGenerator.GenerateGroupImplementation(
                         i,
                         ruleGroups[i],
                         stringLayerMap,
@@ -87,7 +94,7 @@ namespace Pulsar.Compiler.Core
                 }
 
                 // Generate rule coordinator
-                var coordinator = _codeGenerator.GenerateRuleCoordinator(
+                var coordinator = _ruleCoordinatorGenerator.GenerateRuleCoordinator(
                     ruleGroups,
                     stringLayerMap,
                     options.BuildConfig
@@ -96,7 +103,7 @@ namespace Pulsar.Compiler.Core
                 _logger.LogDebug("Generated rule coordinator");
 
                 // Generate metadata file
-                var metadata = _codeGenerator.GenerateMetadataFile(
+                var metadata = _metadataGenerator.GenerateMetadataFile(
                     sortedRules,
                     stringLayerMap,
                     options.BuildConfig

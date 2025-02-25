@@ -4,12 +4,12 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Beacon.Runtime.Buffers;
+using Beacon.Runtime.Interfaces;
+using Beacon.Runtime.Services;
 using Microsoft.Extensions.Logging;
-using Pulsar.Runtime.Buffers;
-using Pulsar.Runtime.Services;
-using Pulsar.Runtime.Interfaces;
 
-namespace Pulsar.Runtime.Rules
+namespace Beacon.Runtime.Rules
 {
     public abstract class TemplateRuleCoordinator : IRuleCoordinator
     {
@@ -21,11 +21,13 @@ namespace Pulsar.Runtime.Rules
         public TemplateRuleCoordinator(
             IRedisService redis,
             ILogger logger,
-            RingBufferManager bufferManager)
+            RingBufferManager bufferManager
+        )
         {
             _redis = redis ?? throw new ArgumentNullException(nameof(redis));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));
+            _bufferManager =
+                bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));
             _ruleGroups = new List<IRuleGroup>();
 
             InitializeRuleGroups();
@@ -33,7 +35,10 @@ namespace Pulsar.Runtime.Rules
 
         public string[] RequiredSensors => GetRequiredSensors();
 
-        public async Task EvaluateRulesAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs)
+        public async Task EvaluateRulesAsync(
+            Dictionary<string, object> inputs,
+            Dictionary<string, object> outputs
+        )
         {
             foreach (var group in _ruleGroups)
             {
