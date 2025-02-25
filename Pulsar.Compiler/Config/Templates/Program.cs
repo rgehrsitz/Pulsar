@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using Beacon.Runtime.Services;
 using Microsoft.Extensions.Logging;
-using Pulsar.Runtime.Services;
 using Serilog;
 
 namespace Generated

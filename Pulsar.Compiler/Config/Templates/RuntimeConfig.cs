@@ -5,11 +5,11 @@ using System;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Pulsar.Runtime.Services;
+using Beacon.Runtime.Services;
 using Serilog.Events;
 using YamlDotNet.Serialization;
 
-namespace Pulsar.Runtime.Rules
+namespace Beacon.Runtime.Rules
 {
     public class RuntimeConfig
     {

@@ -1,15 +1,20 @@
 // File: Pulsar.Compiler/Config/Templates/Runtime/Services/RedisService.cs
 
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Generated;
 using NRedisStack;
 using NRedisStack.RedisStackCommands;
 using Polly;
 using Polly.Retry;
-using Pulsar.Compiler;
 using Serilog;
 using StackExchange.Redis;
 
-namespace Beacon.Runtime.Services;
+namespace Generated.Services;
 
 public interface IRedisService
 {

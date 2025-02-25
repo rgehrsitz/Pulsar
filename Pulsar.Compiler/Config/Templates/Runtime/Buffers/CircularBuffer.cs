@@ -5,10 +5,10 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using Pulsar.Compiler;
+using Generated;
 using Serilog;
 
-namespace Beacon.Runtime.Buffers;
+namespace Generated.Buffers;
 
 /// <summary>
 /// Represents a single value with its timestamp

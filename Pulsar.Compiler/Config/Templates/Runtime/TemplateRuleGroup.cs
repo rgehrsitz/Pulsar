@@ -4,12 +4,12 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Beacon.Runtime.Buffers;
+using Beacon.Runtime.Interfaces;
+using Beacon.Runtime.Services;
 using Microsoft.Extensions.Logging;
-using Pulsar.Runtime.Buffers;
-using Pulsar.Runtime.Services;
-using Pulsar.Runtime.Interfaces;
 
-namespace Pulsar.Runtime.Rules
+namespace Beacon.Runtime.Rules
 {
     public abstract class TemplateRuleGroup : IRuleGroup
     {
@@ -20,16 +20,21 @@ namespace Pulsar.Runtime.Rules
         protected TemplateRuleGroup(
             IRedisService redis,
             ILogger logger,
-            RingBufferManager bufferManager)
+            RingBufferManager bufferManager
+        )
         {
             _redis = redis ?? throw new ArgumentNullException(nameof(redis));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));
+            _bufferManager =
+                bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));
         }
 
         public abstract string[] RequiredSensors { get; }
 
-        public async Task EvaluateRulesAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs)
+        public async Task EvaluateRulesAsync(
+            Dictionary<string, object> inputs,
+            Dictionary<string, object> outputs
+        )
         {
             try
             {
@@ -61,19 +66,49 @@ namespace Pulsar.Runtime.Rules
             }
         }
 
-        protected abstract Task EvaluateRulesInternalAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs);
+        protected abstract Task EvaluateRulesInternalAsync(
+            Dictionary<string, object> inputs,
+            Dictionary<string, object> outputs
+        );
 
-        protected bool CheckThreshold(string sensor, double threshold, TimeSpan duration, string comparisonOperator)
+        protected bool CheckThreshold(
+            string sensor,
+            double threshold,
+            TimeSpan duration,
+            string comparisonOperator
+        )
         {
             return comparisonOperator switch
             {
-                ">" or ">=" => _bufferManager.IsAboveThresholdForDuration(sensor, threshold, duration),
-                "<" or "<=" => _bufferManager.IsBelowThresholdForDuration(sensor, threshold, duration),
-                "==" => _bufferManager.IsAboveThresholdForDuration(sensor, threshold, duration) && 
-                       !_bufferManager.IsAboveThresholdForDuration(sensor, threshold + 0.000001, duration),
-                "!=" => _bufferManager.IsAboveThresholdForDuration(sensor, threshold + 0.000001, duration) ||
-                       _bufferManager.IsBelowThresholdForDuration(sensor, threshold - 0.000001, duration),
-                _ => throw new ArgumentException($"Unknown comparison operator: {comparisonOperator}")
+                ">" or ">=" => _bufferManager.IsAboveThresholdForDuration(
+                    sensor,
+                    threshold,
+                    duration
+                ),
+                "<" or "<=" => _bufferManager.IsBelowThresholdForDuration(
+                    sensor,
+                    threshold,
+                    duration
+                ),
+                "==" => _bufferManager.IsAboveThresholdForDuration(sensor, threshold, duration)
+                    && !_bufferManager.IsAboveThresholdForDuration(
+                        sensor,
+                        threshold + 0.000001,
+                        duration
+                    ),
+                "!=" => _bufferManager.IsAboveThresholdForDuration(
+                    sensor,
+                    threshold + 0.000001,
+                    duration
+                )
+                    || _bufferManager.IsBelowThresholdForDuration(
+                        sensor,
+                        threshold - 0.000001,
+                        duration
+                    ),
+                _ => throw new ArgumentException(
+                    $"Unknown comparison operator: {comparisonOperator}"
+                ),
             };
         }
     }

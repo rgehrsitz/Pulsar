@@ -1,6 +1,8 @@
 // File: Pulsar.Compiler/Config/Templates/Runtime/Buffers/IDateTimeProvider.cs
 
-namespace Beacon.Runtime.Buffers
+using System;
+
+namespace Generated.Buffers
 {
     public interface IDateTimeProvider
     {
