@@ -50,20 +50,42 @@ EndGlobal";
             sb.AppendLine("    <ImplicitUsings>enable</ImplicitUsings>");
             sb.AppendLine("    <Nullable>enable</Nullable>");
             sb.AppendLine("    <OutputType>Exe</OutputType>");
+            
+            // Always add AOT compatibility properties
+            sb.AppendLine("    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>");
+            sb.AppendLine("    <IsTrimmable>true</IsTrimmable>");
+            sb.AppendLine("    <TrimmerSingleWarn>false</TrimmerSingleWarn>");
+            
             if (buildConfig.StandaloneExecutable)
             {
                 sb.AppendLine("    <PublishSingleFile>true</PublishSingleFile>");
                 sb.AppendLine("    <SelfContained>true</SelfContained>");
                 sb.AppendLine($"    <RuntimeIdentifier>{buildConfig.Target}</RuntimeIdentifier>");
             }
+            
             if (buildConfig.OptimizeOutput)
             {
                 sb.AppendLine("    <PublishReadyToRun>true</PublishReadyToRun>");
                 sb.AppendLine("    <PublishTrimmed>true</PublishTrimmed>");
                 sb.AppendLine("    <TrimMode>link</TrimMode>");
+                sb.AppendLine("    <TrimmerRemoveSymbols>true</TrimmerRemoveSymbols>");
+                sb.AppendLine("    <DebuggerSupport>false</DebuggerSupport>");
+                sb.AppendLine("    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>");
+                sb.AppendLine("    <EnableUnsafeUTF7Encoding>false</EnableUnsafeUTF7Encoding>");
+                sb.AppendLine("    <InvariantGlobalization>true</InvariantGlobalization>");
+                sb.AppendLine("    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>");
             }
+            
             sb.AppendLine("  </PropertyGroup>");
             sb.AppendLine();
+            
+            // Add trimming configuration
+            sb.AppendLine("  <ItemGroup>");
+            sb.AppendLine("    <TrimmerRootDescriptor Include=\"trimming.xml\" />");
+            sb.AppendLine("  </ItemGroup>");
+            sb.AppendLine();
+            
+            // Add package references
             sb.AppendLine("  <ItemGroup>");
             sb.AppendLine(
                 "    <PackageReference Include=\"Microsoft.Extensions.Logging\" Version=\"8.0.0\" />"
@@ -166,6 +188,13 @@ EndGlobal";
                 "Runtime/Buffers/SystemDateTimeProvider.cs",
                 outputPath,
                 "Buffers/SystemDateTimeProvider.cs"
+            );
+
+            // Copy trimming.xml file for AOT compatibility
+            CopyTemplateFile(
+                "trimming.xml",
+                outputPath,
+                "trimming.xml"
             );
         }
 

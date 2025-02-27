@@ -84,6 +84,11 @@ namespace Pulsar.Compiler.Generation
             var embeddedConfig = GenerateEmbeddedConfig(buildConfig);
             embeddedConfig.Namespace = buildConfig.Namespace;
             generatedFiles.Add(embeddedConfig);
+            
+            // Generate Program.cs with AOT compatibility attributes
+            var programFile = GenerateProgramFile(buildConfig);
+            programFile.Namespace = buildConfig.Namespace;
+            generatedFiles.Add(programFile);
 
             return generatedFiles;
         }
@@ -225,6 +230,156 @@ namespace Pulsar.Compiler.Generation
             {
                 FileName = System.IO.Path.Combine(buildConfig.OutputPath, "EmbeddedConfig.cs"),
                 Content = content,
+            };
+        }
+        
+        public GeneratedFileInfo GenerateProgramFile(BuildConfig buildConfig)
+        {
+            var sb = new StringBuilder();
+            
+            // Add file header 
+            sb.AppendLine("// Auto-generated Program.cs");
+            sb.AppendLine("// Generated: " + DateTime.UtcNow.ToString("O"));
+            sb.AppendLine("// This file contains the main entry point and AOT compatibility attributes");
+            sb.AppendLine();
+            
+            // Add AOT compatibility attributes
+            sb.Append(CodeGenHelpers.GenerateAOTAttributes(buildConfig.Namespace));
+            sb.AppendLine();
+            
+            // Add standard using statements
+            sb.AppendLine("using System;");
+            sb.AppendLine("using System.IO;");
+            sb.AppendLine("using System.Threading;");
+            sb.AppendLine("using System.Threading.Tasks;");
+            sb.AppendLine("using Microsoft.Extensions.Logging;");
+            sb.AppendLine("using Serilog;");
+            sb.AppendLine($"using {buildConfig.Namespace}.Buffers;");
+            sb.AppendLine($"using {buildConfig.Namespace}.Services;");
+            sb.AppendLine($"using {buildConfig.Namespace}.Interfaces;");
+            sb.AppendLine();
+            
+            // Add namespace and class declaration
+            sb.AppendLine($"namespace {buildConfig.Namespace}");
+            sb.AppendLine("{");
+            sb.AppendLine("    public class Program");
+            sb.AppendLine("    {");
+            
+            // Add main method
+            sb.AppendLine("        public static async Task Main(string[] args)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            // Configure Serilog");
+            sb.AppendLine("            var logger = ConfigureLogging();");
+            sb.AppendLine("            logger.Information(\"Starting Beacon Runtime Engine\");");
+            sb.AppendLine();
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine("                // Load configuration");
+            sb.AppendLine("                var config = RuntimeConfig.LoadFromJson(EmbeddedConfig.SystemConfigJson);");
+            sb.AppendLine("                logger.Information(\"Loaded configuration with {SensorCount} sensors\", config.ValidSensors.Count);");
+            sb.AppendLine();
+            sb.AppendLine("                // Initialize Redis service");
+            sb.AppendLine("                var redisConfig = new RedisConfiguration");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    Endpoints = config.Redis.Endpoints,");
+            sb.AppendLine("                    PoolSize = config.Redis.PoolSize,");
+            sb.AppendLine("                    RetryCount = config.Redis.RetryCount,");
+            sb.AppendLine("                    RetryBaseDelayMs = config.Redis.RetryBaseDelayMs,");
+            sb.AppendLine("                    ConnectTimeoutMs = config.Redis.ConnectTimeoutMs,");
+            sb.AppendLine("                    SyncTimeoutMs = config.Redis.SyncTimeoutMs");
+            sb.AppendLine("                };");
+            sb.AppendLine();
+            sb.AppendLine("                // Create buffer manager for temporal rules");
+            sb.AppendLine("                var bufferManager = new RingBufferManager(config.BufferCapacity);");
+            sb.AppendLine();
+            sb.AppendLine("                // Initialize runtime orchestrator");
+            sb.AppendLine("                using var redisService = new RedisService(redisConfig);");
+            sb.AppendLine("                var orchestrator = new RuntimeOrchestrator(redisService, logger, bufferManager);");
+            sb.AppendLine();
+            sb.AppendLine("                // Run the main cycle loop");
+            sb.AppendLine("                await RunCycleLoop(orchestrator, config.CycleTime, logger);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            catch (Exception ex)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                logger.Error(ex, \"Fatal error in Beacon Runtime Engine\");");
+            sb.AppendLine("                Environment.ExitCode = 1;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally");
+            sb.AppendLine("            {");
+            sb.AppendLine("                Log.CloseAndFlush();");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            
+            // Add helper methods
+            sb.AppendLine("        private static ILogger ConfigureLogging()");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var logConfig = new LoggerConfiguration()");
+            sb.AppendLine("                .MinimumLevel.Information()");
+            sb.AppendLine("                .Enrich.WithThreadId()");
+            sb.AppendLine("                .WriteTo.Console()");
+            sb.AppendLine("                .WriteTo.File(");
+            sb.AppendLine("                    Path.Combine(\"logs\", \"beacon-.log\"),");
+            sb.AppendLine("                    rollingInterval: RollingInterval.Day,");
+            sb.AppendLine("                    retainedFileCountLimit: 7");
+            sb.AppendLine("                );");
+            sb.AppendLine();
+            sb.AppendLine("            var logger = logConfig.CreateLogger();");
+            sb.AppendLine("            Log.Logger = logger;");
+            sb.AppendLine("            return logger;");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            
+            sb.AppendLine("        private static async Task RunCycleLoop(RuntimeOrchestrator orchestrator, int cycleTimeMs, ILogger logger)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var cancelSource = new CancellationTokenSource();");
+            sb.AppendLine("            Console.CancelKeyPress += (s, e) =>");
+            sb.AppendLine("            {");
+            sb.AppendLine("                logger.Information(\"Shutdown requested\");");
+            sb.AppendLine("                cancelSource.Cancel();");
+            sb.AppendLine("                e.Cancel = true;");
+            sb.AppendLine("            };");
+            sb.AppendLine();
+            sb.AppendLine("            logger.Information(\"Starting rule execution cycle loop with interval {CycleTimeMs}ms\", cycleTimeMs);");
+            sb.AppendLine("            var cycleCount = 0;");
+            sb.AppendLine();
+            sb.AppendLine("            while (!cancelSource.Token.IsCancellationRequested)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var cycleStart = DateTime.UtcNow;");
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    await orchestrator.RunCycleAsync();");
+            sb.AppendLine("                    cycleCount++;");
+            sb.AppendLine();
+            sb.AppendLine("                    if (cycleCount % 1000 == 0)");
+            sb.AppendLine("                    {");
+            sb.AppendLine("                        logger.Information(\"Completed {CycleCount} execution cycles\", cycleCount);");
+            sb.AppendLine("                    }");
+            sb.AppendLine("                }");
+            sb.AppendLine("                catch (Exception ex)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    logger.Error(ex, \"Error in execution cycle {CycleCount}\", cycleCount);");
+            sb.AppendLine("                }");
+            sb.AppendLine();
+            sb.AppendLine("                // Calculate time to wait until next cycle");
+            sb.AppendLine("                var cycleTime = DateTime.UtcNow - cycleStart;");
+            sb.AppendLine("                var delayMs = Math.Max(0, cycleTimeMs - (int)cycleTime.TotalMilliseconds);");
+            sb.AppendLine("                if (delayMs > 0)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    await Task.Delay(delayMs, cancelSource.Token);");
+            sb.AppendLine("                }");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            logger.Information(\"Execution cycle loop stopped after {CycleCount} cycles\", cycleCount);");
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+            
+            return new Pulsar.Compiler.Models.GeneratedFileInfo
+            {
+                FileName = "Program.cs",
+                Content = sb.ToString(),
+                Namespace = buildConfig.Namespace
             };
         }
 

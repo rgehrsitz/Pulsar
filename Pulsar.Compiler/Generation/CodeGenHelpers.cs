@@ -16,6 +16,43 @@ namespace Pulsar.Compiler.Generation
     public static class CodeGenHelpers
     {
         private static readonly ILogger _logger = LoggingConfig.GetLogger();
+        
+        /// <summary>
+        /// Generates AOT compatibility attributes for the assembly
+        /// </summary>
+        public static string GenerateAOTAttributes(string namespace1)
+        {
+            var sb = new StringBuilder();
+            
+            // Add standard using directives needed for AOT
+            sb.AppendLine("using System;");
+            sb.AppendLine("using System.Diagnostics.CodeAnalysis;");
+            sb.AppendLine("using System.Runtime.CompilerServices;");
+            sb.AppendLine();
+            
+            // Add attributes to preserve Redis types
+            sb.AppendLine("[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(StackExchange.Redis.ConnectionMultiplexer))]");
+            sb.AppendLine("[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(StackExchange.Redis.IDatabase))]");
+            sb.AppendLine("[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(StackExchange.Redis.HashEntry))]");
+            
+            // Add attributes to preserve buffer types for temporal rules
+            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({namespace1}.Buffers.RingBufferManager))]");
+            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({namespace1}.Buffers.CircularBuffer))]");
+            
+            // Add attributes to preserve rule interfaces
+            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({namespace1}.Interfaces.IRuleCoordinator))]");
+            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({namespace1}.Interfaces.IRuleGroup))]");
+            
+            // Add attributes to preserve metrics types
+            sb.AppendLine("[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Prometheus.Metrics))]");
+            sb.AppendLine("[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Prometheus.Counter))]");
+            sb.AppendLine("[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Prometheus.Histogram))]");
+            
+            // Add attributes to preserve service types
+            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({namespace1}.Services.RedisService))]");
+            
+            return sb.ToString();
+        }
 
         /// <summary>
         /// Generates a standard file header comment including the file name and UTC generation timestamp.
