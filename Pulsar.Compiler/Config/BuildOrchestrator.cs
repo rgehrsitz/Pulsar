@@ -79,18 +79,24 @@ namespace Pulsar.Compiler.Config
                 _logger.Information("Starting async build for project: {ProjectName}", config.ProjectName);
 
                 // Ensure output directory exists
-                Directory.CreateDirectory(config.OutputDirectory);
+                var outputDir = config.OutputDirectory ?? config.OutputPath;
+                if (string.IsNullOrEmpty(outputDir))
+                {
+                    throw new ArgumentException("Output directory is not specified in the configuration");
+                }
+                
+                Directory.CreateDirectory(outputDir);
 
                 var result = new BuildResult
                 {
                     Success = true,
-                    OutputPath = config.OutputDirectory,
+                    OutputPath = outputDir,
                     Metrics = new RuleMetrics()
                 };
 
                 // Copy templates to output directory
-                _logger.Information("Copying templates to output directory: {OutputDir}", config.OutputDirectory);
-                _templateManager.CopyTemplates(config.OutputDirectory);
+                _logger.Information("Copying templates to output directory: {OutputDir}", outputDir);
+                _templateManager.CopyTemplates(outputDir);
 
                 // Generate runtime files
                 var compilerOptions = new CompilerOptions { BuildConfig = config };
@@ -105,8 +111,8 @@ namespace Pulsar.Compiler.Config
                 }
 
                 // Build the project using dotnet CLI
-                _logger.Information("Building project at {OutputDir}", config.OutputDirectory);
-                var projectPath = Path.Combine(config.OutputDirectory, $"{config.AssemblyName}.csproj");
+                _logger.Information("Building project at {OutputDir}", outputDir);
+                var projectPath = Path.Combine(outputDir, $"{config.AssemblyName}.csproj");
 
                 if (!File.Exists(projectPath))
                 {

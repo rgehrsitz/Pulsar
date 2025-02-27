@@ -1,3 +1,4 @@
+# File: Pulsar.Tests/RuntimeValidation/test-output/simpleRule.yaml
 rules:
   - name: 'SimpleTestRule'
     description: 'Simple rule that adds two values'

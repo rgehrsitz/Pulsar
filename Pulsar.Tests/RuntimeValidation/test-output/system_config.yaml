@@ -1,3 +1,4 @@
+# File: Pulsar.Tests/RuntimeValidation/test-output/system_config.yaml
 version: 1
 validSensors:
   - input:a

@@ -1,3 +1,4 @@
+# File: Pulsar.Tests/RuntimeValidation/TestRules/minimal-rule.yaml
 rules:
   - name: "MinimalTestRule"
     description: "Simple test rule for runtime validation"

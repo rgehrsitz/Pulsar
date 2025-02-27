@@ -1,3 +1,4 @@
+# File: TestOutput/debug-rules/simple-rule.yaml
 rules:
   - name: "TestRule"
     description: "Simple test rule that copies input to output"

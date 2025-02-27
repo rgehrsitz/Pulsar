@@ -1,3 +1,4 @@
+# File: TestOutput/debug-config/system_config.yaml
 version: 1
 validSensors:
   - input:a
