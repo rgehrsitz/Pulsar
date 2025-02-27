@@ -1,4 +1,4 @@
-// File: Pulse.Compiler/Core/AOTRuleCompiler.cs
+// File: Pulsar.Compiler/Core/AOTRuleCompiler.cs
 
 using System;
 using System.Collections.Generic;

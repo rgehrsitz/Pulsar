@@ -1,3 +1,4 @@
+// File: Pulsar.Compiler/Stubs/RuntimeServicesStubs.cs
 namespace Pulsar.Runtime.Services
 {
     // Minimal stub definitions for the Services namespace required by the compiler.

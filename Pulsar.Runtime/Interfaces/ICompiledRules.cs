@@ -1,3 +1,4 @@
+// File: Pulsar.Runtime/Interfaces/ICompiledRules.cs
 using System.Collections.Generic;
 
 namespace Beacon.Runtime.Interfaces

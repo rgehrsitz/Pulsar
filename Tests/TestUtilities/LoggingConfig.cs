@@ -1,3 +1,4 @@
+// File: Tests/TestUtilities/LoggingConfig.cs
 using Serilog;
 using Serilog.Debugging;
 using System.Diagnostics;

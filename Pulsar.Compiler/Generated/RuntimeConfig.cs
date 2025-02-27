@@ -1,3 +1,4 @@
+// File: Pulsar.Compiler/Generated/RuntimeConfig.cs
 using System;
 // Generated code - do not modify directly
 // Generated at: 2025-02-09 23:26:45 UTC

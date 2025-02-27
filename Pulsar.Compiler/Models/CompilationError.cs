@@ -1,3 +1,4 @@
+// File: Pulsar.Compiler/Models/CompilationError.cs
 using System;
 
 namespace Pulsar.Compiler.Models

@@ -1,3 +1,4 @@
+// File: Pulsar.Compiler/Config/Templates/Program.cs
 using System;
 using System.Threading.Tasks;
 using Beacon.Runtime.Services;

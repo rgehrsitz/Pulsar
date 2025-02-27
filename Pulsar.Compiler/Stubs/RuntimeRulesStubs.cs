@@ -1,3 +1,4 @@
+// File: Pulsar.Compiler/Stubs/RuntimeRulesStubs.cs
 namespace Pulsar.Runtime.Rules
 {
     // Minimal stub for the Rules namespace required by the compiler.

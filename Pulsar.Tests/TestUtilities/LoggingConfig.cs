@@ -1,3 +1,4 @@
+// File: Pulsar.Tests/TestUtilities/LoggingConfig.cs
 using Serilog;
 
 namespace Pulsar.Tests.TestUtilities

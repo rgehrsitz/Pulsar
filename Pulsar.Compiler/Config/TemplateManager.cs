@@ -1,3 +1,4 @@
+// File: Pulsar.Compiler/Config/TemplateManager.cs
 using System;
 using System.IO;
 using System.Text;

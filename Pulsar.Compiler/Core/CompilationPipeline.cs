@@ -1,4 +1,4 @@
-// File: Pulse.Compiler/Core/CompilationPipeline.cs
+// File: Pulsar.Compiler/Core/CompilationPipeline.cs
 
 using System;
 using System.Collections.Generic;
