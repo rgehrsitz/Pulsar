@@ -1,7 +1,7 @@
-# File: TestData/sample-rules.yaml
+# File: TestData/debug-rule.yaml
 rules:
-  - name: "TestRule"
-    description: "Simple test rule that copies input to output"
+  - name: "DebugRule"
+    description: "Simple rule for debugging"
     conditions:
       all:
         - condition:
@@ -12,4 +12,4 @@ rules:
     actions:
       - set_value:
           key: 'output:sum'
-          value_expression: 'input:a'
+          value_expression: 'input:a + input:b'

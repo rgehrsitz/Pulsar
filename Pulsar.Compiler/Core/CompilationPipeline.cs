@@ -53,6 +53,31 @@ namespace Pulsar.Compiler.Core
                 return new CompilationResult { Success = false, Errors = new List<string> { ex.Message } };
             }
         }
+        
+        public CompilationResult ProcessRules(List<RuleDefinition> rules, CompilerOptions options)
+        {
+            try
+            {
+                _logger.Information("Starting rule compilation pipeline for {Count} predefined rules", rules.Count);
+
+                var result = _compiler.Compile(rules.ToArray(), options);
+                if (result.Success)
+                {
+                    _logger.Information("Successfully compiled {Count} rules", rules.Count);
+                }
+                else
+                {
+                    _logger.Error("Rule compilation failed with {Count} errors", result.Errors.Count);
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error in compilation pipeline");
+                return new CompilationResult { Success = false, Errors = new List<string> { ex.Message } };
+            }
+        }
 
         private List<RuleDefinition> LoadRulesFromPaths(string rulesPath, List<string> validSensors)
         {

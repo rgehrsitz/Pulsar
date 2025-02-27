@@ -29,6 +29,12 @@ namespace Pulsar.Compiler.Models
 
         [YamlMember(Alias = "bufferCapacity")]
         public int BufferCapacity { get; set; } = 100;
+        
+        [YamlMember(Alias = "logLevel")]
+        public string LogLevel { get; set; } = "Information";
+        
+        [YamlMember(Alias = "logFile")]
+        public string LogFile { get; set; } = "logs/pulsar.log";
 
         public static SystemConfig Load(string path)
         {

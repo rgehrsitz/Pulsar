@@ -12,8 +12,13 @@ namespace Pulsar.Compiler.Config
         public string OutputDirectory => OutputPath; // new alias for backward compatibility
         public required string Target { get; set; }
         public required string ProjectName { get; set; }
+        public string AssemblyName { get; set; } // Added for AOT compilation
         public required string TargetFramework { get; set; }
         public required string RulesPath { get; set; } = string.Empty;
+        
+        // Added for handling list of rule definitions directly
+        public List<RuleDefinition> RuleDefinitions { get; set; } = new List<RuleDefinition>();
+        public SystemConfig? SystemConfig { get; set; }
 
         public string Namespace { get; set; } = "Generated";
         public bool Parallel { get; set; } = true;
@@ -30,6 +35,12 @@ namespace Pulsar.Compiler.Config
         public int BufferCapacity { get; set; } = 100;
         public string AdditionalUsings { get; set; } = "";
         public int MaxLinesPerFile { get; set; } = 1000;
+        
+        public BuildConfig()
+        {
+            // Default constructor
+            AssemblyName = "Runtime";
+        }
     }
 
     public class BuildResult

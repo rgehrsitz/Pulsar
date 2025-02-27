@@ -4,49 +4,80 @@ This directory contains test infrastructure for validating the runtime execution
 
 ## Current Status
 
-The test infrastructure is partially implemented but not yet fully working. We're encountering issues with the code generation and compilation process that need to be addressed.
+The test infrastructure has been implemented and is ready for testing. We've addressed several issues with the code generation and compilation process to make the tests more reliable.
 
-Key issues:
-1. When trying to run the full Beacon runtime validation tests, there appear to be problems with the project file generation.
-2. The compiled Beacon code needs to be properly tested in a controlled environment with proper Redis integration.
-3. We've implemented a placeholder test to confirm that the test infrastructure itself is working.
+## Test Categories
 
-## Test Infrastructure Design
+The test suite is organized into three main categories:
 
-The test infrastructure is designed to:
+### 1. Real Rule Execution Tests
 
-1. **Generate Rules**: Create test rule files with varying complexity
-2. **Compile Rules**: Use Pulsar compiler to generate C# code
-3. **Build Runtime**: Compile the generated code with actual AOT settings
-4. **Execute Rules**: Run the compiled code against a test Redis instance
-5. **Verify Outputs**: Confirm rules execute as expected
-6. **Measure Performance**: Track execution times and memory usage
+These tests validate that rules compile correctly and produce the expected outputs when executed:
 
-## Next Steps
+- **SimpleRule_ValidInput_SetsOutput**: Tests a basic rule that performs simple arithmetic
+- **ComplexRule_ValidInput_SetsOutput**: Tests a rule with complex nested conditions
+- **DebugRule_FromTestData_Executes**: Uses a minimal debug rule to verify the pipeline works
 
-To complete the runtime validation tests:
+### 2. Performance Benchmark Tests
 
-1. Debug the project generation and build process to ensure proper project structure
-2. Fix any issues with the generated project build failures
-3. Update the testing of the generated and compiled Beacon code
-4. Implement comprehensive performance benchmarks for real rule execution
-5. Add memory leak detection through extended execution cycles
-6. Enhance concurrency testing with multiple rule execution threads
+These tests measure the performance characteristics of the rule engine:
 
-## Benefits
+- **Benchmark_IncreasingRuleCount_MeasuresScalability**: Tests how performance scales with the number of rules
+- **Benchmark_IncreasingRuleComplexity_MeasuresPerformanceImpact**: Tests how performance is affected by rule complexity
+- **Benchmark_ConcurrentRuleExecution_MeasuresThroughput**: Tests the throughput under concurrent execution
 
-Once implemented, this testing approach will:
+### 3. Memory Usage Tests
 
-1. Validate that the Pulsar compiler generates correct, compilable code
-2. Ensure runtime performance meets expectations under various rule loads
-3. Detect memory leaks or performance degradation during extended operation
-4. Verify proper Redis integration with real data flows
-5. Provide benchmarks for different rule complexity and concurrency levels
+These tests monitor memory consumption during extended rule execution:
+
+- **ExtendedExecution_MonitorsMemoryUsage**: Runs rules over a long period to detect memory leaks
+- **HighInputChurn_MonitorsMemoryStability**: Tests memory stability with rapidly changing inputs
+- **CircularBuffer_VerifiesNoMemoryLeak**: Specifically tests the circular buffer implementation for leaks
+
+## Architecture
+
+The tests use a `RuntimeValidationFixture` which:
+
+1. Spins up a Redis container for testing
+2. Dynamically generates rule YAML files with different characteristics
+3. Compiles these rules into a .NET assembly using the Pulsar compiler
+4. Loads the assembly dynamically for testing
+5. Executes rules and analyzes the results
 
 ## Usage
 
-Currently, you can run the basic infrastructure test with:
+Run all runtime validation tests:
 
 ```bash
-dotnet test --filter "FullyQualifiedName~Pulsar.Tests.RuntimeValidation.RealRuleExecutionTests"
+dotnet test --filter "Category=RuntimeValidation"
 ```
+
+Run memory tests:
+
+```bash
+dotnet test --filter "Category=MemoryUsage"
+```
+
+Run a specific test:
+
+```bash
+dotnet test --filter "FullyQualifiedName=Pulsar.Tests.RuntimeValidation.RealRuleExecutionTests.DebugRule_FromTestData_Executes"
+```
+
+## Debugging Tips
+
+If tests are failing, check:
+
+1. Redis connection - Ensure Docker is running and ports aren't conflicting
+2. Rule YAML format - Ensure rules follow the expected format with proper indentation
+3. System config - Make sure all sensors used in rules are listed in `validSensors`
+4. Build output - Check the logs for compilation errors
+5. Redis data - Use `redis-cli` to verify that data is being written/read correctly
+
+## Future Improvements
+
+1. Add stress tests with thousands of rules
+2. Test multi-threading and parallel rule execution more thoroughly
+3. Add profiling to identify performance bottlenecks
+4. Simulate network conditions and latency for Redis operations
+5. Test with more complex rule dependencies and feedback loops

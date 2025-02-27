@@ -2,11 +2,19 @@
 using System;
 using System.IO;
 using System.Text;
+using Serilog;
 
 namespace Pulsar.Compiler.Config
 {
     public class TemplateManager
     {
+        private readonly ILogger _logger;
+        
+        public TemplateManager()
+        {
+            _logger = LoggingConfig.GetLogger().ForContext<TemplateManager>();
+        }
+        
         public void GenerateSolutionFile(string path)
         {
             var content =
@@ -15,9 +23,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""Generated"", ""Generated.csproj"", ""{"
-                + Guid.NewGuid().ToString().ToUpper()
-                + @"}""
+Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""Generated"", ""Generated.csproj"", ""{" + Guid.NewGuid().ToString().ToUpper() + @"}""
 EndProject
 Global
     GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -25,18 +31,10 @@ Global
         Release|Any CPU = Release|Any CPU
     EndGlobalSection
     GlobalSection(ProjectConfigurationPlatforms) = postSolution
-        {"
-                + Guid.NewGuid().ToString().ToUpper()
-                + @"}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-        {"
-                + Guid.NewGuid().ToString().ToUpper()
-                + @"}.Debug|Any CPU.Build.0 = Debug|Any CPU
-        {"
-                + Guid.NewGuid().ToString().ToUpper()
-                + @"}.Release|Any CPU.ActiveCfg = Release|Any CPU
-        {"
-                + Guid.NewGuid().ToString().ToUpper()
-                + @"}.Release|Any CPU.Build.0 = Release|Any CPU
+        {" + Guid.NewGuid().ToString().ToUpper() + @"}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {" + Guid.NewGuid().ToString().ToUpper() + @"}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {" + Guid.NewGuid().ToString().ToUpper() + @"}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {" + Guid.NewGuid().ToString().ToUpper() + @"}.Release|Any CPU.Build.0 = Release|Any CPU
     EndGlobalSection
 EndGlobal";
 
@@ -171,6 +169,46 @@ EndGlobal";
             );
         }
 
+        /// <summary>
+        /// Copies all templates to the output directory
+        /// </summary>
+        public void CopyTemplates(string outputDirectory)
+        {
+            _logger.Information("Copying templates to {Destination}", outputDirectory);
+            
+            // Create output directory if it doesn't exist
+            if (!Directory.Exists(outputDirectory))
+            {
+                Directory.CreateDirectory(outputDirectory);
+            }
+            
+            try
+            {
+                // Generate project files at the output directory
+                var config = new BuildConfig { 
+                    OutputPath = outputDirectory,
+                    ProjectName = "RuntimeTest",
+                    RulesPath = outputDirectory,
+                    TargetFramework = "net9.0",
+                    StandaloneExecutable = false,
+                    OptimizeOutput = false,
+                    Target = "linux-x64"
+                };
+                
+                GenerateProjectFiles(outputDirectory, config);
+                
+                // Generate specifically named project file
+                GenerateProjectFile(Path.Combine(outputDirectory, "RuntimeTest.csproj"), config);
+                
+                _logger.Information("Templates copied successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error copying templates");
+                throw;
+            }
+        }
+
         private void CopyTemplateFile(
             string templateRelativePath,
             string outputPath,
@@ -191,13 +229,13 @@ EndGlobal";
                 // Copy the template file
                 var templateContent = File.ReadAllText(templatePath);
                 File.WriteAllText(destinationPath, templateContent);
+                
+                _logger.Debug("Copied template file: {Source} to {Destination}", templateRelativePath, destinationPath);
             }
             catch (FileNotFoundException ex)
             {
                 // Log the error but continue - some templates might be optional
-                Console.Error.WriteLine(
-                    $"Warning: Could not find template file: {templateRelativePath}. {ex.Message}"
-                );
+                _logger.Warning("Could not find template file: {TemplatePath}. {Message}", templateRelativePath, ex.Message);
             }
         }
 
@@ -211,9 +249,15 @@ EndGlobal";
                 // Path relative to assembly location
                 Path.Combine(
                     Path.GetDirectoryName(typeof(TemplateManager).Assembly.Location) ?? "",
-                    "Pulsar.Compiler",
                     "Config",
                     "Templates",
+                    templateFileName
+                ),
+                // Path from assembly base directory
+                Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    "Config", 
+                    "Templates", 
                     templateFileName
                 ),
                 // Path relative to project root (go up from bin directory)
@@ -246,10 +290,14 @@ EndGlobal";
                 var normalizedPath = Path.GetFullPath(path);
                 if (File.Exists(normalizedPath))
                 {
+                    _logger.Debug("Found template at: {Path}", normalizedPath);
                     return normalizedPath;
                 }
             }
 
+            _logger.Error("Template file not found: {TemplateFile}. Searched in: {Paths}", 
+                templateFileName, string.Join(", ", possiblePaths));
+                
             throw new FileNotFoundException(
                 $"Template file not found: {templateFileName}. Searched in: {string.Join(", ", possiblePaths)}"
             );

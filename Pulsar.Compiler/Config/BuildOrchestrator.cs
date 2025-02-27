@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using System.Diagnostics;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
 using Pulsar.Compiler.Models;
@@ -15,11 +16,20 @@ namespace Pulsar.Compiler.Config
     {
         private readonly ILogger _logger;
         private readonly CompilationPipeline _pipeline;
+        private readonly TemplateManager _templateManager;
 
         public BuildOrchestrator()
         {
             _logger = LoggingConfig.GetLogger();
             _pipeline = new CompilationPipeline(new AOTRuleCompiler(), new Parsers.DslParser());
+            _templateManager = new TemplateManager();
+        }
+
+        public BuildOrchestrator(BuildConfig config)
+        {
+            _logger = LoggingConfig.GetLogger();
+            _pipeline = new CompilationPipeline(new AOTRuleCompiler(), new Parsers.DslParser());
+            _templateManager = new TemplateManager();
         }
 
         public BuildResult BuildProject(BuildConfig config)
@@ -58,6 +68,90 @@ namespace Pulsar.Compiler.Config
                 {
                     Success = false,
                     Errors = new List<string> { ex.Message }.ToArray()
+                };
+            }
+        }
+
+        public async Task<BuildResult> BuildAsync(BuildConfig config)
+        {
+            try
+            {
+                _logger.Information("Starting async build for project: {ProjectName}", config.ProjectName);
+
+                // Ensure output directory exists
+                Directory.CreateDirectory(config.OutputDirectory);
+
+                var result = new BuildResult
+                {
+                    Success = true,
+                    OutputPath = config.OutputDirectory,
+                    Metrics = new RuleMetrics()
+                };
+
+                // Copy templates to output directory
+                _logger.Information("Copying templates to output directory: {OutputDir}", config.OutputDirectory);
+                _templateManager.CopyTemplates(config.OutputDirectory);
+
+                // Generate runtime files
+                var compilerOptions = new CompilerOptions { BuildConfig = config };
+                var compilationResult = _pipeline.ProcessRules(config.RuleDefinitions, compilerOptions);
+
+                if (!compilationResult.Success)
+                {
+                    _logger.Error("Rule compilation failed: {@Errors}", compilationResult.Errors);
+                    result.Success = false;
+                    result.Errors = compilationResult.Errors.ToArray();
+                    return result;
+                }
+
+                // Build the project using dotnet CLI
+                _logger.Information("Building project at {OutputDir}", config.OutputDirectory);
+                var projectPath = Path.Combine(config.OutputDirectory, $"{config.AssemblyName}.csproj");
+
+                if (!File.Exists(projectPath))
+                {
+                    _logger.Error("Project file not found: {ProjectPath}", projectPath);
+                    result.Success = false;
+                    result.Errors = new[] { $"Project file not found: {projectPath}" };
+                    return result;
+                }
+
+                // Run dotnet build
+                var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "dotnet",
+                        Arguments = $"build {projectPath} -c Release -v detailed",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false
+                    }
+                };
+
+                process.Start();
+                var output = await process.StandardOutput.ReadToEndAsync();
+                var error = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode != 0)
+                {
+                    _logger.Error("Build process failed with exit code {ExitCode}: {Error}", process.ExitCode, error);
+                    result.Success = false;
+                    result.Errors = new[] { $"Build process failed: {error}" };
+                    return result;
+                }
+
+                _logger.Information("Build completed successfully");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Build failed with exception");
+                return new BuildResult
+                {
+                    Success = false,
+                    Errors = new[] { ex.Message }
                 };
             }
         }
