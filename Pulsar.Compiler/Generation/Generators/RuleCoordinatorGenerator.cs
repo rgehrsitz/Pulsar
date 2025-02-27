@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,6 +33,7 @@ namespace Pulsar.Compiler.Generation.Generators
 
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
+            sb.AppendLine("using System.Linq;");
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using Microsoft.Extensions.Logging;");
             sb.AppendLine("using Prometheus;");
@@ -49,6 +51,10 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("        private readonly Microsoft.Extensions.Logging.ILogger _logger;");
             sb.AppendLine("        private readonly RingBufferManager _bufferManager;");
             sb.AppendLine("        private readonly List<IRuleGroup> _ruleGroups;");
+            sb.AppendLine();
+            
+            // RequiredSensors property implementation
+            sb.AppendLine("        public string[] RequiredSensors => _ruleGroups.SelectMany(g => g.RequiredSensors).Distinct().ToArray();");
             sb.AppendLine();
 
             // Add Prometheus metrics
@@ -93,14 +99,12 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // EvaluateAllRulesAsync method
-            sb.AppendLine("        public async Task EvaluateAllRulesAsync()");
+            // EvaluateRulesAsync method (implementation of IRuleCoordinator)
+            sb.AppendLine("        public async Task EvaluateRulesAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs)");
             sb.AppendLine("        {");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                using var timer = RuleEvaluationDuration.NewTimer();");
-            sb.AppendLine("                var inputs = await _redis.GetAllInputsAsync();");
-            sb.AppendLine("                var outputs = new Dictionary<string, object>();");
             sb.AppendLine();
 
             // Evaluate each rule group in sequence
@@ -113,12 +117,30 @@ namespace Pulsar.Compiler.Generation.Generators
                 sb.AppendLine($"                RuleEvaluationsTotal.Inc();");
             }
 
+            sb.AppendLine("            }");
+            sb.AppendLine("            catch (Exception ex)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                _logger.LogError(ex, \"Error evaluating rules\");");
+            sb.AppendLine("                throw;");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            
+            // EvaluateAllRulesAsync method - convenience method that gets inputs from Redis
+            sb.AppendLine("        public async Task EvaluateAllRulesAsync()");
+            sb.AppendLine("        {");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var inputs = await _redis.GetAllInputsAsync();");
+            sb.AppendLine("                var outputs = new Dictionary<string, object>();");
+            sb.AppendLine();
+            sb.AppendLine("                await EvaluateRulesAsync(inputs, outputs);");
             sb.AppendLine();
             sb.AppendLine("                await _redis.SetOutputsAsync(outputs);");
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");
-            sb.AppendLine("                _logger.LogError(ex, \"Error evaluating rules\");");
+            sb.AppendLine("                _logger.LogError(ex, \"Error evaluating rules from Redis\");");
             sb.AppendLine("                throw;");
             sb.AppendLine("            }");
             sb.AppendLine("        }");

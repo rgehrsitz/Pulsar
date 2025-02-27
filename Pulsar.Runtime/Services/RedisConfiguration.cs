@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 using StackExchange.Redis;
 using YamlDotNet.Serialization;
 
-namespace Pulsar.Runtime.Services
+namespace Beacon.Runtime.Services
 {
     public class RedisConfiguration
     {
@@ -81,7 +81,7 @@ namespace Pulsar.Runtime.Services
 
             if (Endpoints.Count > 1)
             {
-                options.ServiceName = "PulsarRedisCluster";
+                options.ServiceName = "BeaconRedisCluster";
             }
 
             options.CommandMap = CommandMap.Create(

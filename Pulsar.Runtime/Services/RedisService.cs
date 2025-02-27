@@ -6,7 +6,7 @@ using Polly;
 using Polly.Retry;
 using StackExchange.Redis;
 
-namespace Pulsar.Runtime.Services
+namespace Beacon.Runtime.Services
 {
     public class RedisService : IRedisService, IDisposable
     {
@@ -43,6 +43,37 @@ namespace Pulsar.Runtime.Services
 
             _redis = ConnectionMultiplexer.Connect(config.ToRedisOptions());
             _db = _redis.GetDatabase();
+        }
+
+        public async Task<Dictionary<string, double>> GetSensorValuesAsync(IEnumerable<string> sensorNames)
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var result = new Dictionary<string, double>();
+                
+                foreach (var sensor in sensorNames)
+                {
+                    var value = await _db.StringGetAsync($"input:{sensor}");
+                    if (value.HasValue && double.TryParse(value.ToString(), out var doubleValue))
+                    {
+                        result[sensor] = doubleValue;
+                    }
+                }
+                
+                return result;
+            });
+        }
+
+        public async Task SetOutputValuesAsync(Dictionary<string, double> outputs)
+        {
+            await _retryPolicy.ExecuteAsync(async () =>
+            {
+                foreach (var (key, value) in outputs)
+                {
+                    await _db.StringSetAsync($"output:{key}", value.ToString());
+                }
+                return true;
+            });
         }
 
         public async Task<Dictionary<string, object>> GetAllInputsAsync()

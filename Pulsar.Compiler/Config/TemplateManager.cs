@@ -73,6 +73,10 @@ EndGlobal";
             sb.AppendLine("    <PackageReference Include=\"Polly\" Version=\"8.3.0\" />");
             sb.AppendLine("    <PackageReference Include=\"prometheus-net\" Version=\"8.2.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"4.2.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Serilog.Enrichers.Thread\" Version=\"3.1.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Serilog.Formatting.Compact\" Version=\"2.0.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Serilog.Sinks.Console\" Version=\"5.0.1\" />");
+            sb.AppendLine("    <PackageReference Include=\"Serilog.Sinks.File\" Version=\"5.0.0\" />");
             sb.AppendLine(
                 "    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.8.16\" />"
             );
@@ -107,6 +111,24 @@ EndGlobal";
             // Create directories for additional files
             Directory.CreateDirectory(Path.Combine(outputPath, "Services"));
             Directory.CreateDirectory(Path.Combine(outputPath, "Buffers"));
+            Directory.CreateDirectory(Path.Combine(outputPath, "Interfaces"));
+
+            // Copy interface templates
+            CopyTemplateFile(
+                "Interfaces/IRuleCoordinator.cs",
+                outputPath,
+                "Interfaces/IRuleCoordinator.cs"
+            );
+            CopyTemplateFile(
+                "Interfaces/IRuleGroup.cs",
+                outputPath,
+                "Interfaces/IRuleGroup.cs"
+            );
+            CopyTemplateFile(
+                "Interfaces/ICompiledRules.cs",
+                outputPath,
+                "Interfaces/ICompiledRules.cs"
+            );
 
             // Copy service templates
             CopyTemplateFile(
@@ -124,7 +146,12 @@ EndGlobal";
                 outputPath,
                 "Services/RedisMonitoring.cs"
             );
-
+            CopyTemplateFile(
+                "Runtime/Services/RedisLoggingConfiguration.cs", 
+                outputPath,
+                "Services/RedisLoggingConfiguration.cs"
+            );
+            
             // Copy buffer templates
             CopyTemplateFile(
                 "Runtime/Buffers/CircularBuffer.cs",

@@ -2,7 +2,7 @@
 
 using System;
 
-namespace Generated.Buffers
+namespace Beacon.Runtime.Buffers
 {
     public class SystemDateTimeProvider : IDateTimeProvider
     {

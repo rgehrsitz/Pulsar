@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Pulsar.Compiler;
-using Pulsar.Runtime.Services;
+using Beacon.Runtime.Services;
 using Serilog;
 using YamlDotNet.Serialization;
 
