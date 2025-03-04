@@ -1,38 +1,61 @@
-# Debugging Pulsar Project Generation and Compilation
+# Debug Workflow for Beacon AOT Implementation
 
-Based on our investigation, we've identified several issues with the project generation and compilation process:
+This document explains how to debug the Beacon AOT implementation and test the generated solution.
 
-## Key Issues
+## Testing the Beacon Implementation
 
-1. **System Config and Rule Sensor Mismatch**: 
-   - The system_config.yaml defines valid sensors that must match what's used in the rules
-   - There's an inconsistency between what's defined in system_config.yaml and what's used in sample-rules.yaml
+1. Run the generate-beacon.sh script to create a Beacon solution:
 
-2. **Rule Format Validation**:
-   - The rule parser expects conditions and actions in specific formats
-   - Sample rule was failing validation for missing required conditions
+```bash
+./generate-beacon.sh --rules TestRules.yaml --config system_config.yaml --output TestOutput/beacon-test
+```
 
-3. **Compiler Pipeline Issues**:
-   - When generating the project, validations are performed but error messages aren't clear
-   - Attempting to build the generated code fails because of missing project files
+2. Build the generated solution:
 
-## Recommended Next Steps
+```bash
+cd TestOutput/beacon-test/Beacon
+dotnet build
+```
 
-1. **Create Valid Test Configuration**:
-   - Ensure system config and rules use the same sensor names
-   - Test with minimal, known-good configurations
+3. Run the tests:
 
-2. **Debug Project Generation**:
-   - Add logging to the TemplateManager to verify all template files are getting copied
-   - Ensure the proper directory structure is created for code generation
+```bash
+dotnet test
+```
 
-3. **Fix RuntimeValidationFixture**:
-   - Update to use a known-working config and rules
-   - Add more detailed logging to project build process
-   - Ensure proper namespace handling for the generated code
+4. If you want to test the runtime:
 
-4. **Create Integration Tests**:
-   - Test the full pipeline from rule definition to compiled code
-   - Verify code generation, compilation, and execution independently
+```bash
+cd Beacon.Runtime/bin/Debug/net9.0
+dotnet Beacon.Runtime.dll
+```
 
-These steps will help ensure the Pulsar to Beacon compilation process is reliable and properly tested.
+## Troubleshooting
+
+If the tests fail, check the following:
+
+1. Examine the generated files in `TestOutput/beacon-test/Beacon`
+2. Check for errors in the Beacon.Runtime project
+3. Check for errors in the RuntimeValidationFixture
+
+## Common Issues
+
+1. **Directory Structure**: Ensure that the directory structure is created correctly
+2. **Namespace Conflicts**: Check for namespace conflicts between Pulsar.Runtime and Beacon.Runtime
+3. **Redis Dependencies**: Ensure Redis dependencies are properly set up
+4. **Temporal Buffer Implementation**: Verify that the CircularBuffer is implemented correctly
+
+## Testing with Docker
+
+For Redis integration tests, you'll need Docker installed. The tests will automatically start a Redis container using TestContainers.
+
+## AOT Compatibility Testing
+
+To verify AOT compatibility:
+
+```bash
+cd TestOutput/beacon-test/Beacon
+dotnet publish -c Release -r linux-x64 --self-contained true
+```
+
+The generated executable should run without any reflection or dynamic code generation.
