@@ -70,6 +70,7 @@ namespace Pulsar.Compiler.Config
             Directory.CreateDirectory(Path.Combine(runtimeDir, "Services"));
             Directory.CreateDirectory(Path.Combine(runtimeDir, "Buffers"));
             Directory.CreateDirectory(Path.Combine(runtimeDir, "Interfaces"));
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Rules"));
             
             // Generate project file
             GenerateRuntimeProjectFile(runtimeDir, buildConfig);
@@ -114,7 +115,9 @@ namespace Pulsar.Compiler.Config
             
             // Add Runtime project
             string runtimeGuid = Guid.NewGuid().ToString("B").ToUpper();
-            sb.AppendLine($"Project(\"{{{Guid.NewGuid().ToString("B").ToUpper()}}}\") = \"Beacon.Runtime\", \"Beacon.Runtime\\Beacon.Runtime.csproj\", \"{runtimeGuid}\"");
+            // Use the standard C# project type GUID
+            string csharpProjectTypeGuid = "{9A19103F-16F7-4668-BE54-9A1E7A4F7556}";
+            sb.AppendLine($"Project(\"{csharpProjectTypeGuid}\") = \"Beacon.Runtime\", \"Beacon.Runtime\\Beacon.Runtime.csproj\", \"{runtimeGuid}\"");
             sb.AppendLine("EndProject");
             
             // Add Tests project if enabled
@@ -122,7 +125,7 @@ namespace Pulsar.Compiler.Config
             if (buildConfig.GenerateTestProject)
             {
                 testsGuid = Guid.NewGuid().ToString("B").ToUpper();
-                sb.AppendLine($"Project(\"{{{Guid.NewGuid().ToString("B").ToUpper()}}}\") = \"Beacon.Tests\", \"Beacon.Tests\\Beacon.Tests.csproj\", \"{testsGuid}\"");
+                sb.AppendLine($"Project(\"{csharpProjectTypeGuid}\") = \"Beacon.Tests\", \"Beacon.Tests\\Beacon.Tests.csproj\", \"{testsGuid}\"");
                 sb.AppendLine("EndProject");
             }
             
@@ -207,15 +210,19 @@ namespace Pulsar.Compiler.Config
             // Add package references
             sb.AppendLine("  <ItemGroup>");
             sb.AppendLine("    <PackageReference Include=\"Microsoft.Extensions.Logging\" Version=\"8.0.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Microsoft.Extensions.Logging.Abstractions\" Version=\"8.0.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Microsoft.Extensions.Logging.Console\" Version=\"8.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"NRedisStack\" Version=\"0.13.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Polly\" Version=\"8.3.0\" />");
             sb.AppendLine("    <PackageReference Include=\"prometheus-net\" Version=\"8.2.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"4.2.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Serilog.Extensions.Logging\" Version=\"8.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog.Enrichers.Thread\" Version=\"3.1.0\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog.Formatting.Compact\" Version=\"2.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog.Sinks.Console\" Version=\"5.0.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog.Sinks.File\" Version=\"5.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.8.16\" />");
+            sb.AppendLine("    <PackageReference Include=\"System.Diagnostics.DiagnosticSource\" Version=\"8.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"YamlDotNet\" Version=\"16.3.0\" />");
             sb.AppendLine("  </ItemGroup>");
             sb.AppendLine("</Project>");
@@ -273,28 +280,58 @@ namespace Pulsar.Compiler.Config
         /// </summary>
         private void CopyRuntimeTemplateFiles(string runtimeDir, BuildConfig buildConfig)
         {
-            // Copy interface templates
-            CopyTemplateFile("Interfaces/ICompiledRules.cs", Path.Combine(runtimeDir, "Interfaces", "ICompiledRules.cs"));
-            CopyTemplateFile("Interfaces/IRuleCoordinator.cs", Path.Combine(runtimeDir, "Interfaces", "IRuleCoordinator.cs"));
-            CopyTemplateFile("Interfaces/IRuleGroup.cs", Path.Combine(runtimeDir, "Interfaces", "IRuleGroup.cs"));
+            // Clean existing directories to avoid duplicate class definitions
+            if (Directory.Exists(Path.Combine(runtimeDir, "Buffers")))
+                Directory.Delete(Path.Combine(runtimeDir, "Buffers"), true);
+            if (Directory.Exists(Path.Combine(runtimeDir, "Services")))
+                Directory.Delete(Path.Combine(runtimeDir, "Services"), true);
+            if (Directory.Exists(Path.Combine(runtimeDir, "Interfaces")))
+                Directory.Delete(Path.Combine(runtimeDir, "Interfaces"), true);
+            if (Directory.Exists(Path.Combine(runtimeDir, "Models")))
+                Directory.Delete(Path.Combine(runtimeDir, "Models"), true);
+            if (Directory.Exists(Path.Combine(runtimeDir, "Rules")))
+                Directory.Delete(Path.Combine(runtimeDir, "Rules"), true);
+            if (Directory.Exists(Path.Combine(runtimeDir, "Generated")))
+                Directory.Delete(Path.Combine(runtimeDir, "Generated"), true);
             
-            // Copy service templates
-            CopyTemplateFile("Runtime/Services/RedisConfiguration.cs", Path.Combine(runtimeDir, "Services", "RedisConfiguration.cs"));
-            CopyTemplateFile("Runtime/Services/RedisService.cs", Path.Combine(runtimeDir, "Services", "RedisService.cs"));
-            CopyTemplateFile("Runtime/Services/RedisMonitoring.cs", Path.Combine(runtimeDir, "Services", "RedisMonitoring.cs"));
-            CopyTemplateFile("Runtime/Services/RedisLoggingConfiguration.cs", Path.Combine(runtimeDir, "Services", "RedisLoggingConfiguration.cs"));
+            // Create directories
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Buffers"));
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Services"));
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Interfaces"));
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Models"));
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Rules"));
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Generated"));
             
-            // Copy buffer templates
-            CopyTemplateFile("Runtime/Buffers/CircularBuffer.cs", Path.Combine(runtimeDir, "Buffers", "CircularBuffer.cs"));
+            // Copy buffer-related templates
+            CopyTemplateFile("Runtime/Buffers/RingBufferManager.cs", Path.Combine(runtimeDir, "Buffers", "RingBufferManager.cs"));
             CopyTemplateFile("Runtime/Buffers/IDateTimeProvider.cs", Path.Combine(runtimeDir, "Buffers", "IDateTimeProvider.cs"));
             CopyTemplateFile("Runtime/Buffers/SystemDateTimeProvider.cs", Path.Combine(runtimeDir, "Buffers", "SystemDateTimeProvider.cs"));
             
-            // Copy RuntimeOrchestrator and other core templates
-            CopyTemplateFile("Runtime/RuntimeOrchestrator.cs", Path.Combine(runtimeDir, "RuntimeOrchestrator.cs"));
-            CopyTemplateFile("RuntimeConfig.cs", Path.Combine(runtimeDir, "RuntimeConfig.cs"));
+            // Copy service-related templates
+            CopyTemplateFile("Runtime/Services/RedisService.cs", Path.Combine(runtimeDir, "Services", "RedisService.cs"));
+            CopyTemplateFile("Runtime/Services/RedisMetrics.cs", Path.Combine(runtimeDir, "Services", "RedisMetrics.cs"));
+            CopyTemplateFile("Runtime/Services/RedisHealthCheck.cs", Path.Combine(runtimeDir, "Services", "RedisHealthCheck.cs"));
             
-            // Copy AOT compatibility file
+            // Copy interface templates
+            CopyTemplateFile("Interfaces/IRedisService.cs", Path.Combine(runtimeDir, "Interfaces", "IRedisService.cs"));
+            CopyTemplateFile("Interfaces/IRuleCoordinator.cs", Path.Combine(runtimeDir, "Interfaces", "IRuleCoordinator.cs"));
+            CopyTemplateFile("Interfaces/IRuleGroup.cs", Path.Combine(runtimeDir, "Interfaces", "IRuleGroup.cs"));
+            CopyTemplateFile("Interfaces/ICompiledRules.cs", Path.Combine(runtimeDir, "Interfaces", "ICompiledRules.cs"));
+            
+            // Copy model templates
+            CopyTemplateFile("Runtime/Models/RedisConfiguration.cs", Path.Combine(runtimeDir, "Models", "RedisConfiguration.cs"));
+            CopyTemplateFile("Runtime/Models/RuntimeConfig.cs", Path.Combine(runtimeDir, "Models", "RuntimeConfig.cs"));
+            
+            // Copy rule templates
+            CopyTemplateFile("Runtime/Rules/RuleBase.cs", Path.Combine(runtimeDir, "Rules", "RuleBase.cs"));
+            
+            // Copy main orchestrator
+            CopyTemplateFile("Runtime/RuntimeOrchestrator.cs", Path.Combine(runtimeDir, "RuntimeOrchestrator.cs"));
+            
+            // Copy trimming configuration
             CopyTemplateFile("trimming.xml", Path.Combine(runtimeDir, "trimming.xml"));
+            
+            _logger.Information("Copied runtime template files to {Path}", runtimeDir);
         }
         
         /// <summary>
@@ -312,26 +349,20 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("// This file contains the main entry point and AOT compatibility attributes");
             sb.AppendLine();
             
-            // Add AOT compatibility attributes
-            sb.AppendLine("using System.Runtime.CompilerServices;");
-            sb.AppendLine("using System.Text.Json.Serialization;");
-            sb.AppendLine();
-            sb.AppendLine("[assembly: JsonSerializable(typeof(Dictionary<string, object>))]");
-            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({buildConfig.Namespace}.RuntimeOrchestrator))]");
-            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({buildConfig.Namespace}.Services.RedisService))]");
-            sb.AppendLine();
-            
-            // Add standard using statements
+            // Add standard using statements first
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using System.IO;");
             sb.AppendLine("using System.Threading;");
             sb.AppendLine("using System.Threading.Tasks;");
+            sb.AppendLine("using System.Runtime.CompilerServices;");
+            sb.AppendLine("using System.Text.Json.Serialization;");
+            sb.AppendLine("using System.Diagnostics.CodeAnalysis;");
             sb.AppendLine("using Microsoft.Extensions.Logging;");
-            sb.AppendLine("using Serilog;");
             sb.AppendLine($"using {buildConfig.Namespace}.Buffers;");
             sb.AppendLine($"using {buildConfig.Namespace}.Services;");
             sb.AppendLine($"using {buildConfig.Namespace}.Interfaces;");
+            sb.AppendLine("using ILogger = Microsoft.Extensions.Logging.ILogger;");
             sb.AppendLine();
             
             // Add namespace and class declaration
@@ -341,73 +372,79 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("    {");
             
             // Add main method
+            sb.AppendLine("        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuntimeOrchestrator))]");
+            sb.AppendLine("        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RedisService))]");
             sb.AppendLine("        public static async Task Main(string[] args)");
             sb.AppendLine("        {");
-            sb.AppendLine("            // Configure Serilog");
+            sb.AppendLine("            // Configure logging");
             sb.AppendLine("            var logger = ConfigureLogging();");
-            sb.AppendLine("            logger.Information(\"Starting Beacon Runtime Engine\");");
+            sb.AppendLine("            logger.LogInformation(\"Starting Beacon Runtime Engine\");");
             sb.AppendLine();
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                // Load configuration");
             sb.AppendLine("                var config = RuntimeConfig.LoadFromEnvironment();");
-            sb.AppendLine("                logger.Information(\"Loaded configuration with {SensorCount} sensors\", config.ValidSensors.Count);");
+            sb.AppendLine("                logger.LogInformation(\"Loaded configuration with {SensorCount} sensors\", config.ValidSensors.Count);");
             sb.AppendLine();
-            sb.AppendLine("                // Initialize Redis service");
-            sb.AppendLine("                var redisConfig = config.Redis;");
-            sb.AppendLine();
-            sb.AppendLine("                // Create buffer manager for temporal rules");
-            sb.AppendLine($"                var bufferManager = new CircularBuffer(config.BufferCapacity);");
-            sb.AppendLine();
-            sb.AppendLine("                // Initialize runtime orchestrator");
-            sb.AppendLine("                using var redisService = new RedisService(redisConfig, logger);");
-            sb.AppendLine("                var orchestrator = new RuntimeOrchestrator(redisService, logger, bufferManager);");
+            sb.AppendLine("                // Create services");
+            sb.AppendLine("                var redisConfig = new RedisConfiguration");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    Endpoints = config.Redis.Endpoints,");
+            sb.AppendLine("                    Password = config.Redis.Password,");
+            sb.AppendLine("                    PoolSize = config.Redis.PoolSize,");
+            sb.AppendLine("                    RetryCount = config.Redis.RetryCount,");
+            sb.AppendLine("                    RetryBaseDelayMs = config.Redis.RetryBaseDelayMs,");
+            sb.AppendLine("                    ConnectTimeout = config.Redis.ConnectTimeout,");
+            sb.AppendLine("                    SyncTimeout = config.Redis.SyncTimeout,");
+            sb.AppendLine("                    KeepAlive = config.Redis.KeepAlive,");
+            sb.AppendLine("                    Ssl = config.Redis.Ssl,");
+            sb.AppendLine("                    AllowAdmin = config.Redis.AllowAdmin");
+            sb.AppendLine("                };");
+            sb.AppendLine("                var loggerFactory = LoggerFactory.Create(builder => {");
+            sb.AppendLine("                    builder.AddConsole();");
+            sb.AppendLine("                });");
+            sb.AppendLine("                using var redisService = new RedisService(redisConfig, loggerFactory);");
+            sb.AppendLine("                var bufferManager = new RingBufferManager(config.BufferCapacity);");
+            sb.AppendLine("                var coordinator = new RuleCoordinator(redisService, logger, bufferManager);");
+            sb.AppendLine("                var orchestrator = new RuntimeOrchestrator(redisService, logger, coordinator);");
             sb.AppendLine();
             sb.AppendLine("                // Run the main cycle loop");
             sb.AppendLine("                await RunCycleLoop(orchestrator, config.CycleTime, logger);");
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");
-            sb.AppendLine("                logger.Error(ex, \"Fatal error in Beacon Runtime Engine\");");
+            sb.AppendLine("                logger.LogError(ex, \"Fatal error in Beacon Runtime Engine\");");
             sb.AppendLine("                Environment.ExitCode = 1;");
             sb.AppendLine("            }");
             sb.AppendLine("            finally");
             sb.AppendLine("            {");
-            sb.AppendLine("                Log.CloseAndFlush();");
+            sb.AppendLine("                logger.LogInformation(\"Beacon Runtime Engine stopped\");");
             sb.AppendLine("            }");
             sb.AppendLine("        }");
             sb.AppendLine();
             
             // Add helper methods
-            sb.AppendLine("        private static ILogger ConfigureLogging()");
+            sb.AppendLine("        private static ILogger<Program> ConfigureLogging()");
             sb.AppendLine("        {");
-            sb.AppendLine("            var logConfig = new LoggerConfiguration()");
-            sb.AppendLine("                .MinimumLevel.Information()");
-            sb.AppendLine("                .Enrich.WithThreadId()");
-            sb.AppendLine("                .WriteTo.Console()");
-            sb.AppendLine("                .WriteTo.File(");
-            sb.AppendLine("                    Path.Combine(\"logs\", \"beacon-.log\"),");
-            sb.AppendLine("                    rollingInterval: RollingInterval.Day,");
-            sb.AppendLine("                    retainedFileCountLimit: 7");
-            sb.AppendLine("                );");
-            sb.AppendLine();
-            sb.AppendLine("            var logger = logConfig.CreateLogger();");
-            sb.AppendLine("            Log.Logger = logger;");
+            sb.AppendLine("            var loggerFactory = LoggerFactory.Create(builder => {");
+            sb.AppendLine("                builder.AddConsole();");
+            sb.AppendLine("            });");
+            sb.AppendLine("            var logger = loggerFactory.CreateLogger<Program>();");
             sb.AppendLine("            return logger;");
             sb.AppendLine("        }");
             sb.AppendLine();
             
-            sb.AppendLine("        private static async Task RunCycleLoop(RuntimeOrchestrator orchestrator, int cycleTimeMs, ILogger logger)");
+            sb.AppendLine("        private static async Task RunCycleLoop(RuntimeOrchestrator orchestrator, int cycleTimeMs, ILogger<Program> logger)");
             sb.AppendLine("        {");
             sb.AppendLine("            var cancelSource = new CancellationTokenSource();");
             sb.AppendLine("            Console.CancelKeyPress += (s, e) =>");
             sb.AppendLine("            {");
-            sb.AppendLine("                logger.Information(\"Shutdown requested\");");
+            sb.AppendLine("                logger.LogInformation(\"Shutdown requested\");");
             sb.AppendLine("                cancelSource.Cancel();");
             sb.AppendLine("                e.Cancel = true;");
             sb.AppendLine("            };");
             sb.AppendLine();
-            sb.AppendLine("            logger.Information(\"Starting rule execution cycle loop with interval {CycleTimeMs}ms\", cycleTimeMs);");
+            sb.AppendLine("            logger.LogInformation(\"Starting rule execution cycle loop with interval {CycleTimeMs}ms\", cycleTimeMs);");
             sb.AppendLine("            var cycleCount = 0;");
             sb.AppendLine();
             sb.AppendLine("            while (!cancelSource.Token.IsCancellationRequested)");
@@ -420,12 +457,12 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine();
             sb.AppendLine("                    if (cycleCount % 1000 == 0)");
             sb.AppendLine("                    {");
-            sb.AppendLine("                        logger.Information(\"Completed {CycleCount} execution cycles\", cycleCount);");
+            sb.AppendLine("                        logger.LogInformation(\"Completed {CycleCount} execution cycles\", cycleCount);");
             sb.AppendLine("                    }");
             sb.AppendLine("                }");
             sb.AppendLine("                catch (Exception ex)");
             sb.AppendLine("                {");
-            sb.AppendLine("                    logger.Error(ex, \"Error in execution cycle {CycleCount}\", cycleCount);");
+            sb.AppendLine("                    logger.LogError(ex, \"Error in execution cycle {CycleCount}\", cycleCount);");
             sb.AppendLine("                }");
             sb.AppendLine();
             sb.AppendLine("                // Calculate time to wait until next cycle");
@@ -437,7 +474,7 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("                }");
             sb.AppendLine("            }");
             sb.AppendLine();
-            sb.AppendLine("            logger.Information(\"Execution cycle loop stopped after {CycleCount} cycles\", cycleCount);");
+            sb.AppendLine("            logger.LogInformation(\"Execution cycle loop stopped after {CycleCount} cycles\", cycleCount);");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
             sb.AppendLine("}");

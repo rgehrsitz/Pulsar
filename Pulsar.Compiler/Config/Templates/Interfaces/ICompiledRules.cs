@@ -6,9 +6,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Beacon.Runtime;
 using Beacon.Runtime.Buffers;
-using Serilog;
+using Microsoft.Extensions.Logging;
 
-namespace Beacon.Runtime.Rules
+namespace Beacon.Runtime.Interfaces
 {
     public interface ICompiledRules
     {

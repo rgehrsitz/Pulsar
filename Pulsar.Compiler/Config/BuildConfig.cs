@@ -29,6 +29,11 @@ namespace Pulsar.Compiler.Config
         public int MaxRulesPerFile { get; set; } = 100;
         public bool GroupParallelRules { get; set; } = true;
 
+        // Missing properties needed for Beacon AOT implementation
+        public bool GenerateTestProject { get; set; } = true;
+        public bool CreateSeparateDirectory { get; set; } = true;
+        public string SolutionName { get; set; } = "Beacon";
+
         // New properties referenced by CodeGenerator and others:
         public string RedisConnection { get; set; } = "localhost:6379";
         public int CycleTime { get; set; } = 100;

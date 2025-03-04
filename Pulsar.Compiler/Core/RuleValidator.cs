@@ -113,6 +113,16 @@ namespace Pulsar.Compiler.Core
                         errors.Add($"Rule '{ruleName}' has a SetValue action with an empty key");
                     }
                     break;
+                case SendMessageAction sendMessage:
+                    if (string.IsNullOrWhiteSpace(sendMessage.Channel))
+                    {
+                        errors.Add($"Rule '{ruleName}' has a SendMessage action with an empty channel");
+                    }
+                    if (string.IsNullOrWhiteSpace(sendMessage.Message))
+                    {
+                        errors.Add($"Rule '{ruleName}' has a SendMessage action with an empty message");
+                    }
+                    break;
                 default:
                     errors.Add(
                         $"Rule '{ruleName}' has an unsupported action type: {action.GetType().Name}"

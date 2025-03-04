@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text.Json;
 using Serilog;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler;
@@ -18,6 +19,8 @@ namespace Pulsar.Compiler.Models
         public GeneratedFileInfo[] GeneratedFiles { get; set; } = Array.Empty<GeneratedFileInfo>();
         public string? OutputPath { get; set; }
         public Dictionary<string, RuleMetrics> Metrics { get; set; } = new();
+        public RuleManifest? Manifest { get; set; }
+        public List<RuleDefinition> Rules { get; set; } = new();
 
         public void AddError(string error)
         {

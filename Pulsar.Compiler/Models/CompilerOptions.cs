@@ -21,6 +21,10 @@ namespace Pulsar.Compiler.Models
         };
         public List<string> ValidSensors { get; set; } = new();
         public bool StrictMode { get; set; }
+        public bool AllowInvalidSensors { get; set; }
+        public string OutputDirectory { get; set; } = "build";
+        public string TargetFramework { get; set; } = "net9.0";
+        public string RuntimeIdentifier { get; set; } = "win-x64";
 
         public void Validate()
         {

@@ -23,6 +23,10 @@ Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The 
     - `Beacon.Runtime.csproj` - Runtime project file
     - `Generated/` - Contains all generated rule files
     - `Services/` - Core runtime services
+    - `Models/` - Data models and configurations
+    - `Interfaces/` - Service and component interfaces
+    - `Buffers/` - Temporal data caching components
+    - `Rules/` - Base rule implementations
   - `Beacon.Tests/` - Test project for generated rules
     - `Beacon.Tests.csproj` - Test project file
     - `Generated/` - Generated test files
@@ -34,98 +38,67 @@ Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The 
 
 ### 3. Redis as the Primary Data Source with Temporal Data Caching
 - The generated solution will use **Redis** as the exclusive mechanism for fetching and storing system data.
-- **Exception:** For **temporal rules**, the runtime engine must **cache the previous X number of values** in memory to support temporal evaluations.
-- Actions within rules may **send messages to external REST endpoints** but cannot use other data storage mechanisms.
+- **Exception:** For **temporal rules**, the runtime engine must **cache the previous X number of values** in memory to support temporal rule evaluation.
+- The Redis integration includes:
+  - **Connection Pooling**: Efficient management of Redis connections
+  - **Health Monitoring**: Continuous monitoring of Redis connection health
+  - **Metrics Collection**: Tracking of Redis operations and errors
+  - **Error Handling**: Robust error handling and retry mechanisms
+  - **Configuration**: Flexible configuration options for Redis connections
 
-### 4. Eliminate Runtime Code Generation
-- **All rules are precompiled** into C# source files.
-- No runtime `Reflection.Emit`, dynamic assemblies, or code injection.
-- **Remove all dynamic loading mechanisms** from the system.
+### 4. Rule Group Organization
+- Rules are organized into **rule groups** for better maintainability and performance.
+- Each rule group is generated as a **separate class** with its own evaluation method.
+- Rule groups are evaluated in a **coordinated manner** to ensure proper execution order.
 
-### 5. Maintain Rule Traceability
-- Generated files must include **comments and metadata** tracing rules back to their original DSL/YAML definitions.
-- If a rule was split into multiple files, the manifest must track these changes.
+## Implementation Progress
 
-### 6. Improve Build-Time Processing
-- A dedicated **build-time orchestrator** will:
-  - Read **YAML rule files**.
-  - Validate syntax and semantics.
-  - Detect and **prevent circular dependencies**.
-  - Manage **file splitting/grouping**.
-  - Generate **all necessary C# source files**.
-- The orchestrator must be configurable via **MSBuild integration**.
+### Completed
+- Basic project structure and code generation
+- Rule group organization and code generation
+- Temporal data caching implementation
+- Redis service integration with connection pooling
+- Health monitoring and metrics collection
+- Error handling and retry mechanisms
+- Logging using Microsoft.Extensions.Logging
 
-## Implementation Phases
-### Phase 1: Code Generation Updates
-- Update `Pulsar.Compiler` to:
-  - Generate the complete **Beacon solution structure**
-  - Output **C# source files** in appropriate project directories
-  - Include **rule metadata** in comments for traceability
-  - **Support file splitting** for large rule sets
-  - **Eliminate reflection/dynamic code**
-  - Generate a **manifest** tracking all output files
-  - Generate appropriate **project files** for both runtime and test projects
+### In Progress
+- Comprehensive testing of generated code
+- Performance optimization
+- Documentation updates
 
-### Phase 2: Build Process Integration
-- Implement a **build-time orchestrator** that:
-  - Reads **YAML rule files**
-  - Validates and compiles them into **C# code**
-  - Manages **file splitting/grouping**
-  - Outputs a complete **Beacon solution** with all necessary files
-  - Generates appropriate **test files** in the Beacon.Tests project
-- Integrate with **MSBuild**:
-  - Define a **pre-build step** to run the orchestrator
-  - Allow configuration of **file thresholds and output paths**
-  - Support customization of the **Beacon solution structure**
+### Pending
+- CI/CD integration
+- Deployment automation
+- Advanced monitoring and alerting
 
-### Phase 3: Runtime System Execution
-- The **generated Beacon solution** will:
-  - **Fetch data from Redis every 100ms**.
-  - **Process rules in evaluation layers**, ensuring dependencies are satisfied.
-  - **Write outputs back to Redis**.
-  - Perform **logging, error handling, and observability**.
-  - **Cache previous values for temporal rules** to support time-based evaluations.
-- No external runtime dependencies will be required.
+## Phases of Implementation
 
-### Phase 4: AOT Compatibility
+### Phase 1: Code Generation (Completed)
+- Implement the basic code generation framework.
+- Generate rule groups and evaluation methods.
+
+### Phase 2: Redis Integration (Completed)
+- Implement Redis service with connection pooling.
+- Add health monitoring and metrics collection.
+- Implement error handling and retry mechanisms.
+
+### Phase 3: Testing and Optimization (In Progress)
+- Test the generated code with various rule sets.
+- Optimize performance for large rule sets.
+- Update documentation.
+
+### Phase 4: AOT Compatibility (Completed)
 - Audit and **remove**:
   - **Dynamic code generation**.
   - **Runtime reflection**.
   - **Dynamic loading of assemblies**.
-- Add **AOT compatibility attributes** where needed.
-- Ensure all dependencies support **AOT compilation**.
-- Conduct **AOT compilation testing**.
+- Ensure all code is **AOT-compatible**.
 
-### Phase 5: Testing & Documentation
-- Implement **integration tests** covering:
-  - **Large rule sets**.
-  - **File splitting mechanisms**.
-  - **Full build process validation**.
-- Update documentation for:
-  - **Build process setup**.
-  - **Rule organization**.
-  - **Debugging compiled code**.
+### Phase 5: Deployment and Automation (Pending)
+- Implement CI/CD integration.
+- Automate deployment process.
+- Add advanced monitoring and alerting.
 
-## Expected Output
-Once the changes are implemented, Pulsar will function as a **purely static code generator**, ensuring that:
-- The **output directory** contains a complete **Beacon solution** with runtime and test projects
-- No runtime-generated code exists
-- The solution **can be built separately** via MSBuild or command-line tools
-- The final binary is fully **AOT-compatible**
-- The generated solution includes all **required runtime execution functionality**
-- Test projects are properly configured to validate rule behavior
-
-## Summary of Clarifications
-| Topic | Clarification |
-|-------|--------------|
-| **Runtime Execution** | The **Beacon.Runtime** project must implement **all runtime logic**, including the 100ms execution loop |
-| **Redis Requirement** | Redis is the **primary** data source, with an exception for **temporal caching** in memory |
-| **Temporal Mode** | **Strict Discrete Mode** is the default. **Extended Last-Known Mode** must be explicitly defined in the DSL |
-| **Rule Dependencies** | Rules **can reference each other's outputs**. Circular dependencies **must be detected** at build time |
-| **Action Execution Order** | Actions execute **in sequence**, in the order they are written in the rule definition |
-| **CI/CD Integration** | The user is responsible for compiling the generated Beacon solution. Future CI/CD automation is possible |
-| **Project Structure** | The generated Beacon solution follows a standard structure with separate runtime and test projects |
-
----
-
-This document now fully aligns with the clarified requirements, including the explicit handling of temporal caching. Let me know if further refinements are needed.
+## Conclusion
+This refactoring effort will result in a more maintainable, scalable, and performant rules evaluation system that is fully AOT-compatible and can be deployed as a standalone executable.

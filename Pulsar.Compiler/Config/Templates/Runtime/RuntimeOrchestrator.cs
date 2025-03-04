@@ -9,37 +9,40 @@ using Beacon.Runtime.Interfaces;
 using Beacon.Runtime.Services;
 using Microsoft.Extensions.Logging;
 
-namespace Beacon.Runtime.Rules
+namespace Beacon.Runtime
 {
     public class RuntimeOrchestrator
     {
         private readonly IRedisService _redis;
-        private readonly ILogger _logger;
+        private readonly ILogger<RuntimeOrchestrator> _logger;
         private readonly IRuleCoordinator _coordinator;
         private readonly CancellationTokenSource _cts;
         private Task? _executionTask;
 
         public RuntimeOrchestrator(
             IRedisService redis,
-            ILogger logger,
+            ILogger<RuntimeOrchestrator> logger,
             IRuleCoordinator coordinator
         )
         {
-            _redis = redis ?? throw new ArgumentNullException(nameof(redis));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+            _redis = redis;
+            _logger = logger;
+            _coordinator = coordinator;
             _cts = new CancellationTokenSource();
+            
+            _logger.LogInformation("RuntimeOrchestrator initialized");
         }
 
         public async Task StartAsync()
         {
             if (_executionTask != null)
             {
-                throw new InvalidOperationException("Orchestrator is already running");
+                _logger.LogWarning("RuntimeOrchestrator is already running");
+                return;
             }
 
-            _logger.LogInformation("Starting runtime orchestrator");
-            _executionTask = ExecuteRulesAsync(_cts.Token);
+            _logger.LogInformation("Starting RuntimeOrchestrator");
+            _executionTask = Task.Run(() => RunCycleAsync(_cts.Token));
             await Task.CompletedTask;
         }
 
@@ -47,72 +50,79 @@ namespace Beacon.Runtime.Rules
         {
             if (_executionTask == null)
             {
+                _logger.LogWarning("RuntimeOrchestrator is not running");
                 return;
             }
 
-            _logger.LogInformation("Stopping runtime orchestrator");
+            _logger.LogInformation("Stopping RuntimeOrchestrator");
             _cts.Cancel();
             await _executionTask;
             _executionTask = null;
         }
 
-        private async Task ExecuteRulesAsync(CancellationToken cancellationToken)
+        public async Task RunCycleAsync(CancellationToken cancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                try
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    // Get all required sensor values from Redis
-                    var sensorValues = await _redis.GetSensorValuesAsync(
-                        _coordinator.RequiredSensors
-                    );
-                    var inputs = new Dictionary<string, object>();
-                    var outputs = new Dictionary<string, object>();
-
-                    // Convert sensor values to inputs dictionary
-                    foreach (var (sensor, value) in sensorValues)
+                    try
                     {
-                        inputs[sensor] = value;
-                    }
+                        // Get all required sensor values from Redis
+                        var sensorValues = await _redis.GetSensorValuesAsync(
+                            _coordinator.RequiredSensors
+                        );
+                        var inputs = new Dictionary<string, object>();
+                        var outputs = new Dictionary<string, object>();
 
-                    // Evaluate rules
-                    await _coordinator.EvaluateRulesAsync(inputs, outputs);
-
-                    // Convert outputs to doubles for Redis
-                    var outputValues = new Dictionary<string, double>();
-                    foreach (var (key, value) in outputs)
-                    {
-                        if (value is double doubleValue)
+                        // Convert sensor values to inputs dictionary
+                        foreach (var (sensor, value) in sensorValues)
                         {
-                            outputValues[key] = doubleValue;
+                            inputs[sensor] = value;
                         }
-                        else if (double.TryParse(value.ToString(), out doubleValue))
+
+                        // Evaluate rules
+                        await _coordinator.EvaluateRulesAsync(inputs, outputs);
+
+                        // Convert outputs to doubles for Redis
+                        var outputValues = new Dictionary<string, double>();
+                        foreach (var (key, value) in outputs)
                         {
-                            outputValues[key] = doubleValue;
+                            if (value is double doubleValue)
+                            {
+                                outputValues[key] = doubleValue;
+                            }
+                            else if (double.TryParse(value.ToString(), out doubleValue))
+                            {
+                                outputValues[key] = doubleValue;
+                            }
+                        }
+
+                        // Write outputs back to Redis
+                        if (outputValues.Count > 0)
+                        {
+                            await _redis.SetOutputValuesAsync(outputValues);
                         }
                     }
-
-                    // Write outputs back to Redis
-                    if (outputValues.Count > 0)
+                    catch (Exception ex)
                     {
-                        await _redis.SetOutputValuesAsync(outputValues);
+                        _logger.LogError(ex, "Error during rule evaluation cycle");
                     }
 
-                    // Wait for next cycle
-                    await Task.Delay(100, cancellationToken);
+                    await Task.Delay(100, cancellationToken); // Configurable delay
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    // Normal shutdown
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error during rule evaluation cycle");
-
-                    // Brief delay before retry
-                    await Task.Delay(1000, cancellationToken);
-                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("RuntimeOrchestrator execution cancelled");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled exception in RuntimeOrchestrator");
+            }
+            finally
+            {
+                _logger.LogInformation("RuntimeOrchestrator execution stopped");
             }
         }
     }

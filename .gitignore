@@ -78,3 +78,4 @@ log.*
 log*.txt
 
 # Auto generated files from Pulsar.Compiler
+/Beacon/

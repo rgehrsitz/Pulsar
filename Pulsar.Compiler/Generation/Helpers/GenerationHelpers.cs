@@ -89,6 +89,7 @@ namespace Pulsar.Compiler.Generation.Helpers
             return action switch
             {
                 SetValueAction setValue => GenerateSetValueAction(setValue),
+                SendMessageAction sendMessage => GenerateSendMessageAction(sendMessage),
                 _ => throw new InvalidOperationException(
                     $"Unknown action type: {action.GetType().Name}"
                 ),
@@ -134,25 +135,42 @@ namespace Pulsar.Compiler.Generation.Helpers
             }
         }
 
+        public static string GenerateSendMessageAction(SendMessageAction sendMessage)
+        {
+            // Generate code to send a message to the specified channel
+            return $"SendMessage(\"{sendMessage.Channel}\", \"{sendMessage.Message}\");";  
+        }
+
         public static string FixupExpression(string expression)
         {
             if (string.IsNullOrEmpty(expression))
+            {
                 return "null";
+            }
 
-            // First, handle sensor names with colons by wrapping them in quotes
-            var colonPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*:[a-zA-Z0-9_]+)\b";
-            expression = Regex.Replace(
+            // Replace sensor references with inputs["sensor"] syntax
+            var sensorPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b";
+            var fixedExpression = System.Text.RegularExpressions.Regex.Replace(
                 expression,
-                colonPattern,
-                m => $"inputs[\"{m.Groups[1].Value}\"]"
+                sensorPattern,
+                match =>
+                {
+                    var sensor = match.Groups[1].Value;
+                    // Skip known non-sensor terms like operators, functions, etc.
+                    if (IsMathFunction(sensor) || IsNumeric(sensor))
+                    {
+                        return sensor;
+                    }
+                    return $"Convert.ToDouble(inputs[\"{sensor}\"])";
+                }
             );
 
-            // Then handle the standard $ prefixed variables
-            return Regex.Replace(
-                expression,
-                @"\$([a-zA-Z_][a-zA-Z0-9_]*)",
-                m => $"Convert.ToDouble(inputs[\"{m.Groups[1].Value}\"])"
-            );
+            return fixedExpression;
+        }
+
+        private static bool IsNumeric(string value)
+        {
+            return double.TryParse(value, out _);
         }
 
         public static List<string> GetInputSensors(RuleDefinition rule)

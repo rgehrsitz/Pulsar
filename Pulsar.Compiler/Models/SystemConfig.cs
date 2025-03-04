@@ -49,12 +49,55 @@ namespace Pulsar.Compiler.Models
                 }
 
                 var yaml = File.ReadAllText(path);
-                var deserializer = new DeserializerBuilder().Build();
+                _logger.Debug("YAML content: {Content}", yaml);
+                
+                var deserializer = new DeserializerBuilder()
+                    .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.CamelCaseNamingConvention.Instance)
+                    .IgnoreUnmatchedProperties()
+                    .Build();
                 var config = deserializer.Deserialize<SystemConfig>(yaml);
 
+                // Manually parse validSensors if they weren't deserialized properly
+                if (config.ValidSensors == null || config.ValidSensors.Count == 0)
+                {
+                    _logger.Warning("ValidSensors not properly deserialized, attempting manual parsing");
+                    try
+                    {
+                        // Parse the YAML manually to extract validSensors
+                        var lines = yaml.Split('\n');
+                        bool inValidSensors = false;
+                        foreach (var line in lines)
+                        {
+                            var trimmedLine = line.Trim();
+                            if (trimmedLine.StartsWith("validSensors:"))
+                            {
+                                inValidSensors = true;
+                                config.ValidSensors = new List<string>();
+                                continue;
+                            }
+                            
+                            if (inValidSensors && trimmedLine.StartsWith("-"))
+                            {
+                                var sensor = trimmedLine.Substring(1).Trim();
+                                config.ValidSensors.Add(sensor);
+                                _logger.Debug("Manually added sensor: {Sensor}", sensor);
+                            }
+                            else if (inValidSensors && !string.IsNullOrWhiteSpace(trimmedLine) && !trimmedLine.StartsWith("#") && !trimmedLine.StartsWith("-"))
+                            {
+                                inValidSensors = false;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Error during manual parsing of validSensors");
+                    }
+                }
+
                 _logger.Information(
-                    "Successfully loaded system configuration with {SensorCount} valid sensors",
-                    config.ValidSensors.Count
+                    "Successfully loaded system configuration with {SensorCount} valid sensors: {Sensors}",
+                    config.ValidSensors.Count,
+                    string.Join(", ", config.ValidSensors)
                 );
                 return config;
             }

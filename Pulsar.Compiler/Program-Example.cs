@@ -24,9 +24,13 @@ namespace Pulsar.Compiler.Examples
                 _logger.Information("Generating AOT-compatible Beacon solution...");
 
                 // Parse system config
-                string configContent = await File.ReadAllTextAsync(configPath);
-                var configLoader = new ConfigurationLoader();
-                var systemConfig = configLoader.LoadFromYaml(configContent);
+                if (!File.Exists(configPath))
+                {
+                    _logger.Error("System configuration file not found: {Path}", configPath);
+                    return;
+                }
+                
+                var systemConfig = SystemConfig.Load(configPath);
                 
                 _logger.Information("System configuration loaded with {SensorCount} valid sensors", 
                     systemConfig.ValidSensors.Count);

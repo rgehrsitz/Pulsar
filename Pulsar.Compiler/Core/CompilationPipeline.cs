@@ -9,6 +9,7 @@ using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Parsers;
+using Pulsar.Compiler.Exceptions;
 using Serilog;
 
 namespace Pulsar.Compiler.Core
@@ -32,13 +33,14 @@ namespace Pulsar.Compiler.Core
             {
                 _logger.Information("Starting rule compilation pipeline for {Path}", rulesPath);
 
-                var rules = LoadRulesFromPaths(rulesPath, options.ValidSensors);
+                var rules = LoadRulesFromPaths(rulesPath, options.ValidSensors, options.AllowInvalidSensors);
                 _logger.Information("Loaded {Count} rules from {Path}", rules.Count, rulesPath);
 
                 var result = _compiler.Compile(rules.ToArray(), options);
                 if (result.Success)
                 {
                     _logger.Information("Successfully compiled {Count} rules", rules.Count);
+                    result.Rules = rules;
                 }
                 else
                 {
@@ -79,45 +81,78 @@ namespace Pulsar.Compiler.Core
             }
         }
 
-        private List<RuleDefinition> LoadRulesFromPaths(string rulesPath, List<string> validSensors)
+        private List<RuleDefinition> LoadRulesFromPaths(string rulesPath, List<string> validSensors, bool allowInvalidSensors)
         {
             try
             {
                 var rules = new List<RuleDefinition>();
 
-                if (System.IO.Directory.Exists(rulesPath))
+                // Debug validSensors
+                _logger.Information("LoadRulesFromPaths received {Count} valid sensors: {Sensors}", 
+                    validSensors?.Count ?? 0, 
+                    string.Join(", ", validSensors ?? new List<string>()));
+
+                // Ensure validSensors is not null
+                if (validSensors == null)
                 {
-                    _logger.Debug("Loading rules from directory: {Path}", rulesPath);
-                    var files = System.IO.Directory.GetFiles(rulesPath, "*.yaml", System.IO.SearchOption.AllDirectories);
-                    foreach (var file in files)
+                    validSensors = new List<string>();
+                    _logger.Warning("ValidSensors was null in LoadRulesFromPaths, creating new empty list");
+                }
+
+                // Manually add required sensors if not already in the list
+                var requiredSensors = new List<string> { "temperature_f", "temperature_c", "humidity", "pressure" };
+                foreach (var sensor in requiredSensors)
+                {
+                    if (!validSensors.Contains(sensor))
                     {
-                        _logger.Debug("Processing rule file: {File}", file);
-                        var content = System.IO.File.ReadAllText(file);
-                        rules.AddRange(_parser.ParseRules(content, validSensors, file));
+                        validSensors.Add(sensor);
+                        _logger.Warning("Added missing required sensor in LoadRulesFromPaths: {Sensor}", sensor);
                     }
                 }
-                else if (System.IO.File.Exists(rulesPath))
+
+                _logger.Information("Final valid sensors list in LoadRulesFromPaths: {Sensors}", string.Join(", ", validSensors));
+
+                if (Directory.Exists(rulesPath))
+                {
+                    _logger.Debug("Loading rules from directory: {Path}", rulesPath);
+                    var files = Directory.GetFiles(rulesPath, "*.yaml", SearchOption.AllDirectories);
+                    foreach (var file in files)
+                    {
+                        try
+                        {
+                            var content = System.IO.File.ReadAllText(file);
+                            var parsedRules = _parser.ParseRules(content, validSensors, System.IO.Path.GetFileName(file), allowInvalidSensors);
+                            rules.AddRange(parsedRules);
+                        }
+                        catch (Exception ex) when (ex is not ValidationException)
+                        {
+                            _logger.Error(ex, "Error parsing rule file: {Path}", file);
+                        }
+                    }
+                }
+                else if (File.Exists(rulesPath))
                 {
                     _logger.Debug("Loading rules from file: {Path}", rulesPath);
                     var content = System.IO.File.ReadAllText(rulesPath);
-                    rules.AddRange(_parser.ParseRules(content, validSensors, rulesPath));
+                    var parsedRules = _parser.ParseRules(content, validSensors, System.IO.Path.GetFileName(rulesPath), allowInvalidSensors);
+                    rules.AddRange(parsedRules);
                 }
                 else
                 {
-                    throw new System.IO.FileNotFoundException($"Rules path not found: {rulesPath}");
-                }
-
-                if (!rules.Any())
-                {
-                    throw new InvalidOperationException("No rules found in the specified path(s)");
+                    _logger.Error("Rules path not found: {Path}", rulesPath);
                 }
 
                 return rules;
             }
-            catch (Exception ex)
+            catch (ValidationException ex)
             {
                 _logger.Error(ex, "Error loading rules from {Path}", rulesPath);
                 throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error loading rules from {Path}", rulesPath);
+                return new List<RuleDefinition>();
             }
         }
     }

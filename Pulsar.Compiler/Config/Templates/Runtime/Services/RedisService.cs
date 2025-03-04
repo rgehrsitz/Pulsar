@@ -6,33 +6,22 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Generated;
-using NRedisStack;
-using NRedisStack.RedisStackCommands;
+using Beacon.Runtime.Interfaces;
+using Beacon.Runtime.Models;
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
-using Serilog;
 using StackExchange.Redis;
 
-namespace Generated.Services;
-
-public interface IRedisService
-{
-    Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(
-        IEnumerable<string> sensorKeys
-    );
-    Task SetOutputValuesAsync(Dictionary<string, double> outputs);
-    RedisHealthCheck.ConnectionHealth GetEndpointHealth(string endpoint);
-}
+namespace Beacon.Runtime.Services;
 
 public class RedisService : IRedisService, IDisposable
 {
-    private readonly ILogger _logger;
+    private readonly ILogger<RedisService> _logger;
     private readonly ConcurrentDictionary<string, DateTime> _lastErrorTime = new();
     private readonly TimeSpan _errorThrottleWindow = TimeSpan.FromSeconds(60);
     private readonly ConnectionMultiplexer[] _connectionPool;
     private readonly Random _random = new();
-    private readonly int _poolSize;
     private readonly AsyncRetryPolicy _retryPolicy;
     private readonly ConfigurationOptions _redisOptions;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
@@ -40,21 +29,23 @@ public class RedisService : IRedisService, IDisposable
     private readonly RedisHealthCheck? _healthCheck;
     private bool _disposed;
 
-    public RedisService(RedisConfiguration config, string? logPath = null)
-    {
-        RedisLoggingConfiguration.EnsureLogDirectories();
-        _logger = RedisLoggingConfiguration.ConfigureRedisLogger(config, logPath);
+    public bool IsHealthy => _healthCheck?.IsHealthy ?? true;
 
-        _poolSize = config.PoolSize;
-        _connectionPool = new ConnectionMultiplexer[_poolSize];
-        _metrics = new RedisMetrics(config.Metrics.InstanceName);
+    public RedisService(RedisConfiguration config, ILoggerFactory loggerFactory)
+    {
+        _logger = loggerFactory.CreateLogger<RedisService>();
+
+        // Use a default pool size of 5 connections
+        var poolSize = 5;
+        _connectionPool = new ConnectionMultiplexer[poolSize];
+        _metrics = config.Metrics;
 
         try
         {
             _redisOptions = config.ToRedisOptions();
 
             // Initialize connection pool
-            for (int i = 0; i < _poolSize; i++)
+            for (int i = 0; i < poolSize; i++)
             {
                 _connectionPool[i] = ConnectionMultiplexer.Connect(_redisOptions);
                 SetupConnectionCallbacks(_connectionPool[i]);
@@ -69,45 +60,28 @@ public class RedisService : IRedisService, IDisposable
                     retryAttempt =>
                     {
                         var delay = TimeSpan.FromMilliseconds(
-                            Math.Pow(2, retryAttempt) * config.RetryBaseDelayMs
+                            Math.Pow(2, retryAttempt) * config.RetryDelayMs
                         );
-                        _logger.Debug(
-                            "Retry {RetryAttempt}/{MaxRetries} after {Delay}ms",
-                            retryAttempt,
-                            config.RetryCount,
-                            delay.TotalMilliseconds
-                        );
+                        LogDebug($"Retry {retryAttempt}/{config.RetryCount} after {delay.TotalMilliseconds}ms");
                         return delay;
                     },
                     (exception, timeSpan, retryCount, context) =>
                     {
-                        _logger.Warning(
-                            exception,
-                            "Redis operation failed. Retry {RetryCount} after {Delay}ms. Error: {ErrorMessage}",
-                            retryCount,
-                            timeSpan.TotalMilliseconds,
-                            exception.Message
-                        );
-                        _metrics.TrackError(exception.GetType().Name);
+                        LogWarning($"Redis operation failed. Retry {retryCount} after {timeSpan.TotalMilliseconds}ms. Error: {exception.Message}");
+                        _metrics.IncrementRetryCount();
+                        return Task.CompletedTask;
                     }
                 );
 
-            // Initialize health check if enabled
-            if (config.HealthCheck.Enabled)
-            {
-                _healthCheck = new RedisHealthCheck(config, _logger);
-            }
+            // Initialize health check
+            _healthCheck = config.HealthCheck;
 
-            _logger.Information(
-                "Redis service initialized with pool size: {PoolSize}, endpoints: {Endpoints}",
-                _poolSize,
-                string.Join(",", config.Endpoints)
-            );
+            LogInformation($"Redis service initialized with pool size: {poolSize}, endpoints: {string.Join(",", config.Endpoints)}");
         }
         catch (Exception ex)
         {
-            _logger.Fatal(ex, "Failed to initialize Redis service: {ErrorMessage}", ex.Message);
-            _metrics?.TrackError("InitializationError");
+            LogError($"Failed to initialize Redis service: {ex.Message}", ex);
+            _metrics.RecordError("InitializationError");
             throw;
         }
     }
@@ -116,38 +90,30 @@ public class RedisService : IRedisService, IDisposable
     {
         connection.ConnectionFailed += (sender, e) =>
         {
-            _logger.Error("Redis connection failed: {@Error}", e.Exception);
-            _metrics.TrackError("ConnectionFailed");
-            if (sender is ConnectionMultiplexer multiplexer)
+            LogError($"Redis connection failed: {e.Exception.Message}", e.Exception);
+            _metrics.RecordError("ConnectionFailed");
+            if (sender is ConnectionMultiplexer)
             {
-                var endpoint = multiplexer.Configuration.Split(',')[0];
-                _metrics.UpdateConnectionCount(
-                    endpoint,
-                    (int)multiplexer.GetCounters().TotalOutstanding
-                );
+                _metrics.UpdateConnectionCount(-1);
             }
         };
 
         connection.ConnectionRestored += (sender, e) =>
         {
-            _logger.Information("Redis connection restored");
-            if (sender is ConnectionMultiplexer multiplexer)
+            LogInformation("Redis connection restored");
+            if (sender is ConnectionMultiplexer)
             {
-                var endpoint = multiplexer.Configuration.Split(',')[0];
-                _metrics.UpdateConnectionCount(
-                    endpoint,
-                    (int)multiplexer.GetCounters().TotalOutstanding
-                );
+                _metrics.UpdateConnectionCount(1);
             }
         };
 
         connection.ErrorMessage += (sender, e) =>
-            _logger.Warning("Redis error: {Error}", e.Message);
+            LogWarning($"Redis error: {e.Message}");
 
         connection.InternalError += (sender, e) =>
         {
-            _logger.Error(e.Exception, "Redis internal error");
-            _metrics.TrackError("InternalError");
+            LogError($"Redis internal error", e.Exception);
+            _metrics.RecordError("InternalError");
         };
     }
 
@@ -159,24 +125,24 @@ public class RedisService : IRedisService, IDisposable
             {
                 using var operation = _metrics.TrackOperation("Reconnect");
                 await ConnectionMultiplexer.ConnectAsync(_redisOptions);
-                _logger.Information("Redis connection reconfigured successfully");
+                LogInformation("Redis connection reconfigured successfully");
             }
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Failed to reconfigure Redis connection");
-            _metrics.TrackError("ReconnectionError");
+            LogError($"Failed to reconfigure Redis connection", ex);
+            _metrics.RecordError("ReconnectionError");
         }
     }
 
     private ConnectionMultiplexer GetConnection()
     {
-        var index = _random.Next(_poolSize);
+        var index = _random.Next(_connectionPool.Length);
         var connection = _connectionPool[index];
 
         if (!connection.IsConnected)
         {
-            _logger.Warning("Connection {Index} is disconnected, trying to reconnect", index);
+            LogWarning($"Connection {index} is disconnected, trying to reconnect");
             TryReconnect(connection).Wait();
         }
 
@@ -227,9 +193,7 @@ public class RedisService : IRedisService, IDisposable
                         }
                         else
                         {
-                            LogThrottledWarning(
-                                $"Invalid value or timestamp format for sensor {keyArray[i]}"
-                            );
+                            LogWarning($"Invalid value or timestamp format for sensor {keyArray[i]}");
                         }
                     }
                 }
@@ -237,8 +201,8 @@ public class RedisService : IRedisService, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Error fetching sensor values from Redis");
-            _metrics.TrackError("GetSensorValuesError");
+            LogError($"Error fetching sensor values from Redis", ex);
+            _metrics.RecordError("GetSensorValuesError");
             throw;
         }
         finally
@@ -286,8 +250,8 @@ public class RedisService : IRedisService, IDisposable
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Error writing output values to Redis");
-            _metrics.TrackError("SetOutputValuesError");
+            LogError($"Error writing output values to Redis", ex);
+            _metrics.RecordError("SetOutputValuesError");
             throw;
         }
         finally
@@ -296,30 +260,49 @@ public class RedisService : IRedisService, IDisposable
         }
     }
 
-    public RedisHealthCheck.ConnectionHealth GetEndpointHealth(string endpoint)
+    private void LogError(string message, Exception? ex = null)
     {
-        return _healthCheck?.GetEndpointHealth(endpoint) ?? new RedisHealthCheck.ConnectionHealth();
-    }
-
-    private void LogThrottledWarning(string message)
-    {
-        if (_lastErrorTime.TryGetValue(message, out var lastTime))
+        var now = DateTime.UtcNow;
+        var key = message + (ex?.Message ?? string.Empty);
+        
+        if (_lastErrorTime.TryGetValue(key, out var lastTime) && 
+            (now - lastTime) < _errorThrottleWindow)
         {
-            if (DateTime.UtcNow - lastTime < _errorThrottleWindow)
-            {
-                return;
-            }
+            return; // Skip logging to avoid flooding logs
         }
-
-        _lastErrorTime.AddOrUpdate(message, DateTime.UtcNow, (_, _) => DateTime.UtcNow);
-        _logger.Warning(message);
+        
+        _lastErrorTime[key] = now;
+        
+        if (ex != null)
+        {
+            _logger.LogError(ex, message);
+        }
+        else
+        {
+            _logger.LogError(message);
+        }
+    }
+    
+    private void LogDebug(string message)
+    {
+        _logger.LogDebug(message);
+    }
+    
+    private void LogWarning(string message)
+    {
+        _logger.LogWarning(message);
+    }
+    
+    private void LogInformation(string message)
+    {
+        _logger.LogInformation(message);
     }
 
     public void Dispose()
     {
         if (!_disposed)
         {
-            _logger.Debug("Disposing RedisService");
+            LogDebug("Disposing RedisService");
             _connectionLock.Dispose();
             foreach (var connection in _connectionPool)
             {
@@ -329,7 +312,7 @@ public class RedisService : IRedisService, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.Warning(ex, "Error disposing Redis connection");
+                    LogWarning($"Error disposing Redis connection", ex);
                 }
             }
             _healthCheck?.Dispose();

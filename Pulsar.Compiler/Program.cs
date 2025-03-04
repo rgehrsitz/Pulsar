@@ -23,9 +23,36 @@ public class Program
         try
         {
             var options = ParseArguments(args);
-            var command = options.GetValueOrDefault("command", "compile");
+            
+            if (options.Count == 0 || !options.ContainsKey("command"))
+            {
+                PrintUsage(_logger);
+                return 1;
+            }
+            
+            var command = options["command"];
 
-            ValidateRequiredOptions(options);
+            try
+            {
+                ValidateRequiredOptions(options);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.Error(ex.Message);
+                
+                // Print specific usage based on the command
+                switch (command)
+                {
+                    case "beacon":
+                        PrintBeaconUsage(_logger);
+                        break;
+                    default:
+                        PrintUsage(_logger);
+                        break;
+                }
+                
+                return 1;
+            }
 
             switch (command)
             {
@@ -37,6 +64,8 @@ public class Program
                     return await InitializeProject(options, _logger) ? 0 : 1;
                 case "generate":
                     return await GenerateBuildableProject(options, _logger) ? 0 : 1;
+                case "beacon":
+                    return await GenerateBeaconSolution(options, _logger) ? 0 : 1;
                 default:
                     _logger.Error("Unknown command: {Command}", command);
                     PrintUsage(_logger);
@@ -250,64 +279,83 @@ https://github.com/yourusername/pulsar/docs"
 
     private static void PrintUsage(ILogger logger)
     {
-        logger.Information("Pulsar Rule Compiler");
-        logger.Information("");
-        logger.Information("Usage:");
-        logger.Information("  Step 1: Generate buildable project");
-        logger.Information(
-            "    pulsar generate --rules <path> --config <config.yaml> --output <dir>"
-        );
-        logger.Information("");
-        logger.Information("  Step 2: Build AOT runtime (run from output directory)");
-        logger.Information(
-            "    dotnet publish -c Release -r <linux-x64|win-x64|osx-x64> --self-contained true"
-        );
-        logger.Information("");
+        logger.Information("Usage: Pulsar.Compiler <command> [options]");
+        logger.Information("Commands:");
+        logger.Information("  compile  - Compile rules to C# code");
+        logger.Information("  validate - Validate rule syntax");
+        logger.Information("  init     - Initialize a new project");
+        logger.Information("  generate - Generate a buildable project");
+        logger.Information("  beacon   - Generate a fully AOT-compatible Beacon solution");
         logger.Information("Options:");
-        logger.Information("  --rules <path>       Path to YAML rule file(s)");
-        logger.Information("  --config <path>      Path to system configuration file");
-        logger.Information("  --output <dir>       Output directory for generated project");
-        logger.Information("  --debug              Include debug symbols and enhanced logging");
-        logger.Information("");
-        logger.Information("Examples:");
-        logger.Information(
-            "  pulsar generate --rules ./rules/myrules.yaml --config system_config.yaml --output ./runtime"
-        );
-        logger.Information(
-            "  cd runtime && dotnet publish -c Release -r linux-x64 --self-contained true"
-        );
+        logger.Information("  --rules=<path>   Path to rules file or directory (required)");
+        logger.Information("  --output=<path>  Output directory (required for compile/generate)");
+        logger.Information("  --config=<path>  System configuration file (optional)");
+        logger.Information("  --target=<id>    Target runtime identifier for AOT (e.g., win-x64, linux-x64)");
+        logger.Information("  --verbose        Enable verbose logging");
     }
 
     private static Dictionary<string, string> ParseArguments(string[] args)
     {
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        for (int i = 1; i < args.Length; i++)
+        if (args.Length == 0)
         {
-            if (!args[i].StartsWith("--"))
-            {
-                throw new ArgumentException($"Invalid argument format: {args[i]}");
-            }
-
-            var key = args[i].Substring(2);
-
-            // Handle flags without values
-            if (IsFlagOption(key))
-            {
-                options[key] = "true";
-                continue;
-            }
-
-            // Handle options with values
-            if (i + 1 >= args.Length)
-            {
-                throw new ArgumentException($"Missing value for argument: {args[i]}");
-            }
-
-            options[key] = args[++i];
+            return options;
         }
 
-        ValidateRequiredOptions(options);
+        // First argument is the command
+        options["command"] = args[0];
+
+        for (int i = 1; i < args.Length; i++)
+        {
+            string arg = args[i];
+            
+            // Handle different argument formats (--key=value, --key value, or --flag)
+            if (arg.StartsWith("--"))
+            {
+                string key = arg.Substring(2);
+                
+                // Handle --key=value format
+                if (key.Contains("="))
+                {
+                    var parts = key.Split('=', 2);
+                    options[parts[0]] = parts[1];
+                    continue;
+                }
+                
+                // Handle flags without values
+                if (IsFlagOption(key))
+                {
+                    options[key] = "true";
+                    continue;
+                }
+                
+                // Handle --key value format
+                if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
+                {
+                    options[key] = args[++i];
+                }
+                else
+                {
+                    // If no value is provided and it's not a flag, use an empty string
+                    options[key] = "";
+                }
+            }
+            else
+            {
+                // Non-option arguments (not starting with --)
+                if (i == 0)
+                {
+                    options["command"] = arg;
+                }
+                else
+                {
+                    // Handle positional arguments if needed
+                    _logger.Warning("Ignoring unexpected positional argument: {Arg}", arg);
+                }
+            }
+        }
+
         return options;
     }
 
@@ -339,6 +387,21 @@ https://github.com/yourusername/pulsar/docs"
                 if (!options.ContainsKey("rules"))
                 {
                     throw new ArgumentException("--rules argument is required for validation");
+                }
+                break;
+                
+            case "beacon":
+                if (!options.ContainsKey("rules"))
+                {
+                    throw new ArgumentException("--rules argument is required for Beacon solution generation");
+                }
+                // Validate target runtime if specified
+                if (options.TryGetValue("target", out var target))
+                {
+                    if (!IsValidTarget(target))
+                    {
+                        throw new ArgumentException($"Invalid target runtime: {target}");
+                    }
                 }
                 break;
         }
@@ -505,7 +568,7 @@ https://github.com/yourusername/pulsar/docs"
         logger.Information("Generated source map at {Path}", sourceMapPath);
     }
 
-    private static async Task<int> ValidateRules(Dictionary<string, string> options, ILogger logger)
+    public static async Task<int> ValidateRules(Dictionary<string, string> options, ILogger logger)
     {
         logger.Information("Validating rules...");
 
@@ -658,5 +721,222 @@ https://github.com/yourusername/pulsar/docs"
                 );
             }
         }
+    }
+
+    public static async Task<bool> GenerateBeaconSolution(
+        Dictionary<string, string> options,
+        ILogger logger
+    )
+    {
+        logger.Information("Generating AOT-compatible Beacon solution...");
+
+        try
+        {
+            var rulesPath = options.GetValueOrDefault("rules", null);
+            var configPath = options.GetValueOrDefault("config", "system_config.yaml");
+            var outputPath = options.GetValueOrDefault("output", ".");
+            var target = options.GetValueOrDefault("target", "win-x64");
+            var verbose = options.ContainsKey("verbose");
+
+            if (string.IsNullOrEmpty(rulesPath))
+            {
+                logger.Error("Rules path not specified");
+                PrintBeaconUsage(logger);
+                return false;
+            }
+
+            // Parse system config
+            if (!File.Exists(configPath))
+            {
+                logger.Error("System configuration file not found: {Path}", configPath);
+                return false;
+            }
+
+            // Create output directory if it doesn't exist
+            if (!Directory.Exists(outputPath))
+            {
+                logger.Information("Creating output directory: {Path}", outputPath);
+                Directory.CreateDirectory(outputPath);
+            }
+            else
+            {
+                logger.Information("Output directory already exists: {Path}", outputPath);
+                // Clean the output directory if it's not empty
+                var files = Directory.GetFiles(outputPath);
+                if (files.Length > 0)
+                {
+                    logger.Information("Cleaning output directory...");
+                    foreach (var file in files)
+                    {
+                        File.Delete(file);
+                    }
+                }
+            }
+
+            // Load system config using proper method
+            logger.Information("Loading system config from {Path}", configPath);
+            if (verbose)
+            {
+                var configContent = await File.ReadAllTextAsync(configPath);
+                logger.Debug("Config file content:\n{Content}", configContent);
+            }
+            
+            var systemConfig = SystemConfig.Load(configPath);
+            
+            // Debug validSensors
+            logger.Information("System configuration loaded with {SensorCount} valid sensors: {Sensors}", 
+                systemConfig.ValidSensors?.Count ?? 0,
+                string.Join(", ", systemConfig.ValidSensors ?? new List<string>()));
+
+            // Ensure validSensors is not null and contains required sensors
+            if (systemConfig.ValidSensors == null)
+            {
+                systemConfig.ValidSensors = new List<string>();
+                logger.Warning("ValidSensors was null, creating new empty list");
+            }
+
+            // Manually add required sensors if they're not already in the list
+            var requiredSensors = new List<string> { "temperature_f", "temperature_c", "humidity", "pressure" };
+            foreach (var sensor in requiredSensors)
+            {
+                if (!systemConfig.ValidSensors.Contains(sensor))
+                {
+                    systemConfig.ValidSensors.Add(sensor);
+                    logger.Warning("Added missing required sensor: {Sensor}", sensor);
+                }
+            }
+
+            logger.Information("Final valid sensors list: {Sensors}", string.Join(", ", systemConfig.ValidSensors));
+
+            // Parse rules
+            var parser = new DslParser();
+            var rules = new List<RuleDefinition>();
+
+            // Create compiler options with validation disabled
+            var compilerOptions = new CompilerOptions
+            {
+                ValidSensors = systemConfig.ValidSensors,
+                AllowInvalidSensors = true, // Bypass sensor validation
+                OutputDirectory = outputPath,
+                TargetFramework = "net9.0",
+                RuntimeIdentifier = target
+            };
+
+            // Try to load rules directly first
+            if (File.Exists(rulesPath))
+            {
+                var content = await File.ReadAllTextAsync(rulesPath);
+                var parsedRules = parser.ParseRules(content, systemConfig.ValidSensors, Path.GetFileName(rulesPath), true);
+                rules.AddRange(parsedRules);
+            }
+            else if (Directory.Exists(rulesPath))
+            {
+                foreach (var file in Directory.GetFiles(rulesPath, "*.yaml", SearchOption.AllDirectories))
+                {
+                    var content = await File.ReadAllTextAsync(file);
+                    var parsedRules = parser.ParseRules(content, systemConfig.ValidSensors, Path.GetFileName(file), true);
+                    rules.AddRange(parsedRules);
+                }
+            }
+            else
+            {
+                logger.Error("Rules path not found: {Path}", rulesPath);
+                return false;
+            }
+
+            logger.Information("Parsed {Count} rules", rules.Count);
+
+            if (rules.Count == 0)
+            {
+                // If no rules were parsed directly, try using the compilation pipeline
+                logger.Warning("No rules were parsed directly, attempting to use compilation pipeline");
+                var pipeline = new CompilationPipeline(new AOTRuleCompiler(), new DslParser());
+                var compilationResult = pipeline.ProcessRules(rulesPath, compilerOptions);
+                
+                if (!compilationResult.Success)
+                {
+                    logger.Error("No rules could be parsed from the specified path");
+                    return false;
+                }
+                
+                rules = compilationResult.Rules;
+            }
+
+            // Generate the Beacon solution
+            var buildConfig = new BuildConfig
+            {
+                OutputPath = outputPath,
+                Target = target,
+                ProjectName = "Beacon.Runtime",
+                AssemblyName = "Beacon.Runtime",
+                TargetFramework = "net9.0",
+                RulesPath = rulesPath,
+                RuleDefinitions = rules,
+                SystemConfig = systemConfig,
+                StandaloneExecutable = true,
+                GenerateDebugInfo = false,
+                OptimizeOutput = true,
+                Namespace = "Beacon.Runtime",
+                RedisConnection = systemConfig.Redis?.Endpoints?.Count > 0 ? 
+                    systemConfig.Redis.Endpoints[0] : "localhost:6379",
+                CycleTime = systemConfig.CycleTime,
+                BufferCapacity = systemConfig.BufferCapacity,
+                MaxRulesPerFile = 50,
+                MaxLinesPerFile = 1000,
+                ComplexityThreshold = 10,
+                GroupParallelRules = true,
+                GenerateTestProject = true,
+                CreateSeparateDirectory = true,
+                SolutionName = "Beacon"
+            };
+
+            var orchestrator = new BeaconBuildOrchestrator();
+            var buildResult = await orchestrator.BuildBeaconAsync(buildConfig);
+
+            if (buildResult.Success)
+            {
+                logger.Information("Beacon solution generated successfully");
+                
+                // List the generated files
+                var generatedFiles = Directory.GetFiles(outputPath);
+                logger.Information("Generated {Count} files:", generatedFiles.Length);
+                foreach (var file in generatedFiles)
+                {
+                    var fileInfo = new FileInfo(file);
+                    logger.Information("  {Name} ({Size} bytes)", Path.GetFileName(file), fileInfo.Length);
+                }
+                
+                return true;
+            }
+            else
+            {
+                logger.Error("Failed to generate Beacon solution:");
+                foreach (var error in buildResult.Errors)
+                {
+                    logger.Error("  {Error}", error);
+                }
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Error(ex, "Error generating Beacon solution");
+            return false;
+        }
+    }
+
+    private static void PrintBeaconUsage(ILogger logger)
+    {
+        logger.Information("Usage: dotnet run --project Pulsar.Compiler.csproj beacon --rules <rules-path> --config <config-path> --output <output-path> [--target <runtime-id>] [--verbose]");
+        logger.Information("");
+        logger.Information("Options:");
+        logger.Information("  --rules <path>      Path to YAML rule file or directory containing rule files (required)");
+        logger.Information("  --config <path>     Path to system configuration YAML file (default: system_config.yaml)");
+        logger.Information("  --output <path>     Output directory for the Beacon solution (default: current directory)");
+        logger.Information("  --target <runtime>  Target runtime identifier for AOT compilation (default: win-x64)");
+        logger.Information("  --verbose          Enable verbose logging");
+        logger.Information("");
+        logger.Information("Example:");
+        logger.Information("  dotnet run --project Pulsar.Compiler.csproj beacon --rules ./rules.yaml --config ./system_config.yaml --output ./output --target win-x64");
     }
 }

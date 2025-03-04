@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
@@ -45,13 +47,13 @@ namespace Pulsar.Compiler.Config
                 };
 
                 // Ensure output directory exists
-                var outputDir = config.OutputDirectory ?? config.OutputPath;
+                var outputDir = config.OutputDirectory;
                 if (string.IsNullOrEmpty(outputDir))
                 {
                     throw new ArgumentException("Output directory is not specified in the configuration");
                 }
                 
-                // Create a beacon directory inside the output directory if CreateSeparateDirectory is true
+                // Create a beacon directory inside the output directory
                 string beaconOutputDir = outputDir;
                 if (config.CreateSeparateDirectory)
                 {
@@ -90,16 +92,16 @@ namespace Pulsar.Compiler.Config
 
                 // Create rule manifest file
                 string manifestPath = Path.Combine(generatedOutputDir, "rules.manifest.json");
-                var manifestContent = Newtonsoft.Json.JsonConvert.SerializeObject(
-                    compilationResult.Manifest, 
-                    Newtonsoft.Json.Formatting.Indented
+                var manifestContent = JsonSerializer.Serialize(
+                    compilationResult.Manifest,
+                    new JsonSerializerOptions { WriteIndented = true }
                 );
                 File.WriteAllText(manifestPath, manifestContent);
                 _logger.Information("Created rule manifest at {Path}", manifestPath);
 
                 // Build the solution using dotnet CLI
                 _logger.Information("Building Beacon solution at {OutputDir}", beaconOutputDir);
-                var solutionPath = Path.Combine(beaconOutputDir, $"{config.SolutionName}.sln");
+                var solutionPath = Path.Combine(beaconOutputDir, config.SolutionName + ".sln");
 
                 if (!File.Exists(solutionPath))
                 {
@@ -194,11 +196,12 @@ namespace Pulsar.Compiler.Config
                     manifestPath
                 };
                 
+                // Add test project path if generated
                 if (config.GenerateTestProject)
                 {
-                    result.GeneratedFiles = result.GeneratedFiles.Append(
-                        Path.Combine(beaconOutputDir, "Beacon.Tests", "Beacon.Tests.csproj")
-                    ).ToArray();
+                    var testFiles = result.GeneratedFiles.ToList();
+                    testFiles.Add(Path.Combine(beaconOutputDir, "Beacon.Tests", "Beacon.Tests.csproj"));
+                    result.GeneratedFiles = testFiles.ToArray();
                 }
                 
                 return result;
