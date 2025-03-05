@@ -17,13 +17,22 @@ namespace Beacon.Runtime.Models
 
         public static RuntimeConfig LoadFromEnvironment()
         {
-            // Try to load from embedded config first
+            // Try to load from embedded config first if it exists
             try
             {
-                var embeddedConfig = JsonSerializer.Deserialize<RuntimeConfig>(EmbeddedConfig.ConfigJson);
-                if (embeddedConfig != null)
+                var embeddedConfigType = Type.GetType("Beacon.Runtime.Generated.EmbeddedConfig");
+                if (embeddedConfigType != null)
                 {
-                    return embeddedConfig;
+                    var configJsonProperty = embeddedConfigType.GetProperty("ConfigJson");
+                    if (configJsonProperty != null)
+                    {
+                        var configJson = (string)configJsonProperty.GetValue(null);
+                        var embeddedConfig = JsonSerializer.Deserialize<RuntimeConfig>(configJson);
+                        if (embeddedConfig != null)
+                        {
+                            return embeddedConfig;
+                        }
+                    }
                 }
             }
             catch (Exception)

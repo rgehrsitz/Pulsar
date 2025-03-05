@@ -13,9 +13,9 @@ namespace Beacon.Runtime.Services
     /// <summary>
     /// Health check for Redis connections
     /// </summary>
-    public class RedisHealthCheck
+    public class RedisHealthCheck : IDisposable
     {
-        private readonly ILogger _logger;
+        private readonly ILogger? _logger;
         private readonly RedisConfiguration _config;
         private readonly Timer? _healthCheckTimer;
         private readonly TimeSpan _checkInterval = TimeSpan.FromSeconds(30);
@@ -37,6 +37,18 @@ namespace Beacon.Runtime.Services
         /// Gets the last error message if Redis is unhealthy
         /// </summary>
         public string LastErrorMessage => _lastErrorMessage;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RedisHealthCheck"/> class with just configuration
+        /// </summary>
+        /// <param name="config">Redis configuration</param>
+        public RedisHealthCheck(RedisConfiguration config)
+        {
+            _config = config;
+            _isHealthy = true; // Assume healthy until proven otherwise
+            
+            // Don't start timer in this constructor to avoid circular dependency
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="RedisHealthCheck"/> class
@@ -62,7 +74,7 @@ namespace Beacon.Runtime.Services
         /// Performs a health check on the Redis connection
         /// </summary>
         /// <returns>True if Redis is healthy, false otherwise</returns>
-        public async Task<bool> CheckHealthAsync(RedisConfiguration config, ILogger logger)
+        public async Task<bool> CheckHealthAsync(RedisConfiguration config, ILogger? logger = null)
         {
             try
             {
@@ -79,12 +91,12 @@ namespace Beacon.Runtime.Services
                 if (_isHealthy)
                 {
                     _lastErrorMessage = string.Empty;
-                    logger.LogDebug("Redis health check successful. Ping time: {PingTime}ms", pingResult.TotalMilliseconds);
+                    logger?.LogDebug("Redis health check successful. Ping time: {PingTime}ms", pingResult.TotalMilliseconds);
                 }
                 else
                 {
                     _lastErrorMessage = "Redis ping timeout";
-                    logger.LogWarning("Redis health check failed. Ping timeout.");
+                    logger?.LogWarning("Redis health check failed. Ping timeout.");
                 }
                 
                 return _isHealthy;
@@ -93,7 +105,7 @@ namespace Beacon.Runtime.Services
             {
                 _isHealthy = false;
                 _lastErrorMessage = ex.Message;
-                logger.LogError(ex, "Redis health check failed");
+                logger?.LogError(ex, "Redis health check failed");
                 return false;
             }
         }

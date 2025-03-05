@@ -42,7 +42,7 @@ namespace Beacon.Runtime
             }
 
             _logger.LogInformation("Starting RuntimeOrchestrator");
-            _executionTask = Task.Run(() => RunCycleAsync(_cts.Token));
+            _executionTask = Task.Run(() => RunContinuousAsync(_cts.Token));
             await Task.CompletedTask;
         }
 
@@ -60,7 +60,36 @@ namespace Beacon.Runtime
             _executionTask = null;
         }
 
-        public async Task RunCycleAsync(CancellationToken cancellationToken)
+        public async Task RunCycleAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                // Simplified version for single cycle execution
+                var inputs = await _redis.GetAllInputsAsync();
+                var outputs = new Dictionary<string, object>();
+
+                // Evaluate rules
+                await _coordinator.EvaluateRulesAsync(inputs, outputs);
+
+                // Write outputs back to Redis
+                if (outputs.Count > 0)
+                {
+                    await _redis.SetOutputsAsync(outputs);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("RuntimeOrchestrator execution cancelled");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during rule evaluation cycle");
+                throw;
+            }
+        }
+        
+        // This method handles continuous execution with cancellation token
+        private async Task RunContinuousAsync(CancellationToken cancellationToken)
         {
             try
             {
@@ -68,40 +97,17 @@ namespace Beacon.Runtime
                 {
                     try
                     {
-                        // Get all required sensor values from Redis
-                        var sensorValues = await _redis.GetSensorValuesAsync(
-                            _coordinator.RequiredSensors
-                        );
-                        var inputs = new Dictionary<string, object>();
+                        // Get all inputs from Redis
+                        var inputs = await _redis.GetAllInputsAsync();
                         var outputs = new Dictionary<string, object>();
-
-                        // Convert sensor values to inputs dictionary
-                        foreach (var (sensor, value) in sensorValues)
-                        {
-                            inputs[sensor] = value;
-                        }
 
                         // Evaluate rules
                         await _coordinator.EvaluateRulesAsync(inputs, outputs);
 
-                        // Convert outputs to doubles for Redis
-                        var outputValues = new Dictionary<string, double>();
-                        foreach (var (key, value) in outputs)
-                        {
-                            if (value is double doubleValue)
-                            {
-                                outputValues[key] = doubleValue;
-                            }
-                            else if (double.TryParse(value.ToString(), out doubleValue))
-                            {
-                                outputValues[key] = doubleValue;
-                            }
-                        }
-
                         // Write outputs back to Redis
-                        if (outputValues.Count > 0)
+                        if (outputs.Count > 0)
                         {
-                            await _redis.SetOutputValuesAsync(outputValues);
+                            await _redis.SetOutputsAsync(outputs);
                         }
                     }
                     catch (Exception ex)

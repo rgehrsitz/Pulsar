@@ -4,14 +4,15 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Beacon.Runtime.Buffers
 {
     public class RingBufferManager
     {
         private readonly int _capacity;
-        private readonly ConcurrentDictionary<string, Queue<(DateTime Timestamp, double Value)>> _buffers = 
-            new ConcurrentDictionary<string, Queue<(DateTime Timestamp, double Value)>>();
+        private readonly ConcurrentDictionary<string, Queue<(DateTime Timestamp, object Value)>> _buffers = 
+            new ConcurrentDictionary<string, Queue<(DateTime Timestamp, object Value)>>();
         private readonly IDateTimeProvider _dateTimeProvider;
 
         public RingBufferManager(int capacity, IDateTimeProvider? dateTimeProvider = null)
@@ -20,9 +21,9 @@ namespace Beacon.Runtime.Buffers
             _dateTimeProvider = dateTimeProvider ?? new SystemDateTimeProvider();
         }
 
-        public void AddValue(string key, double value)
+        public void AddValue(string key, object value)
         {
-            var buffer = _buffers.GetOrAdd(key, _ => new Queue<(DateTime, double)>(_capacity));
+            var buffer = _buffers.GetOrAdd(key, _ => new Queue<(DateTime, object)>(_capacity));
             
             lock (buffer)
             {
@@ -37,20 +38,34 @@ namespace Beacon.Runtime.Buffers
             }
         }
 
-        public IReadOnlyList<(DateTime Timestamp, double Value)> GetValues(string key)
+        public IReadOnlyList<(DateTime Timestamp, object Value)> GetValues(string key)
         {
             if (_buffers.TryGetValue(key, out var buffer))
             {
                 lock (buffer)
                 {
-                    return new List<(DateTime, double)>(buffer);
+                    return new List<(DateTime, object)>(buffer);
                 }
             }
             
-            return Array.Empty<(DateTime, double)>();
+            return Array.Empty<(DateTime, object)>();
+        }
+        
+        public IReadOnlyList<(DateTime Timestamp, object Value)> GetValues(string key, TimeSpan duration)
+        {
+            if (_buffers.TryGetValue(key, out var buffer))
+            {
+                lock (buffer)
+                {
+                    var cutoffTime = _dateTimeProvider.UtcNow - duration;
+                    return new List<(DateTime, object)>(buffer.Where(v => v.Timestamp >= cutoffTime));
+                }
+            }
+            
+            return Array.Empty<(DateTime, object)>();
         }
 
-        public double? GetLastValue(string key)
+        public object? GetLastValue(string key)
         {
             if (_buffers.TryGetValue(key, out var buffer) && buffer.Count > 0)
             {

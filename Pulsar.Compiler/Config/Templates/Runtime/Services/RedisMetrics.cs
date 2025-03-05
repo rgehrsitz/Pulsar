@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Threading;
 
 namespace Beacon.Runtime.Services
 {
@@ -13,10 +14,21 @@ namespace Beacon.Runtime.Services
         private readonly ConcurrentDictionary<string, long> _operationCounts = new ConcurrentDictionary<string, long>();
         private readonly ConcurrentDictionary<string, Stopwatch> _operationTimers = new ConcurrentDictionary<string, Stopwatch>();
         private int _connectionCount = 0;
+        private int _retryCount = 0;
 
         public void TrackError(string errorType)
         {
             _errorCounts.AddOrUpdate(errorType, 1, (_, count) => count + 1);
+        }
+        
+        public void RecordError(string errorType)
+        {
+            TrackError(errorType);
+        }
+        
+        public void IncrementRetryCount()
+        {
+            Interlocked.Increment(ref _retryCount);
         }
 
         public IDisposable TrackOperation(string operationName)
