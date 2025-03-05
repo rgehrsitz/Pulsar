@@ -10,17 +10,22 @@ using Beacon.Runtime.Services;
 using Beacon.Runtime.Models;
 using Beacon.Runtime.Buffers;
 using Beacon.Runtime.Interfaces;
-using Beacon.Runtime.Generated;
+// Removed Generated namespace import
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Beacon.Runtime
 {
+    [JsonSerializable(typeof(Dictionary<string, object>))]
+    [JsonSerializable(typeof(RuntimeConfig))]
+    [JsonSerializable(typeof(RedisConfiguration))]
+    public partial class SerializationContext : JsonSerializerContext { }
+    
     public class Program
     {
-        [JsonSerializable(typeof(Dictionary<string, object>))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuntimeOrchestrator))]
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RedisService))]
+        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuleCoordinator))]
         public static async Task Main(string[] args)
         {
             // Create a logger factory

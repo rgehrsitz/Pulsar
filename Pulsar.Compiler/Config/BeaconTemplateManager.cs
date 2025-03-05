@@ -362,18 +362,26 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine($"using {buildConfig.Namespace}.Buffers;");
             sb.AppendLine($"using {buildConfig.Namespace}.Services;");
             sb.AppendLine($"using {buildConfig.Namespace}.Interfaces;");
+            sb.AppendLine($"using {buildConfig.Namespace}.Models;");
+            // Removed Generated namespace import
             sb.AppendLine("using ILogger = Microsoft.Extensions.Logging.ILogger;");
             sb.AppendLine();
             
             // Add namespace and class declaration
             sb.AppendLine($"namespace {buildConfig.Namespace}");
             sb.AppendLine("{");
+            sb.AppendLine("    [JsonSerializable(typeof(Dictionary<string, object>))]");
+            sb.AppendLine("    [JsonSerializable(typeof(Models.RuntimeConfig))]");
+            sb.AppendLine("    [JsonSerializable(typeof(Models.RedisConfiguration))]");
+            sb.AppendLine("    public partial class SerializationContext : JsonSerializerContext { }");
+            sb.AppendLine("");
             sb.AppendLine("    public class Program");
             sb.AppendLine("    {");
             
             // Add main method
             sb.AppendLine("        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuntimeOrchestrator))]");
             sb.AppendLine("        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RedisService))]");
+            sb.AppendLine("        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuleCoordinator))]");
             sb.AppendLine("        public static async Task Main(string[] args)");
             sb.AppendLine("        {");
             sb.AppendLine("            // Configure logging");
@@ -405,8 +413,10 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("                });");
             sb.AppendLine("                using var redisService = new RedisService(redisConfig, loggerFactory);");
             sb.AppendLine("                var bufferManager = new RingBufferManager(config.BufferCapacity);");
-            sb.AppendLine("                var coordinator = new RuleCoordinator(redisService, logger, bufferManager);");
-            sb.AppendLine("                var orchestrator = new RuntimeOrchestrator(redisService, logger, coordinator);");
+            sb.AppendLine("                var coordinatorLogger = loggerFactory.CreateLogger<RuleCoordinator>();");
+            sb.AppendLine("                var orchestratorLogger = loggerFactory.CreateLogger<RuntimeOrchestrator>();");
+            sb.AppendLine("                var coordinator = new RuleCoordinator(redisService, coordinatorLogger, bufferManager);");
+            sb.AppendLine("                var orchestrator = new RuntimeOrchestrator(redisService, orchestratorLogger, coordinator);");
             sb.AppendLine();
             sb.AppendLine("                // Run the main cycle loop");
             sb.AppendLine("                await RunCycleLoop(orchestrator, config.CycleTime, logger);");

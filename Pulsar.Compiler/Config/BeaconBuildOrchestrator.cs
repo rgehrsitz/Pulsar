@@ -21,13 +21,13 @@ namespace Pulsar.Compiler.Config
     {
         private readonly ILogger _logger;
         private readonly CompilationPipeline _pipeline;
-        private readonly BeaconTemplateManager _templateManager;
+        private readonly BeaconTemplateManagerFixed _templateManager;
 
         public BeaconBuildOrchestrator(BuildConfig config = null)
         {
             _logger = LoggingConfig.GetLogger().ForContext<BeaconBuildOrchestrator>();
             _pipeline = new CompilationPipeline(new AOTRuleCompiler(), new Parsers.DslParser());
-            _templateManager = new BeaconTemplateManager();
+            _templateManager = new BeaconTemplateManagerFixed();
         }
 
         /// <summary>

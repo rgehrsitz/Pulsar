@@ -5,14 +5,22 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Beacon.Runtime.Models
 {
     public class RuntimeConfig
     {
+        [JsonInclude]
         public List<string> ValidSensors { get; set; } = new List<string>();
+        
+        [JsonInclude]
         public int CycleTime { get; set; } = 100;
+        
+        [JsonInclude]
         public int BufferCapacity { get; set; } = 100;
+        
+        [JsonInclude]
         public RedisConfiguration Redis { get; set; } = new RedisConfiguration();
 
         public static RuntimeConfig LoadFromEnvironment()
