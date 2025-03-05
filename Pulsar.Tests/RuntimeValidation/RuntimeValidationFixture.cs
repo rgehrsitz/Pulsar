@@ -50,10 +50,39 @@ namespace Pulsar.Tests.RuntimeValidation
             _parser = new DslParser();
             _testOutputPath = Path.Combine(Directory.GetCurrentDirectory(), "RuntimeValidation", "test-output");
             
+            // Ensure parent directories exist
+            var parentDir = Path.GetDirectoryName(_testOutputPath);
+            if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
+            {
+                Directory.CreateDirectory(parentDir);
+            }
+
+            // Now safely delete and recreate the test output directory
             if (Directory.Exists(_testOutputPath))
             {
-                Directory.Delete(_testOutputPath, true);
+                try
+                {
+                    Directory.Delete(_testOutputPath, true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"Could not delete directory {_testOutputPath}: {ex.Message}");
+                    // Try to clean individual files instead
+                    try
+                    {
+                        foreach (var file in Directory.GetFiles(_testOutputPath))
+                        {
+                            File.Delete(file);
+                        }
+                    }
+                    catch 
+                    {
+                        // Ignore cleanup errors, proceed with test
+                    }
+                }
             }
+            
+            // Create output directory if it doesn't exist
             Directory.CreateDirectory(_testOutputPath);
         }
 
@@ -203,7 +232,10 @@ bufferCapacity: 100
                     }
                 };
                 
-                // Use the BuildOrchestrator
+                // Add extra helper files needed for successful build
+                CreateRedisHelperClasses();
+                
+                // Use the BeaconBuildOrchestratorFixed implementation
                 _logger.LogInformation("Building project with {Count} rules", rules.Count);
                 var buildConfig = new BuildConfig
                 {
@@ -225,11 +257,12 @@ bufferCapacity: 100
                     MaxLinesPerFile = 1000,
                     ComplexityThreshold = 10,
                     GroupParallelRules = true,
-                    Namespace = "Beacon.Runtime" // Namespace needs to match the expected namespace
+                    Namespace = "Beacon.Runtime", // Namespace needs to match the expected namespace
+                    CreateSeparateDirectory = false // Don't create a subdirectory
                 };
                 
-                var buildOrchestrator = new BuildOrchestrator(buildConfig);
-                var buildResult = await buildOrchestrator.BuildAsync(buildConfig);
+                var orchestrator = new BeaconBuildOrchestratorFixed();
+                var buildResult = await orchestrator.BuildBeaconAsync(buildConfig);
                 
                 if (!buildResult.Success)
                 {
@@ -240,12 +273,48 @@ bufferCapacity: 100
                 
                 _logger.LogInformation("Build successful, loading assembly");
                 
-                // The assembly should already be built by the BuildOrchestrator
-                var assemblyPath = Path.Combine(_testOutputPath, "bin", "Release", "net9.0", "RuntimeTest.dll");
-                if (!File.Exists(assemblyPath))
+                // Try different possible assembly paths
+                var potentialPaths = new[]
                 {
-                    _logger.LogError("Assembly not found at expected path: {Path}", assemblyPath);
-                    return false;
+                    // BeaconBuildOrchestratorFixed paths
+                    Path.Combine(_testOutputPath, "bin", "Debug", "net9.0", "RuntimeTest.dll"),
+                    Path.Combine(_testOutputPath, "bin", "Release", "net9.0", "RuntimeTest.dll"),
+                    // With RID paths
+                    Path.Combine(_testOutputPath, "bin", "Debug", "net9.0", "linux-x64", "RuntimeTest.dll"),
+                    Path.Combine(_testOutputPath, "bin", "Release", "net9.0", "linux-x64", "RuntimeTest.dll"),
+                    // Legacy builder paths
+                    Path.Combine(_testOutputPath, "bin", "Debug", "net9.0", "publish", "RuntimeTest.dll"),
+                    Path.Combine(_testOutputPath, "bin", "Release", "net9.0", "publish", "RuntimeTest.dll")
+                };
+                
+                string? assemblyPath = null;
+                foreach (var path in potentialPaths)
+                {
+                    if (File.Exists(path))
+                    {
+                        assemblyPath = path;
+                        _logger.LogInformation("Found assembly at: {Path}", assemblyPath);
+                        break;
+                    }
+                }
+                
+                if (assemblyPath == null)
+                {
+                    // If not found, try to find the assembly by searching
+                    _logger.LogWarning("Assembly not found at expected paths, searching in output directory...");
+                    var searchPattern = "RuntimeTest.dll";
+                    var foundFiles = Directory.GetFiles(_testOutputPath, searchPattern, SearchOption.AllDirectories);
+                    
+                    if (foundFiles.Length > 0)
+                    {
+                        assemblyPath = foundFiles[0]; // Take the first one found
+                        _logger.LogInformation("Found assembly by search at: {Path}", assemblyPath);
+                    }
+                    else
+                    {
+                        _logger.LogError("Assembly not found in output directory");
+                        return false;
+                    }
                 }
                 
                 _logger.LogInformation("Loading assembly from: {Path}", assemblyPath);

@@ -40,7 +40,7 @@ namespace Pulsar.Tests.RuntimeValidation
             // We'll test the build process separately once we get this part working
             
             // Arrange
-            var ruleFile = Path.Combine(Directory.GetCurrentDirectory(), "RuntimeValidation", "simple-rule.yaml");
+            var ruleFile = Path.Combine(_fixture.OutputPath, "simple-rule.yaml");
             _fixture.Logger.LogInformation("Using rule file: {RuleFile}", ruleFile);
             Assert.True(File.Exists(ruleFile), $"Rule file should exist at {ruleFile}");
             
@@ -74,28 +74,8 @@ namespace Pulsar.Tests.RuntimeValidation
         public async Task BuildAndRunSimpleRule_ValidInput_ProducesExpectedOutput()
         {
             // Arrange
-            // Create a clean output directory for this test
-            var testOutputPath = Path.Combine(Directory.GetCurrentDirectory(), "RuntimeValidation", "build-test-output");
-            if (Directory.Exists(testOutputPath))
-            {
-                Directory.Delete(testOutputPath, true);
-            }
-            Directory.CreateDirectory(testOutputPath);
-            
-            // Test rule file paths - copy from fixture's test rules
-            var simpleRuleFile = Path.Combine(testOutputPath, "simple-rule.yaml");
-            var systemConfigFile = Path.Combine(testOutputPath, "system_config.yaml");
-            
-            // Copy files from fixture's test output directory
-            File.Copy(
-                Path.Combine(_fixture.OutputPath, "simple-rule.yaml"),
-                simpleRuleFile
-            );
-            
-            File.Copy(
-                Path.Combine(_fixture.OutputPath, "system_config.yaml"),
-                systemConfigFile
-            );
+            // Test rule file paths (directly from fixture) 
+            var simpleRuleFile = Path.Combine(_fixture.OutputPath, "simple-rule.yaml");
             
             // Act
             // Build the test project
