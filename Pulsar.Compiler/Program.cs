@@ -890,7 +890,7 @@ https://github.com/yourusername/pulsar/docs"
                 SolutionName = "Beacon"
             };
 
-            var orchestrator = new BeaconBuildOrchestrator();
+            var orchestrator = new BeaconBuildOrchestratorFixed();
             var buildResult = await orchestrator.BuildBeaconAsync(buildConfig);
 
             if (buildResult.Success)
