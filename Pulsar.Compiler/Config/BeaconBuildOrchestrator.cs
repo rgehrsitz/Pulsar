@@ -93,7 +93,7 @@ namespace Pulsar.Compiler.Config
                 // Create rule manifest file
                 string manifestPath = Path.Combine(generatedOutputDir, "rules.manifest.json");
                 var manifestContent = JsonSerializer.Serialize(
-                    compilationResult.Manifest,
+                    new { Rules = compilationResult.GeneratedFiles.Select(f => f.FileName).ToList() },
                     new JsonSerializerOptions { WriteIndented = true }
                 );
                 File.WriteAllText(manifestPath, manifestContent);

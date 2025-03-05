@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
+using Pulsar.Compiler.Generation.Generators;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
 using Serilog;
@@ -890,7 +891,7 @@ https://github.com/yourusername/pulsar/docs"
                 SolutionName = "Beacon"
             };
 
-            var orchestrator = new BeaconBuildOrchestratorFixed();
+            var orchestrator = new BeaconBuildOrchestrator();
             var buildResult = await orchestrator.BuildBeaconAsync(buildConfig);
 
             if (buildResult.Success)

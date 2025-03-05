@@ -79,3 +79,37 @@ log*.txt
 
 # Auto generated files from Pulsar.Compiler
 /Beacon/
+/Beacon2/
+/BeaconOutput/
+/Generated/
+
+# Pulsar-specific output directories
+/TestOutput/
+/logs/
+/test-output/
+
+# Build artifacts and temporary files
+*.dll
+*.exe
+*.pdb
+*.tmp
+*.cache
+
+# Visual Studio and Test artifacts
+.config/
+.nuget/
+TestResults/
+coverage.json
+coverage.xml
+coverage.info
+*.coverage
+*.opencover.xml
+
+# Environment specific files
+.env
+appsettings.*.json
+Properties/launchSettings.json
+
+# Beacon-specific generated directories
+**/Generated/
+**/*.manifest.json
