@@ -31,7 +31,7 @@ namespace Pulsar.Tests.RuntimeValidation
             _output = output;
         }
         
-        [Fact(Skip = "Requires full AOT setup")]
+        [Fact]
         public async Task Verify_NoReflectionUsed()
         {
             // Generate test rules

@@ -25,7 +25,7 @@ namespace Pulsar.Tests.RuntimeValidation
             _output = output;
         }
         
-        [Fact(Skip = "Current build infrastructure not compatible with memory tests")]
+        [Fact]
         public async Task ExtendedExecution_MonitorsMemoryUsage()
         {
             // Generate rules for memory testing
@@ -54,7 +54,7 @@ namespace Pulsar.Tests.RuntimeValidation
             AnalyzeMemoryUsage(memorySnapshots);
         }
         
-        [Fact(Skip = "Current build infrastructure not compatible with memory tests")]
+        [Fact]
         public async Task HighInputChurn_MonitorsMemoryStability()
         {
             // Generate rules for memory testing
@@ -96,7 +96,7 @@ namespace Pulsar.Tests.RuntimeValidation
             AnalyzeMemoryUsage(memorySnapshots);
         }
         
-        [Fact(Skip = "Current build infrastructure not compatible with memory tests")]
+        [Fact]
         public async Task CircularBuffer_VerifiesNoMemoryLeak()
         {
             // Generate rules with temporal dependencies that use circular buffer

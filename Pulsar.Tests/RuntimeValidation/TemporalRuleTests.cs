@@ -24,7 +24,7 @@ namespace Pulsar.Tests.RuntimeValidation
             _output = output;
         }
         
-        [Fact(Skip = "Requires full temporal rule support")]
+        [Fact]
         public async Task RateOfChange_CalculatesCorrectly()
         {
             // Generate rate-of-change rule
@@ -68,7 +68,7 @@ namespace Pulsar.Tests.RuntimeValidation
             _output.WriteLine($"Rate of change: {rateValue} units per second");
         }
         
-        [Fact(Skip = "Requires full temporal rule support")]
+        [Fact]
         public async Task PreviousValues_AccessibleInExpressions()
         {
             // Generate temporal rule that accesses previous values
@@ -124,7 +124,7 @@ namespace Pulsar.Tests.RuntimeValidation
             _output.WriteLine($"Average of last 3 values: {average}");
         }
         
-        [Fact(Skip = "Requires full temporal rule support")]
+        [Fact]
         public async Task CircularBuffer_HandlesBufferLimits()
         {
             // Generate rule that uses a larger number of historical values

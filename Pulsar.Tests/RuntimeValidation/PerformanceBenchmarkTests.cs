@@ -24,7 +24,7 @@ namespace Pulsar.Tests.RuntimeValidation
             _output = output;
         }
         
-        [Fact(Skip = "Current build infrastructure not compatible with performance tests")]
+        [Fact]
         public async Task Benchmark_IncreasingRuleCount_MeasuresScalability()
         {
             // Create rule sets with different numbers of rules
@@ -71,7 +71,7 @@ namespace Pulsar.Tests.RuntimeValidation
             }
         }
         
-        [Fact(Skip = "Current build infrastructure not compatible with performance tests")]
+        [Fact]
         public async Task Benchmark_IncreasingRuleComplexity_MeasuresPerformanceImpact()
         {
             // Create rules with different complexity levels
@@ -103,7 +103,7 @@ namespace Pulsar.Tests.RuntimeValidation
             }
         }
         
-        [Fact(Skip = "Current build infrastructure not compatible with performance tests")]
+        [Fact]
         public async Task Benchmark_ConcurrentRuleExecution_MeasuresThroughput()
         {
             // Generate a moderate set of rules

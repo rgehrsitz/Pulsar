@@ -70,7 +70,7 @@ namespace Pulsar.Tests.RuntimeValidation
             _fixture.Logger.LogInformation("Test completed successfully");
         }
         
-        [Fact(Skip = "Integration test requiring full AOT compilation")]
+        [Fact]
         public async Task BuildAndRunSimpleRule_ValidInput_ProducesExpectedOutput()
         {
             // Arrange
@@ -101,7 +101,7 @@ namespace Pulsar.Tests.RuntimeValidation
             _fixture.Logger.LogInformation("Rule execution completed with outputs: {@Outputs}", outputs);
         }
         
-        [Fact(Skip = "Integration test requiring full AOT compilation")]
+        [Fact]
         public async Task ComplexRule_NestedConditions_EvaluatesCorrectly()
         {
             // Arrange

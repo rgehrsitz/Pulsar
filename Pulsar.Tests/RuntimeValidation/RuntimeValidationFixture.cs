@@ -301,16 +301,68 @@ bufferCapacity: 100
                 if (assemblyPath == null)
                 {
                     // If not found, try to find the assembly by searching
+                    // If not found, try to find the assembly by searching
                     _logger.LogWarning("Assembly not found at expected paths, searching in output directory...");
-                    var searchPattern = "RuntimeTest.dll";
-                    var foundFiles = Directory.GetFiles(_testOutputPath, searchPattern, SearchOption.AllDirectories);
-                    
-                    if (foundFiles.Length > 0)
+                    string[] searchPatterns = new[] { "RuntimeTest.dll", "Beacon.Runtime.dll" };
+                
+                    foreach (var searchPattern in searchPatterns)
                     {
-                        assemblyPath = foundFiles[0]; // Take the first one found
-                        _logger.LogInformation("Found assembly by search at: {Path}", assemblyPath);
+                        var foundFiles = Directory.GetFiles(_testOutputPath, searchPattern, SearchOption.AllDirectories);
+                        
+                        if (foundFiles.Length > 0)
+                        {
+                            assemblyPath = foundFiles[0]; // Take the first one found
+                            _logger.LogInformation("Found assembly by search at: {Path}", assemblyPath);
+                            break;
+                        }
                     }
-                    else
+                
+                    if (string.IsNullOrEmpty(assemblyPath))
+                    {
+                        // Try building it manually
+                        _logger.LogInformation("Assembly not found, trying to build it manually");
+                        var buildCommand = $"dotnet build {_testOutputPath}/Beacon.Runtime/Beacon.Runtime.csproj";
+                        try
+                        {
+                            var process = new Process
+                            {
+                                StartInfo = new ProcessStartInfo
+                                {
+                                    FileName = "/bin/bash",
+                                    Arguments = $"-c \"{buildCommand}\"",
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true,
+                                    UseShellExecute = false
+                                }
+                            };
+                            process.Start();
+                            string output = process.StandardOutput.ReadToEnd();
+                            string error = process.StandardError.ReadToEnd();
+                            process.WaitForExit();
+                            
+                            if (process.ExitCode == 0)
+                            {
+                                _logger.LogInformation("Manual build succeeded: {Output}", output);
+                                // Search again after build
+                                var binFiles = Directory.GetFiles(_testOutputPath, "Beacon.Runtime.dll", SearchOption.AllDirectories);
+                                if (binFiles.Length > 0)
+                                {
+                                    assemblyPath = binFiles[0];
+                                    _logger.LogInformation("Found assembly after build at: {Path}", assemblyPath);
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogError("Failed to build assembly manually: {Error}", error);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error trying to build assembly manually");
+                        }
+                    }
+                
+                    if (string.IsNullOrEmpty(assemblyPath))
                     {
                         _logger.LogError("Assembly not found in output directory");
                         return false;
