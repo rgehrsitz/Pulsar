@@ -6,6 +6,7 @@ using System.Threading;
 using Pulsar.Compiler;
 using Pulsar.Compiler.Models;
 using Serilog;
+using Pulsar.Tests.TestUtilities;
 
 namespace Pulsar.Tests.TestUtilities
 {
@@ -15,7 +16,10 @@ namespace Pulsar.Tests.TestUtilities
     /// </summary>
     public static class TestRuleFactory
     {
-        private static readonly ILogger _logger = LoggingConfig.GetLogger();
+        // Use our adapter to convert MS Logger to Serilog
+        private static readonly ILogger _logger = LoggingConfig
+            .GetLogger()
+            .ToSerilogLogger();
         private static int _ruleCounter = 0;
 
         public static RuleDefinition CreateTestRule(string name = "", string description = "")

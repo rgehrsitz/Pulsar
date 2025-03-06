@@ -15,7 +15,7 @@ namespace Pulsar.Tests.RuleValidation
 
         public RuleValidationTests()
         {
-            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger();
+            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger());
         }
 
         [Fact]
