@@ -1,16 +1,54 @@
-# Pulsar Testing Guide
-
-This guide covers how to test the Pulsar rule compilation system and the Beacon runtime environment.
+# Testing Guide
 
 ## Overview
 
-The Pulsar testing framework validates the following components:
+This guide covers how to test the Pulsar rule compilation system and the Beacon runtime environment. The testing framework validates the following components:
 1. Rule parsing and validation
 2. Rule compilation into C# code
 3. AOT compilation of the generated code
 4. Runtime execution in the Beacon environment
 5. Performance and memory usage 
 6. Temporal rule behavior with buffer caching
+
+## Test Categories
+
+### Rule Parsing Tests
+
+These tests validate that YAML rules can be correctly parsed into `RuleDefinition` objects.
+
+### AOT Compilation Tests
+
+These tests verify that the generated C# code can be compiled with AOT (Ahead-of-Time) compilation, which is essential for running in environments where Just-In-Time (JIT) compilation is not available.
+
+Key aspects tested:
+- No use of reflection in the generated code
+- Compatibility with trimming
+- Support for PublishTrimmed and PublishReadyToRun
+
+### Runtime Execution Tests
+
+These tests validate the full pipeline:
+1. Parse rule definitions
+2. Generate C# code
+3. Compile with AOT settings
+4. Execute the compiled rules against a Redis instance
+5. Verify outputs match expected values
+
+### Performance Tests
+
+Performance tests measure:
+- Execution time for different rule counts
+- Execution time as rule complexity increases
+- Memory usage patterns
+- Throughput under concurrent load
+
+### Memory Usage Tests
+
+These tests monitor memory usage during extended rule execution to detect potential memory leaks.
+
+### Temporal Rule Tests
+
+These tests verify the circular buffer implementation that allows rules to reference historical values.
 
 ## Running Tests
 
@@ -54,56 +92,43 @@ If you want to use an existing Redis instance, you can modify the Redis connecti
 _redisConnection = await ConnectionMultiplexer.ConnectAsync("localhost:6379");
 ```
 
-### Testing with Different Rule Sets
+## Test Implementation
 
-The test suite includes various rule sets for different testing scenarios:
+### Redis Integration Tests using TestContainers
 
-1. **Simple Rules**: Basic arithmetic operations and comparisons
-2. **Complex Rules**: Nested conditions and expressions
-3. **Temporal Rules**: Rules that track historical values using circular buffers
-4. **Performance Test Rules**: Large rule sets for performance benchmarking
+The Redis integration tests use TestContainers to ensure that the Redis service works correctly in various deployment configurations.
 
-To create custom rule files for testing, use the pattern in `RuntimeValidationFixture.cs` and place them in the test output directory.
+Key components:
+- `RedisTestFixture` class that manages a Redis container for tests
+- Tests for basic Redis operations (Get, Set)
+- Tests for sending and receiving messages
+- Tests for object serialization and deserialization
+- Tests for Redis connection and retry logic
+- Tests for different Redis deployments
+- Tests for error handling and retry mechanism
 
-## Test Descriptions
+### Performance Benchmarks for Large Rule Sets
 
-### Rule Parsing Tests
+The performance benchmarks measure the rule evaluation performance with different sizes of rule sets.
 
-These tests validate that YAML rules can be correctly parsed into `RuleDefinition` objects.
+Key components:
+- `Pulsar.Benchmarks` project with BenchmarkDotNet configuration
+- `RuleSetGenerator` class to generate rules of different complexity
+- Benchmarks for evaluating rules with different counts and complexities
+- Memory diagnostics to monitor memory usage during benchmarks
+- Parameterized benchmarks for different rule types and sizes
 
-### AOT Compilation Tests
+### AOT Compatibility Tests Across Platforms
 
-These tests verify that the generated C# code can be compiled with AOT (Ahead-of-Time) compilation, which is essential for running in environments where Just-In-Time (JIT) compilation is not available.
+The AOT compatibility tests ensure that the code works correctly on different platforms when compiled with AOT.
 
-Key aspects tested:
-- No use of reflection in the generated code
-- Compatibility with trimming
-- Support for PublishTrimmed and PublishReadyToRun
-
-### Runtime Execution Tests
-
-These tests validate the full pipeline:
-1. Parse rule definitions
-2. Generate C# code
-3. Compile with AOT settings
-4. Execute the compiled rules against a Redis instance
-5. Verify outputs match expected values
-
-### Performance Tests
-
-Performance tests measure:
-- Execution time for different rule counts
-- Execution time as rule complexity increases
-- Memory usage patterns
-- Throughput under concurrent load
-
-### Memory Usage Tests
-
-These tests monitor memory usage during extended rule execution to detect potential memory leaks.
-
-### Temporal Rule Tests
-
-These tests verify the circular buffer implementation that allows rules to reference historical values.
+Key components:
+- Test matrix for Windows x64 and Linux x64 with net9.0
+- `PlatformCompatibilityTests` class for cross-platform testing
+- Tests to verify AOT-specific attributes in generated code
+- Validation for trimming configuration in project files
+- Tests for proper JSON serialization context
+- Tests for the circular buffer with object values
 
 ## Debugging AOT Builds
 
@@ -146,3 +171,28 @@ In CI/CD pipelines, ensure that:
 2. Docker is available for container-based tests
 3. The test output directory is properly cleaned between test runs
 4. Different runtime identifiers are tested (e.g., linux-x64, win-x64) for AOT compatibility
+
+## Success Criteria
+
+The testing suite is considered complete when:
+
+1. All Redis integration tests pass on all supported deployment configurations
+2. Performance benchmarks are established and documented
+3. AOT compatibility tests pass on supported platforms
+
+## Next Steps
+
+1. **Continue Regular Test Runs**
+   - Run the complete test suite regularly to catch regressions
+   - Update tests as needed when new features are added
+   - Expand the test matrix to include more platforms as needed
+
+2. **Integrate with CI/CD**
+   - Set up automated test runs in the CI/CD pipeline
+   - Configure platform-specific test matrix in CI/CD
+   - Add performance benchmark tracking to detect performance regressions
+
+3. **Expand Test Coverage**
+   - Add more edge cases to Redis integration tests
+   - Create additional complexity levels for benchmark tests
+   - Expand platform support for AOT compatibility tests
