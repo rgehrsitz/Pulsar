@@ -17,17 +17,21 @@ This directory contains the documentation for the Pulsar/Beacon project, a high-
 4. [**Redis Integration**](Redis-Integration.md) - Redis integration components, configuration, and best practices
 5. [**Temporal Buffer**](Temporal-Buffer.md) - Implementation of the temporal buffer for historical data storage and evaluation
 
+### User Guides
+
+6. [**End-to-End Guide**](End-to-End-Guide.md) - Complete walkthrough from creating YAML rules to running a Beacon application
+
 ### Development and Testing
 
-6. [**Testing Guide**](Testing-Guide.md) - Comprehensive guide to testing the Pulsar/Beacon system
+7. [**Testing Guide**](Testing-Guide.md) - Comprehensive guide to testing the Pulsar/Beacon system
 
 ## Getting Started
 
 If you're new to the Pulsar/Beacon project, we recommend starting with the following documents:
 
-1. [**Project Status**](Project-Status.md) - To understand the current state of the project
-2. [**Rules Engine**](Rules-Engine.md) - To learn about the core functionality
-3. [**AOT Implementation**](AOT-Implementation.md) - To understand the architecture and implementation
+1. [**End-to-End Guide**](End-to-End-Guide.md) - Complete walkthrough for new users
+2. [**Rules Engine**](Rules-Engine.md) - To learn about rule definitions and capabilities
+3. [**Project Status**](Project-Status.md) - To understand the current state of the project
 
 ## Key Features
 
