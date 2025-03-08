@@ -55,10 +55,66 @@ bufferCapacity: 100  # For temporal rules
 
 ## 3. Compiling with Pulsar
 
+### Required Template Files
+
+Pulsar requires specific template files to be present in order to generate code correctly. These templates are searched for in the following locations:
+
+1. `Pulsar.Compiler/Config/Templates/` (direct path from working directory)
+2. Relative to the compiler assembly location
+3. Relative to the current directory
+
+When using Pulsar from source, these files are automatically available. For compiled or published versions, ensure the templates are copied alongside the executable.
+
+### Template Directory Structure
+
+The required template structure is:
+
+```
+Pulsar.Compiler/Config/Templates/
+├── Interfaces/
+│   ├── ICompiledRules.cs
+│   ├── IRedisService.cs
+│   ├── IRuleCoordinator.cs
+│   └── IRuleGroup.cs
+├── Program.cs
+├── Project/
+│   ├── Generated.sln
+│   ├── Runtime.csproj
+│   └── trimming.xml
+├── Runtime/
+│   ├── Buffers/
+│   │   ├── CircularBuffer.cs
+│   │   ├── IDateTimeProvider.cs
+│   │   ├── RingBufferManager.cs
+│   │   └── SystemDateTimeProvider.cs
+│   ├── Models/
+│   │   ├── RedisConfiguration.cs
+│   │   └── RuntimeConfig.cs
+│   ├── Rules/
+│   │   └── RuleBase.cs
+│   ├── RuntimeOrchestrator.cs
+│   └── Services/
+│       ├── RedisConfiguration.cs
+│       ├── RedisHealthCheck.cs
+│       ├── RedisLoggingConfiguration.cs
+│       ├── RedisMetrics.cs
+│       ├── RedisMonitoring.cs
+│       └── RedisService.cs
+└── RuntimeConfig.cs
+```
+
+### Compiling Your Rules
+
 Run the Pulsar compiler to generate a Beacon solution:
 
 ```bash
 dotnet run --project Pulsar.Compiler -- beacon --rules=my-rules.yaml --config=system_config.yaml --output=MyBeacon
+```
+
+If using a standalone published version of Pulsar:
+
+```bash
+Pulsar.Compiler beacon --rules=my-rules.yaml --config=system_config.yaml --output=MyBeacon
 ```
 
 This will create a directory structure in `MyBeacon/` containing:
@@ -195,9 +251,11 @@ Enable verbose logging to monitor rule execution:
 
 ## 8. Deployment Considerations
 
-### Docker Container
+### Docker Container Deployment
 
-For containerized deployment, create a Dockerfile:
+#### For Beacon Runtime
+
+For containerized deployment of a compiled Beacon application:
 
 ```dockerfile
 FROM mcr.microsoft.com/dotnet/runtime:9.0
@@ -210,6 +268,46 @@ Build and run:
 ```bash
 docker build -t beacon-app .
 docker run -d --name beacon beacon-app
+```
+
+#### For Pulsar Compiler with Templates
+
+For containerized deployment of the Pulsar compiler with all required templates:
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /source
+
+# Copy csproj files and restore dependencies
+COPY *.sln .
+COPY Pulsar.Compiler/*.csproj ./Pulsar.Compiler/
+COPY Pulsar.Runtime/*.csproj ./Pulsar.Runtime/
+RUN dotnet restore
+
+# Copy source code
+COPY Pulsar.Compiler/. ./Pulsar.Compiler/
+COPY Pulsar.Runtime/. ./Pulsar.Runtime/
+
+# Publish
+RUN dotnet publish -c Release -o /app Pulsar.Compiler/Pulsar.Compiler.csproj
+
+FROM mcr.microsoft.com/dotnet/runtime:9.0
+WORKDIR /app
+COPY --from=build /app ./
+# IMPORTANT: Copy templates to the expected location
+COPY --from=build /source/Pulsar.Compiler/Config/Templates ./Pulsar.Compiler/Config/Templates/
+
+# Add sample files
+COPY TestData/sample-rules.yaml ./examples/
+COPY system_config.yaml ./examples/
+
+ENTRYPOINT ["./Pulsar.Compiler"]
+CMD ["--help"]
+```
+
+With this Docker image, you can compile rules like this:
+```bash
+docker run -v $(pwd):/data pulsar-compiler beacon --rules=/data/my-rules.yaml --config=/data/system_config.yaml --output=/data/output
 ```
 
 ### Environment Variables
@@ -249,6 +347,28 @@ Examine the application logs for detailed error information:
 
 ## 10. Advanced Topics
 
+### Creating a Self-Contained Pulsar Distribution
+
+To create a self-contained distribution of Pulsar that includes all necessary templates:
+
+```bash
+# 1. Build Pulsar.Compiler as a self-contained application
+dotnet publish -c Release -r <runtime> --self-contained true Pulsar.Compiler/Pulsar.Compiler.csproj
+
+# 2. Create a distribution folder
+mkdir -p PulsarDist
+
+# 3. Copy the compiler and essential files
+cp -r Pulsar.Compiler/bin/Release/net9.0/<runtime>/publish/* PulsarDist/
+cp -r Pulsar.Compiler/Config/Templates PulsarDist/Pulsar.Compiler/Config/
+
+# 4. Include example files for reference
+cp TestData/sample-rules.yaml PulsarDist/
+cp system_config.yaml PulsarDist/
+```
+
+You can now zip this folder and deploy it to any compatible system. The templates will be accessible from the expected relative paths.
+
 ### High Availability Setup
 
 For production environments, consider:
@@ -268,3 +388,17 @@ For optimal performance:
 ### Custom Extensions
 
 Consult the testing guide for adding custom functionality to the Beacon runtime.
+
+### Template Customization
+
+Advanced users can customize the templates to:
+- Add custom monitoring integration
+- Modify the Redis service implementation
+- Extend the CircularBuffer implementation
+- Add custom metrics collection
+
+To customize templates:
+1. Copy the original templates from `Pulsar.Compiler/Config/Templates/`
+2. Modify as needed
+3. Place them in the same relative path structure
+4. Run Pulsar with the `--template-path=<your-templates-dir>` option
