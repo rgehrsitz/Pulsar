@@ -115,7 +115,9 @@ namespace Pulsar.Compiler.Config
             
             // Add Runtime project
             string runtimeGuid = Guid.NewGuid().ToString("B").ToUpper();
-            sb.AppendLine($"Project(\"{{{Guid.NewGuid().ToString("B").ToUpper()}}}\") = \"Beacon.Runtime\", \"Beacon.Runtime\\Beacon.Runtime.csproj\", \"{runtimeGuid}\"");
+            // Use the standard C# project type GUID
+            string csharpProjectTypeGuid = "{9A19103F-16F7-4668-BE54-9A1E7A4F7556}";
+            sb.AppendLine($"Project(\"{csharpProjectTypeGuid}\") = \"Beacon.Runtime\", \"Beacon.Runtime\\Beacon.Runtime.csproj\", \"{runtimeGuid}\"");
             sb.AppendLine("EndProject");
             
             // Add Tests project if enabled
@@ -124,7 +126,7 @@ namespace Pulsar.Compiler.Config
             if (generateTestProject)
             {
                 testsGuid = Guid.NewGuid().ToString("B").ToUpper();
-                sb.AppendLine($"Project(\"{{{Guid.NewGuid().ToString("B").ToUpper()}}}\") = \"Beacon.Tests\", \"Beacon.Tests\\Beacon.Tests.csproj\", \"{testsGuid}\"");
+                sb.AppendLine($"Project(\"{csharpProjectTypeGuid}\") = \"Beacon.Tests\", \"Beacon.Tests\\Beacon.Tests.csproj\", \"{testsGuid}\"");
                 sb.AppendLine("EndProject");
             }
             
@@ -314,19 +316,12 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("// This file contains the main entry point and AOT compatibility attributes");
             sb.AppendLine();
             
-            // Add AOT compatibility attributes
-            sb.AppendLine("using System.Runtime.CompilerServices;");
-            sb.AppendLine("using System.Text.Json.Serialization;");
-            sb.AppendLine();
-            sb.AppendLine("[assembly: JsonSerializable(typeof(Dictionary<string, object>))]");
-            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({buildConfig.Namespace}.RuntimeOrchestrator))]");
-            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({buildConfig.Namespace}.Services.RedisService))]");
-            sb.AppendLine();
-            
-            // Add standard using statements
+            // Add standard using statements first
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using System.IO;");
+            sb.AppendLine("using System.Runtime.CompilerServices;");
+            sb.AppendLine("using System.Text.Json.Serialization;");
             sb.AppendLine("using System.Threading;");
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using Microsoft.Extensions.Logging;");
@@ -334,6 +329,12 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine($"using {buildConfig.Namespace}.Buffers;");
             sb.AppendLine($"using {buildConfig.Namespace}.Services;");
             sb.AppendLine($"using {buildConfig.Namespace}.Interfaces;");
+            sb.AppendLine();
+            
+            // Add AOT compatibility attributes
+            sb.AppendLine("[assembly: JsonSerializable(typeof(Dictionary<string, object>))]");
+            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({buildConfig.Namespace}.RuntimeOrchestrator))]");
+            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({buildConfig.Namespace}.Services.RedisService))]");
             sb.AppendLine();
             
             // Add namespace and class declaration
