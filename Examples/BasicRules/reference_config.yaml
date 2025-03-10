@@ -1,0 +1,10 @@
+# This is a minimal valid configuration file for Pulsar Beacon
+
+version: 1
+validSensors:
+  - input:temperature
+cycleTime: 100
+redis:
+  endpoints:
+    - "localhost:6379"
+bufferCapacity: 100

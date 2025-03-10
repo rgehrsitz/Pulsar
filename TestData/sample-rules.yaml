@@ -1,0 +1,15 @@
+# File: TestData/sample-rules.yaml
+rules:
+  - name: "TestRule"
+    description: "Simple test rule that copies input to output"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: 'input:a'
+            operator: '>'
+            value: 0
+    actions:
+      - set_value:
+          key: 'output:sum'
+          value_expression: 'input:a'
