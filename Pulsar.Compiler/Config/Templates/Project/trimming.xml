@@ -1,0 +1,27 @@
+<!-- File: Pulsar.Compiler/Config/Templates/Project/trimming.xml -->
+<linker>
+  <assembly fullname="GeneratedRuntime">
+    <!-- Preserve all rule types -->
+    <type fullname="Pulsar.Runtime.Rules.*" preserve="all"/>
+    <!-- Preserve configuration types -->
+    <type fullname="Pulsar.Runtime.RuntimeConfig" preserve="all"/>
+  </assembly>
+
+  <!-- Preserve Redis types -->
+  <assembly fullname="StackExchange.Redis">
+    <type fullname="StackExchange.Redis.ConnectionMultiplexer" preserve="all"/>
+    <type fullname="StackExchange.Redis.RedisValue" preserve="all"/>
+  </assembly>
+
+  <!-- Preserve Serilog types -->
+  <assembly fullname="Serilog">
+    <type fullname="Serilog.Log" preserve="all"/>
+    <type fullname="Serilog.LoggerConfiguration" preserve="all"/>
+  </assembly>
+
+  <!-- Preserve buffer types -->
+  <assembly fullname="Pulsar.Runtime">
+    <type fullname="Pulsar.Runtime.Buffers.*" preserve="all"/>
+    <type fullname="Pulsar.Runtime.Services.*" preserve="all"/>
+  </assembly>
+</linker>

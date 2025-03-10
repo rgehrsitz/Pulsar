@@ -1,0 +1,54 @@
+{
+  "configurations": {
+    "singleNode": {
+      "redis": {
+        "endpoints": ["localhost:6379"],
+        "poolSize": 8,
+        "retryCount": 3,
+        "retryBaseDelayMs": 100,
+        "connectTimeout": 5000,
+        "syncTimeout": 1000,
+        "keepAlive": 60,
+        "password": null,
+        "ssl": false,
+        "allowAdmin": false
+      }
+    },
+    "cluster": {
+      "redis": {
+        "endpoints": [
+          "redis-node1:6379",
+          "redis-node2:6380",
+          "redis-node3:6381"
+        ],
+        "poolSize": 16,
+        "retryCount": 3,
+        "retryBaseDelayMs": 200,
+        "connectTimeout": 5000,
+        "syncTimeout": 2000,
+        "keepAlive": 60,
+        "password": "your-password-here",
+        "ssl": true,
+        "allowAdmin": true
+      }
+    },
+    "highAvailability": {
+      "redis": {
+        "endpoints": [
+          "redis-master:6379",
+          "redis-replica1:6379",
+          "redis-replica2:6379"
+        ],
+        "poolSize": 24,
+        "retryCount": 5,
+        "retryBaseDelayMs": 100,
+        "connectTimeout": 3000,
+        "syncTimeout": 1000,
+        "keepAlive": 30,
+        "password": "your-password-here",
+        "ssl": true,
+        "allowAdmin": false
+      }
+    }
+  }
+}

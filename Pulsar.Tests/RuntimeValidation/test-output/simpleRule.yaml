@@ -1,0 +1,15 @@
+# File: Pulsar.Tests/RuntimeValidation/test-output/simpleRule.yaml
+rules:
+  - name: 'SimpleTestRule'
+    description: 'Simple rule that adds two values'
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: 'input:a'
+            operator: '>'
+            value: 0
+    actions:
+      - set_value:
+          key: 'output:sum'
+          value_expression: 'input:a + input:b'

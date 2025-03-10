@@ -1,0 +1,47 @@
+<!--
+    This file contains trimming configurations for the Beacon runtime.
+    It helps preserve types that are needed during AOT compilation that
+    might otherwise be trimmed out.
+-->
+<linker>
+    <!-- Preserve the entire Beacon.Runtime namespace -->
+    <assembly fullname="Beacon.Runtime">
+        <type fullname="Beacon.Runtime.*" preserve="all" />
+    </assembly>
+    
+    <!-- Preserve Redis types that might be accessed via reflection -->
+    <assembly fullname="StackExchange.Redis">
+        <type fullname="StackExchange.Redis.ConnectionMultiplexer" preserve="all" />
+        <type fullname="StackExchange.Redis.IDatabase" preserve="all" />
+        <type fullname="StackExchange.Redis.IBatch" preserve="all" />
+        <type fullname="StackExchange.Redis.HashEntry" preserve="all" />
+    </assembly>
+    
+    <!-- Preserve NRedisStack types -->
+    <assembly fullname="NRedisStack">
+        <type fullname="NRedisStack.*" preserve="all" />
+    </assembly>
+
+    <!-- Preserve Prometheus metrics types -->
+    <assembly fullname="Prometheus.NetStandard">
+        <type fullname="Prometheus.Metrics" preserve="all" />
+        <type fullname="Prometheus.Counter" preserve="all" />
+        <type fullname="Prometheus.Histogram" preserve="all" />
+        <type fullname="Prometheus.Gauge" preserve="all" />
+    </assembly>
+
+    <!-- System types that might be used in expressions -->
+    <assembly fullname="System.Private.CoreLib">
+        <type fullname="System.Math" preserve="all" />
+        <type fullname="System.DateTime" preserve="all" />
+        <type fullname="System.TimeSpan" preserve="all" />
+        <type fullname="System.String" preserve="all" />
+        <type fullname="System.StringComparison" preserve="all" />
+        <type fullname="System.Double" preserve="all" />
+        <type fullname="System.Int32" preserve="all" />
+        <type fullname="System.Int64" preserve="all" />
+        <type fullname="System.Boolean" preserve="all" />
+        <type fullname="System.Collections.Generic.Dictionary`2" preserve="all" />
+        <type fullname="System.Collections.Generic.List`1" preserve="all" />
+    </assembly>
+</linker>

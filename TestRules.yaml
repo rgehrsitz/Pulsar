@@ -1,0 +1,16 @@
+# File: Pulsar/TestRules.yaml
+
+rules:
+  - name: "TestRule"
+    description: "A test rule for temperature conversion"
+    conditions:
+      all:
+        - condition:
+            type: "comparison"
+            sensor: "temperature_f"
+            operator: "=="
+            value: 100
+    actions:
+      - set_value:
+          key: "temperature_c"
+          value: 212

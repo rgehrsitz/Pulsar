@@ -1,0 +1,15 @@
+# File: TestData/debug-rule.yaml
+rules:
+  - name: "DebugRule"
+    description: "Simple rule for debugging"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: 'input:a'
+            operator: '>'
+            value: 0
+    actions:
+      - set_value:
+          key: 'output:sum'
+          value_expression: 'input:a + input:b'

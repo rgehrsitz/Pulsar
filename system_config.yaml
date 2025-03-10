@@ -1,0 +1,22 @@
+# File: Pulsar/system_config.yaml
+
+version: 1
+validSensors:
+  - temperature_f
+  - temperature_c
+  - humidity
+  - pressure
+cycleTime: 100
+redis:
+  endpoints:
+    - localhost:6379
+  poolSize: 8
+  retryCount: 3
+  retryBaseDelayMs: 100
+  connectTimeout: 5000
+  syncTimeout: 1000
+  keepAlive: 60
+  password: null
+  ssl: false
+  allowAdmin: false
+bufferCapacity: 100

@@ -1,0 +1,15 @@
+# File: Pulsar.Tests/RuntimeValidation/TestRules/minimal-rule.yaml
+rules:
+  - name: "MinimalTestRule"
+    description: "Simple test rule for runtime validation"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: 'input:a'
+            operator: '>'
+            value: 0
+    actions:
+      - set_value:
+          key: 'output:sum'
+          value_expression: 'input:a + input:b'

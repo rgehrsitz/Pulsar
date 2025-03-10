@@ -1,0 +1,36 @@
+# File: TestData/system_config.yaml
+version: 1
+validSensors:
+  - input:a
+  - input:b
+  - input:c
+  - output:sum
+  - output:complex
+
+cycleTime: 100  # ms
+
+redis:
+  endpoints: 
+    - localhost:6379
+  poolSize: 8
+  retryCount: 3
+  retryBaseDelayMs: 100
+  connectTimeout: 5000
+  syncTimeout: 1000
+  keepAlive: 60
+  ssl: false
+  allowAdmin: false
+  healthCheck:
+    enabled: true
+    intervalSeconds: 30
+    failureThreshold: 5
+    timeoutMs: 2000
+  metrics:
+    enabled: true
+    instanceName: default
+    samplingIntervalSeconds: 60
+
+bufferCapacity: 100
+
+logLevel: Information
+logFile: logs/pulsar.log
