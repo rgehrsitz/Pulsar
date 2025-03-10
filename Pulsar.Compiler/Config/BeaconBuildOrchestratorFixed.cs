@@ -50,6 +50,21 @@ namespace Pulsar.Compiler.Config
                     throw new ArgumentException("Output directory is not specified in the configuration");
                 }
                 
+                // Clean existing files if they exist to avoid conflicts
+                if (Directory.Exists(outputDir))
+                {
+                    _logger.Information("Cleaning existing output directory: {Path}", outputDir);
+                    try
+                    {
+                        Directory.Delete(outputDir, true);
+                        Directory.CreateDirectory(outputDir);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning("Could not clean output directory: {Error}", ex.Message);
+                    }
+                }
+                
                 // Create a beacon directory inside the output directory
                 string beaconOutputDir = outputDir;
                 if (config.CreateSeparateDirectory)
@@ -71,9 +86,32 @@ namespace Pulsar.Compiler.Config
                 {
                     Directory.CreateDirectory(generatedDir);
                 }
+                else
+                {
+                    // Clean existing generated files to avoid conflicts
+                    foreach (var file in Directory.GetFiles(generatedDir))
+                    {
+                        try
+                        {
+                            File.Delete(file);
+                            _logger.Debug("Deleted existing generated file: {Path}", file);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Warning("Could not delete generated file {Path}: {Error}", file, ex.Message);
+                        }
+                    }
+                }
                 
                 foreach (var file in generatedFiles)
                 {
+                    // Skip Program.cs in Generated directory to avoid conflicts
+                    if (file.FileName == "Program.cs")
+                    {
+                        _logger.Information("Skipping Program.cs in Generated directory to avoid conflicts");
+                        continue;
+                    }
+                    
                     var filePath = Path.Combine(generatedDir, file.FileName);
                     File.WriteAllText(filePath, file.Content);
                     _logger.Debug("Wrote generated file: {Path}", filePath);

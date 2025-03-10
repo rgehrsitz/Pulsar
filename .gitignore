@@ -82,6 +82,8 @@ log*.txt
 /Beacon2/
 /BeaconOutput/
 /Generated/
+/Examples/BasicRules/logs/
+/Examples/BasicRules/output/
 
 # Pulsar-specific output directories
 /TestOutput/

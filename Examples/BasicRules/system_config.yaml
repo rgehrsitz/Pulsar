@@ -1,0 +1,36 @@
+version: 1
+validSensors:
+  # Input sensors - external data sources
+  - input:temperature
+  - input:humidity
+  - input:pressure
+  - input:air_quality
+  
+  # Output sensors - values set by rules
+  - output:high_temperature_alert
+  - output:heat_index
+  - output:last_alert_time
+  
+  # Buffers for historical data
+  - buffer:temperature_history
+  - buffer:humidity_history
+
+# System cycle time in milliseconds - how frequently rules are evaluated
+cycleTime: 100
+
+# Redis configuration for data persistence
+redis:
+  endpoints:
+    - "localhost:6379"
+  poolSize: 4
+  retryCount: 3
+  retryBaseDelayMs: 100
+  connectTimeout: 5000
+  syncTimeout: 1000
+  keepAlive: 60
+  password: null
+  ssl: false
+  allowAdmin: false
+
+# Maximum number of entries in buffer sensors
+bufferCapacity: 100

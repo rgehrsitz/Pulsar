@@ -71,6 +71,8 @@ namespace Pulsar.Compiler.Config
             Directory.CreateDirectory(Path.Combine(runtimeDir, "Services"));
             Directory.CreateDirectory(Path.Combine(runtimeDir, "Buffers"));
             Directory.CreateDirectory(Path.Combine(runtimeDir, "Interfaces"));
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Models"));
+            Directory.CreateDirectory(Path.Combine(runtimeDir, "Rules"));
             
             // Generate project file
             GenerateRuntimeProjectFile(runtimeDir, buildConfig);
@@ -211,15 +213,19 @@ namespace Pulsar.Compiler.Config
             // Add package references
             sb.AppendLine("  <ItemGroup>");
             sb.AppendLine("    <PackageReference Include=\"Microsoft.Extensions.Logging\" Version=\"8.0.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Microsoft.Extensions.Logging.Abstractions\" Version=\"8.0.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Microsoft.Extensions.Logging.Console\" Version=\"8.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"NRedisStack\" Version=\"0.13.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Polly\" Version=\"8.3.0\" />");
             sb.AppendLine("    <PackageReference Include=\"prometheus-net\" Version=\"8.2.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"4.2.0\" />");
+            sb.AppendLine("    <PackageReference Include=\"Serilog.Extensions.Logging\" Version=\"8.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog.Enrichers.Thread\" Version=\"3.1.0\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog.Formatting.Compact\" Version=\"2.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog.Sinks.Console\" Version=\"5.0.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog.Sinks.File\" Version=\"5.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.8.16\" />");
+            sb.AppendLine("    <PackageReference Include=\"System.Diagnostics.DiagnosticSource\" Version=\"8.0.0\" />");
             sb.AppendLine("    <PackageReference Include=\"YamlDotNet\" Version=\"16.3.0\" />");
             sb.AppendLine("  </ItemGroup>");
             sb.AppendLine("</Project>");
@@ -277,28 +283,196 @@ namespace Pulsar.Compiler.Config
         /// </summary>
         private void CopyRuntimeTemplateFiles(string runtimeDir, BuildConfig buildConfig)
         {
-            // Copy interface templates
-            CopyTemplateFile("Interfaces/ICompiledRules.cs", Path.Combine(runtimeDir, "Interfaces", "ICompiledRules.cs"));
-            CopyTemplateFile("Interfaces/IRuleCoordinator.cs", Path.Combine(runtimeDir, "Interfaces", "IRuleCoordinator.cs"));
-            CopyTemplateFile("Interfaces/IRuleGroup.cs", Path.Combine(runtimeDir, "Interfaces", "IRuleGroup.cs"));
+            // Clean and recreate the project directories to ensure a fresh state
+            CleanAndRecreateDirectory(Path.Combine(runtimeDir, "Generated"));
+            CleanAndRecreateDirectory(Path.Combine(runtimeDir, "Services"));
+            CleanAndRecreateDirectory(Path.Combine(runtimeDir, "Buffers"));
+            CleanAndRecreateDirectory(Path.Combine(runtimeDir, "Interfaces"));
+            CleanAndRecreateDirectory(Path.Combine(runtimeDir, "Models"));
+            CleanAndRecreateDirectory(Path.Combine(runtimeDir, "Rules"));
             
-            // Copy service templates
-            CopyTemplateFile("Runtime/Services/RedisConfiguration.cs", Path.Combine(runtimeDir, "Services", "RedisConfiguration.cs"));
-            CopyTemplateFile("Runtime/Services/RedisService.cs", Path.Combine(runtimeDir, "Services", "RedisService.cs"));
-            CopyTemplateFile("Runtime/Services/RedisMonitoring.cs", Path.Combine(runtimeDir, "Services", "RedisMonitoring.cs"));
-            CopyTemplateFile("Runtime/Services/RedisLoggingConfiguration.cs", Path.Combine(runtimeDir, "Services", "RedisLoggingConfiguration.cs"));
+            _logger.Information("Copying template files to runtime directory");
             
-            // Copy buffer templates
-            CopyTemplateFile("Runtime/Buffers/CircularBuffer.cs", Path.Combine(runtimeDir, "Buffers", "CircularBuffer.cs"));
-            CopyTemplateFile("Runtime/Buffers/IDateTimeProvider.cs", Path.Combine(runtimeDir, "Buffers", "IDateTimeProvider.cs"));
-            CopyTemplateFile("Runtime/Buffers/SystemDateTimeProvider.cs", Path.Combine(runtimeDir, "Buffers", "SystemDateTimeProvider.cs"));
+            // Copy interface templates first - IMPORTANT for resolving reference issues
+            CopyInterfaceFiles(runtimeDir);
+            
+            // Copy model templates - Critical for proper serialization and AOT compatibility
+            CopyModelFiles(runtimeDir);
+            
+            // Copy service files, but ensure no duplicates
+            CopyServiceFiles(runtimeDir);
+            
+            // Copy buffer files
+            CopyBufferFiles(runtimeDir);
+            
+            // Copy rule templates
+            CopyTemplateFile("Runtime/Rules/RuleBase.cs", Path.Combine(runtimeDir, "Rules", "RuleBase.cs"));
             
             // Copy RuntimeOrchestrator and other core templates
             CopyTemplateFile("Runtime/RuntimeOrchestrator.cs", Path.Combine(runtimeDir, "RuntimeOrchestrator.cs"));
-            CopyTemplateFile("RuntimeConfig.cs", Path.Combine(runtimeDir, "RuntimeConfig.cs"));
+            CopyTemplateFile("Runtime/TemplateRuleCoordinator.cs", Path.Combine(runtimeDir, "RuleCoordinator.cs"));
             
             // Copy AOT compatibility file
             CopyTemplateFile("trimming.xml", Path.Combine(runtimeDir, "trimming.xml"));
+            
+            _logger.Information("Finished copying template files to runtime directory");
+        }
+        
+        /// <summary>
+        /// Copy interface files
+        /// </summary>
+        private void CopyInterfaceFiles(string runtimeDir)
+        {
+            var interfacesDir = Path.Combine(runtimeDir, "Interfaces");
+            CopyTemplateFile("Interfaces/ICompiledRules.cs", Path.Combine(interfacesDir, "ICompiledRules.cs"));
+            CopyTemplateFile("Interfaces/IRuleCoordinator.cs", Path.Combine(interfacesDir, "IRuleCoordinator.cs"));
+            CopyTemplateFile("Interfaces/IRuleGroup.cs", Path.Combine(interfacesDir, "IRuleGroup.cs"));
+            CopyTemplateFile("Interfaces/IRedisService.cs", Path.Combine(interfacesDir, "IRedisService.cs"));
+        }
+        
+        /// <summary>
+        /// Copy model files
+        /// </summary>
+        private void CopyModelFiles(string runtimeDir)
+        {
+            var modelsDir = Path.Combine(runtimeDir, "Models");
+            _logger.Information("Copying model templates to {Path}", modelsDir);
+            CopyTemplateFile("Runtime/Models/RedisConfiguration.cs", Path.Combine(modelsDir, "RedisConfiguration.cs"));
+            CopyTemplateFile("Runtime/Models/RuntimeConfig.cs", Path.Combine(modelsDir, "RuntimeConfig.cs"));
+            
+            // Fix model file references to ensure they're using the Models namespace
+            UpdateModelFiles(modelsDir);
+        }
+        
+        /// <summary>
+        /// Update model files to fix namespace references
+        /// </summary>
+        private void UpdateModelFiles(string modelsDir)
+        {
+            var redisConfigPath = Path.Combine(modelsDir, "RedisConfiguration.cs");
+            if (File.Exists(redisConfigPath))
+            {
+                var content = File.ReadAllText(redisConfigPath);
+                
+                // Replace service reference with model reference to avoid circular dependency
+                content = content.Replace("using Beacon.Runtime.Services;", 
+                    "using Beacon.Runtime.Services; // Models should be independent of Services");
+                
+                File.WriteAllText(redisConfigPath, content);
+                _logger.Information("Updated namespace references in RedisConfiguration.cs");
+            }
+        }
+        
+        /// <summary>
+        /// Copy service files, ensuring no duplicates
+        /// </summary>
+        private void CopyServiceFiles(string runtimeDir)
+        {
+            var servicesDir = Path.Combine(runtimeDir, "Services");
+            
+            // Copy individual service files to avoid duplicates
+            CopyTemplateFile("Runtime/Services/RedisService.cs", Path.Combine(servicesDir, "RedisService.cs"));
+            CopyTemplateFile("Runtime/Services/RedisMetrics.cs", Path.Combine(servicesDir, "RedisMetrics.cs"));
+            CopyTemplateFile("Runtime/Services/RedisHealthCheck.cs", Path.Combine(servicesDir, "RedisHealthCheck.cs"));
+            CopyTemplateFile("Runtime/Services/RedisLoggingConfiguration.cs", Path.Combine(servicesDir, "RedisLoggingConfiguration.cs"));
+            
+            // Fix service file references to use Models namespace
+            UpdateServiceFiles(servicesDir);
+        }
+        
+        /// <summary>
+        /// Update service files to fix namespace references
+        /// </summary>
+        private void UpdateServiceFiles(string servicesDir)
+        {
+            foreach (var file in Directory.GetFiles(servicesDir))
+            {
+                var content = File.ReadAllText(file);
+                var fileName = Path.GetFileName(file);
+                bool modified = false;
+                
+                // Add Models namespace reference if missing
+                if (!content.Contains("using Beacon.Runtime.Models;"))
+                {
+                    content = content.Replace("using Beacon.Runtime.Interfaces;", 
+                        "using Beacon.Runtime.Interfaces;\r\nusing Beacon.Runtime.Models;");
+                    modified = true;
+                }
+                
+                // Fix RedisConfiguration references
+                if (fileName == "RedisLoggingConfiguration.cs" && content.Contains("RedisConfiguration config"))
+                {
+                    // This is a special case - RedisLoggingConfiguration tries to use RedisConfiguration without Models namespace
+                    if (!content.Contains("using Beacon.Runtime.Models;"))
+                    {
+                        // Add Models namespace if not already added
+                        content = content.Replace("using Serilog.Formatting.Compact;", 
+                            "using Serilog.Formatting.Compact;\r\nusing Beacon.Runtime.Models;");
+                        modified = true;
+                    }
+                }
+                
+                if (modified)
+                {
+                    File.WriteAllText(file, content);
+                    _logger.Information("Updated namespace references in {File}", fileName);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Copy buffer files
+        /// </summary>
+        private void CopyBufferFiles(string runtimeDir)
+        {
+            var buffersDir = Path.Combine(runtimeDir, "Buffers");
+            var generatedDir = Path.Combine(runtimeDir, "Generated");
+            
+            // Check if RingBufferManager is already in Generated directory (from code generation)
+            bool hasRingBufferManager = false;
+            foreach (var file in Directory.GetFiles(generatedDir))
+            {
+                // If we find RingBufferManager in any generated file, don't copy the template version
+                var content = File.ReadAllText(file);
+                if (content.Contains("class RingBufferManager"))
+                {
+                    hasRingBufferManager = true;
+                    _logger.Information("RingBufferManager already exists in generated files, skipping template copy");
+                    break;
+                }
+            }
+            
+            // Copy buffer files but skip RingBufferManager if it already exists
+            CopyTemplateFile("Runtime/Buffers/CircularBuffer.cs", Path.Combine(buffersDir, "CircularBuffer.cs"));
+            CopyTemplateFile("Runtime/Buffers/IDateTimeProvider.cs", Path.Combine(buffersDir, "IDateTimeProvider.cs"));
+            CopyTemplateFile("Runtime/Buffers/SystemDateTimeProvider.cs", Path.Combine(buffersDir, "SystemDateTimeProvider.cs"));
+            
+            if (!hasRingBufferManager)
+            {
+                CopyTemplateFile("Runtime/Buffers/RingBufferManager.cs", Path.Combine(buffersDir, "RingBufferManager.cs"));
+            }
+        }
+        
+        /// <summary>
+        /// Helper method to clean and recreate a directory
+        /// </summary>
+        private void CleanAndRecreateDirectory(string directory)
+        {
+            if (Directory.Exists(directory))
+            {
+                try
+                {
+                    Directory.Delete(directory, true);
+                    _logger.Debug("Deleted existing directory: {Path}", directory);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning("Could not delete directory {Path}: {Error}", directory, ex.Message);
+                }
+            }
+            
+            Directory.CreateDirectory(directory);
+            _logger.Debug("Created directory: {Path}", directory);
         }
         
         /// <summary>
@@ -306,14 +480,42 @@ namespace Pulsar.Compiler.Config
         /// </summary>
         private void GenerateProgramCs(string runtimeDir, BuildConfig buildConfig)
         {
+            // First delete any existing Program.cs file to avoid duplicate class definitions
             string programPath = Path.Combine(runtimeDir, "Program.cs");
+            if (File.Exists(programPath))
+            {
+                try
+                {
+                    File.Delete(programPath);
+                    _logger.Information("Deleted existing Program.cs file");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning("Could not delete existing Program.cs: {Error}", ex.Message);
+                }
+            }
+            
+            // Also check for and delete any Program.cs file in Generated directory
+            string generatedProgramPath = Path.Combine(runtimeDir, "Generated", "Program.cs");
+            if (File.Exists(generatedProgramPath))
+            {
+                try
+                {
+                    File.Delete(generatedProgramPath);
+                    _logger.Information("Deleted existing Program.cs file from Generated directory");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warning("Could not delete existing Program.cs in Generated directory: {Error}", ex.Message);
+                }
+            }
             
             var sb = new StringBuilder();
             
             // Add file header 
             sb.AppendLine("// Auto-generated Program.cs");
             sb.AppendLine("// Generated: " + DateTime.UtcNow.ToString("O"));
-            sb.AppendLine("// This file contains the main entry point and AOT compatibility attributes");
+            sb.AppendLine("// This file contains the main entry point for the Beacon Runtime Engine");
             sb.AppendLine();
             
             // Add standard using statements first
@@ -321,7 +523,6 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using System.IO;");
             sb.AppendLine("using System.Runtime.CompilerServices;");
-            sb.AppendLine("using System.Text.Json.Serialization;");
             sb.AppendLine("using System.Threading;");
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using Microsoft.Extensions.Logging;");
@@ -329,12 +530,9 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine($"using {buildConfig.Namespace}.Buffers;");
             sb.AppendLine($"using {buildConfig.Namespace}.Services;");
             sb.AppendLine($"using {buildConfig.Namespace}.Interfaces;");
-            sb.AppendLine();
-            
-            // Add AOT compatibility attributes
-            sb.AppendLine("[assembly: JsonSerializable(typeof(Dictionary<string, object>))]");
-            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({buildConfig.Namespace}.RuntimeOrchestrator))]");
-            sb.AppendLine($"[assembly: DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({buildConfig.Namespace}.Services.RedisService))]");
+            sb.AppendLine($"using {buildConfig.Namespace}.Models;");
+            sb.AppendLine($"using {buildConfig.Namespace}.Generated;");
+            sb.AppendLine("using ILogger = Serilog.ILogger;");
             sb.AppendLine();
             
             // Add namespace and class declaration
@@ -343,7 +541,7 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("    public class Program");
             sb.AppendLine("    {");
             
-            // Add main method
+            // Add main method with proper name (not MainEntry)
             sb.AppendLine("        public static async Task Main(string[] args)");
             sb.AppendLine("        {");
             sb.AppendLine("            // Configure Serilog");
@@ -360,11 +558,12 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("                var redisConfig = config.Redis;");
             sb.AppendLine();
             sb.AppendLine("                // Create buffer manager for temporal rules");
-            sb.AppendLine($"                var bufferManager = new CircularBuffer(config.BufferCapacity);");
+            sb.AppendLine($"                var bufferManager = new RingBufferManager(config.BufferCapacity);");
             sb.AppendLine();
             sb.AppendLine("                // Initialize runtime orchestrator");
             sb.AppendLine("                using var redisService = new RedisService(redisConfig, logger);");
-            sb.AppendLine("                var orchestrator = new RuntimeOrchestrator(redisService, logger, bufferManager);");
+            sb.AppendLine("                var coordinator = new RuleCoordinator(redisService, logger, bufferManager);");
+            sb.AppendLine("                var orchestrator = new RuntimeOrchestrator(redisService, logger, coordinator);");
             sb.AppendLine();
             sb.AppendLine("                // Run the main cycle loop");
             sb.AppendLine("                await RunCycleLoop(orchestrator, config.CycleTime, logger);");
@@ -445,8 +644,37 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("    }");
             sb.AppendLine("}");
             
+            // Write to main Program.cs file
             File.WriteAllText(programPath, sb.ToString());
             _logger.Information("Generated Program.cs: {Path}", programPath);
+            
+            // Generate AOT compatibility declarations in a separate file
+            string aotAttributesPath = Path.Combine(runtimeDir, "AOTAttributes.cs");
+            var aotSb = new StringBuilder();
+            
+            aotSb.AppendLine("// Auto-generated AOT attributes");
+            aotSb.AppendLine("// Generated: " + DateTime.UtcNow.ToString("O"));
+            aotSb.AppendLine();
+            
+            aotSb.AppendLine("using System;");
+            aotSb.AppendLine("using System.Collections.Generic;");
+            aotSb.AppendLine("using System.Text.Json.Serialization;");
+            aotSb.AppendLine("using System.Diagnostics.CodeAnalysis;");
+            aotSb.AppendLine();
+            
+            // Add a JsonSerializerContext derived class with appropriate attributes
+            aotSb.AppendLine($"namespace {buildConfig.Namespace}");
+            aotSb.AppendLine("{");
+            aotSb.AppendLine("    [JsonSerializable(typeof(Dictionary<string, object>))]");
+            aotSb.AppendLine($"    [JsonSerializable(typeof({buildConfig.Namespace}.Models.RuntimeConfig))]");
+            aotSb.AppendLine($"    [JsonSerializable(typeof({buildConfig.Namespace}.Models.RedisConfiguration))]");
+            aotSb.AppendLine("    public partial class BeaconJsonContext : JsonSerializerContext");
+            aotSb.AppendLine("    {");
+            aotSb.AppendLine("    }");
+            aotSb.AppendLine("}");
+            
+            File.WriteAllText(aotAttributesPath, aotSb.ToString());
+            _logger.Information("Generated AOT attributes: {Path}", aotAttributesPath);
         }
         
         /// <summary>

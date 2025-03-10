@@ -57,6 +57,9 @@ public class Program
 
             switch (command)
             {
+                case "test":
+                    var testCommand = new Commands.TestCommand(_logger);
+                    return await testCommand.RunAsync(options) ? 0 : 1;
                 case "compile":
                     return await CompileRules(options, _logger);
                 case "validate":
@@ -282,19 +285,19 @@ https://github.com/yourusername/pulsar/docs"
     {
         logger.Information("Usage: Pulsar.Compiler <command> [options]");
         logger.Information("Commands:");
-        logger.Information("  compile  - Compile rules to C# code");
-        logger.Information("  validate - Validate rule syntax");
+        logger.Information("  compile  - Compile rules into a deployable project");
+        logger.Information("  validate - Validate rules without generating code");
+        logger.Information("  test     - Test Pulsar rules and configuration files");
         logger.Information("  init     - Initialize a new project");
         logger.Information("  generate - Generate a buildable project");
-        logger.Information("  beacon   - Generate a fully AOT-compatible Beacon solution");
+        logger.Information("  beacon   - Generate an AOT-compatible Beacon solution");
         logger.Information("Options:");
-        logger.Information("  --rules=<path>   Path to rules file or directory (required)");
         logger.Information("  --output=<path>  Output directory (required for compile/generate)");
         logger.Information("  --config=<path>  System configuration file (optional)");
         logger.Information("  --target=<id>    Target runtime identifier for AOT (e.g., win-x64, linux-x64)");
         logger.Information("  --verbose        Enable verbose logging");
     }
-
+    
     private static Dictionary<string, string> ParseArguments(string[] args)
     {
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -359,12 +362,12 @@ https://github.com/yourusername/pulsar/docs"
 
         return options;
     }
-
+    
     private static bool IsFlagOption(string option)
     {
         return option switch
         {
-            "aot" or "debug" or "parallel" or "emit-sourcemap" => true,
+            "aot" or "debug" or "parallel" or "emit-sourcemap" or "verbose" or "clean" => true,
             _ => false,
         };
     }
@@ -388,6 +391,13 @@ https://github.com/yourusername/pulsar/docs"
                 if (!options.ContainsKey("rules"))
                 {
                     throw new ArgumentException("--rules argument is required for validation");
+                }
+                break;
+                
+            case "test":
+                if (!options.ContainsKey("rules"))
+                {
+                    throw new ArgumentException("--rules argument is required for testing");
                 }
                 break;
                 
@@ -451,16 +461,16 @@ https://github.com/yourusername/pulsar/docs"
     private static async Task<int> CompileRules(Dictionary<string, string> options, ILogger logger)
     {
         logger.Information("Starting rule compilation...");
-
+ 
         var buildConfig = CreateBuildConfig(options);
         var systemConfig = await LoadSystemConfig(
             options.GetValueOrDefault("config", "system_config.yaml")
         );
-
+        
         var compilerOptions = new Models.CompilerOptions
         {
             BuildConfig = buildConfig,
-            ValidSensors = new List<string>(), // Optionally set valid sensors if available
+            ValidSensors = systemConfig.ValidSensors.ToList(),
         };
         var pipeline = new CompilationPipeline(new AOTRuleCompiler(), new DslParser());
         var result = pipeline.ProcessRules(options["rules"], compilerOptions);
@@ -471,13 +481,13 @@ https://github.com/yourusername/pulsar/docs"
             logger.Information(
                 $"Successfully generated {result.GeneratedFiles.Length} files from rules"
             );
-
+            
             // Log any optimizations or special handling
             if (options.GetValueOrDefault("aot") == "true")
             {
                 logger.Information("Generated AOT-compatible code");
             }
-
+            
             if (options.GetValueOrDefault("debug") == "true")
             {
                 logger.Information("Included debug symbols and enhanced logging");
@@ -552,7 +562,7 @@ https://github.com/yourusername/pulsar/docs"
         var sourceMapPath = Path.Combine(outputPath, "sourcemap.json");
         var sourceMap = new
         {
-            result.Manifest.Rules,
+            Rules = result.Manifest.Rules,
             Files = result.GeneratedFiles,
             CompilationTime = DateTime.UtcNow,
             SourceFiles = result.Manifest.Rules.Values.Select(r => r.SourceFile).Distinct(),
@@ -724,9 +734,10 @@ https://github.com/yourusername/pulsar/docs"
         }
     }
 
+    
     public static async Task<bool> GenerateBeaconSolution(
         Dictionary<string, string> options,
-        ILogger logger
+        Serilog.ILogger logger
     )
     {
         logger.Information("Generating AOT-compatible Beacon solution...");
