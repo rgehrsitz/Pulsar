@@ -98,7 +98,7 @@ The **Beacon.Runtime** executable fetches **bulk sensor values from Redis every 
 
 The execution sequence is as follows:
 
-```
+```mermaid
 sequenceDiagram
     participant Timer
     participant Runtime
