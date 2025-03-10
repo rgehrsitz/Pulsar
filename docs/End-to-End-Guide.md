@@ -50,7 +50,18 @@ redis:
   password: null  # Set your Redis password if needed
   ssl: false
   allowAdmin: false
+  healthCheck:
+    enabled: true
+    intervalSeconds: 30
+    failureThreshold: 5
+    timeoutMs: 2000
+  metrics:
+    enabled: true
+    instanceName: default
+    samplingIntervalSeconds: 60
 bufferCapacity: 100  # For temporal rules
+logLevel: Information  # Optional logging level
+logFile: logs/pulsar.log  # Optional log file path
 ```
 
 ## 3. Compiling with Pulsar
@@ -196,24 +207,32 @@ For advanced settings, create a runtime configuration JSON file:
 ```json
 {
   "redis": {
-    "singleNode": {
-      "endpoints": ["redis.example.com:6379"],
-      "poolSize": 8,
-      "retryCount": 3,
-      "retryBaseDelayMs": 100,
-      "connectTimeout": 5000,
-      "syncTimeout": 1000,
-      "keepAlive": 60,
-      "password": "your-password-here",
-      "ssl": true
+    "endpoints": ["redis.example.com:6379"],
+    "poolSize": 8,
+    "retryCount": 3,
+    "retryBaseDelayMs": 100,
+    "connectTimeout": 5000,
+    "syncTimeout": 1000,
+    "keepAlive": 60,
+    "password": "your-password-here",
+    "ssl": true,
+    "allowAdmin": false,
+    "healthCheck": {
+      "enabled": true,
+      "intervalSeconds": 30,
+      "failureThreshold": 5,
+      "timeoutMs": 2000
+    },
+    "metrics": {
+      "enabled": true,
+      "instanceName": "production",
+      "samplingIntervalSeconds": 60
     }
   },
   "cycleTime": 100,
   "bufferCapacity": 100,
-  "logging": {
-    "level": "Information",
-    "file": "beacon-logs.txt"
-  }
+  "logLevel": "Information",
+  "logFile": "beacon-logs.txt"
 }
 ```
 
