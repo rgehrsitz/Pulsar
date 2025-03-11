@@ -1,4 +1,4 @@
-# Pulsar/Beacon Documentation <img src="pulsar.svg" height="75px">
+# Pulsar/Beacon Documentation <img src="pulsar.png" height="75px">
 
 [![License](https://img.shields.io/badge/License-MIT-blue)](#license)
 
