@@ -5,7 +5,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Beacon.Runtime.Models;
-using Microsoft.Extensions.Logging;
+using Serilog;
 using StackExchange.Redis;
 
 namespace Beacon.Runtime.Services
@@ -18,104 +18,71 @@ namespace Beacon.Runtime.Services
         private readonly ILogger? _logger;
         private readonly RedisConfiguration _config;
         private readonly Timer? _healthCheckTimer;
-        private readonly TimeSpan _checkInterval = TimeSpan.FromSeconds(30);
-        private bool _isHealthy = false;
-        private DateTime _lastCheckTime = DateTime.MinValue;
-        private string _lastErrorMessage = string.Empty;
+        private readonly RedisService _redisService;
+        private bool _isHealthy = true;
+        private bool _disposed;
 
         /// <summary>
-        /// Gets a value indicating whether Redis is healthy
+        /// Whether the Redis service is healthy
         /// </summary>
         public bool IsHealthy => _isHealthy;
 
         /// <summary>
-        /// Gets the last time a health check was performed
+        /// Creates a new Redis health check
         /// </summary>
-        public DateTime LastCheckTime => _lastCheckTime;
-
-        /// <summary>
-        /// Gets the last error message if Redis is unhealthy
-        /// </summary>
-        public string LastErrorMessage => _lastErrorMessage;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="RedisHealthCheck"/> class with just configuration
-        /// </summary>
-        /// <param name="config">Redis configuration</param>
-        public RedisHealthCheck(RedisConfiguration config)
+        public RedisHealthCheck(RedisService redisService, ILogger logger)
         {
-            _config = config;
-            _isHealthy = true; // Assume healthy until proven otherwise
+            _redisService = redisService;
+            _logger = logger.ForContext<RedisHealthCheck>();
+            _config = new RedisConfiguration(); // Default configuration
             
-            // Don't start timer in this constructor to avoid circular dependency
+            // Start health check timer (every 30 seconds)
+            _healthCheckTimer = new Timer(
+                CheckHealth,
+                null,
+                TimeSpan.FromSeconds(5), // Initial delay
+                TimeSpan.FromSeconds(30) // Interval
+            );
+            
+            _logger.Debug("Redis health check initialized");
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="RedisHealthCheck"/> class
-        /// </summary>
-        /// <param name="config">Redis configuration</param>
-        /// <param name="logger">Logger</param>
-        public RedisHealthCheck(RedisConfiguration config, ILogger logger)
-        {
-            _config = config;
-            _logger = logger;
-            _isHealthy = true; // Assume healthy until proven otherwise
-
-            // Start health check timer
-            _healthCheckTimer = new Timer(CheckHealth, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
-        }
-
-        private async void CheckHealth(object? state)
-        {
-            await CheckHealthAsync(_config, _logger);
-        }
-
-        /// <summary>
-        /// Performs a health check on the Redis connection
-        /// </summary>
-        /// <returns>True if Redis is healthy, false otherwise</returns>
-        public async Task<bool> CheckHealthAsync(RedisConfiguration config, ILogger? logger = null)
+        private void CheckHealth(object? state)
         {
             try
             {
-                _lastCheckTime = DateTime.UtcNow;
+                // Perform health check
+                var wasHealthy = _isHealthy;
+                _isHealthy = _redisService.IsHealthy;
                 
-                // Create a temporary connection for health check
-                using var connection = await ConnectionMultiplexer.ConnectAsync(config.ToRedisOptions());
-                var db = connection.GetDatabase();
-                
-                // Ping the server
-                var pingResult = await db.PingAsync();
-                _isHealthy = pingResult != TimeSpan.MaxValue;
-                
-                if (_isHealthy)
+                // Log status changes
+                if (wasHealthy && !_isHealthy)
                 {
-                    _lastErrorMessage = string.Empty;
-                    logger?.LogDebug("Redis health check successful. Ping time: {PingTime}ms", pingResult.TotalMilliseconds);
+                    _logger?.Warning("Redis service is now unhealthy");
                 }
-                else
+                else if (!wasHealthy && _isHealthy)
                 {
-                    _lastErrorMessage = "Redis ping timeout";
-                    logger?.LogWarning("Redis health check failed. Ping timeout.");
+                    _logger?.Information("Redis service is now healthy");
                 }
                 
-                return _isHealthy;
+                _logger?.Debug("Redis health check completed: {IsHealthy}", _isHealthy);
             }
             catch (Exception ex)
             {
+                _logger?.Error(ex, "Error performing Redis health check");
                 _isHealthy = false;
-                _lastErrorMessage = ex.Message;
-                logger?.LogError(ex, "Redis health check failed");
-                return false;
             }
         }
 
+        /// <summary>
+        /// Disposes the health check
+        /// </summary>
         public void Dispose()
         {
-            if (_healthCheckTimer != null)
-            {
-                _healthCheckTimer.Dispose();
-            }
+            if (_disposed) return;
+            
+            _healthCheckTimer?.Dispose();
+            _disposed = true;
         }
     }
 }

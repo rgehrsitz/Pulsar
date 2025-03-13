@@ -8,16 +8,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using Beacon.Runtime.Interfaces;
 using Beacon.Runtime.Models;
-using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using StackExchange.Redis;
+using Serilog;
 
 namespace Beacon.Runtime.Services;
 
 public class RedisService : IRedisService, IDisposable
 {
-    private readonly ILogger<RedisService> _logger;
+    private readonly ILogger _logger;
     private readonly ConcurrentDictionary<string, DateTime> _lastErrorTime = new();
     private readonly TimeSpan _errorThrottleWindow = TimeSpan.FromSeconds(60);
     private readonly ConnectionMultiplexer[] _connectionPool;
@@ -29,453 +29,535 @@ public class RedisService : IRedisService, IDisposable
     private readonly RedisHealthCheck? _healthCheck;
     private bool _disposed;
 
+    // Redis key prefixes
+    private const string INPUT_PREFIX = "sensors:";
+    private const string OUTPUT_PREFIX = "outputs:";
+    private const string HISTORY_PREFIX = "history:";
+
     public bool IsHealthy => _healthCheck?.IsHealthy ?? true;
 
-    public RedisService(RedisConfiguration config, ILoggerFactory loggerFactory)
+    public RedisService(RedisConfiguration config, ILogger logger)
     {
-        _logger = loggerFactory.CreateLogger<RedisService>();
+        _logger = logger.ForContext<RedisService>();
 
         // Use a default pool size of 5 connections
         var poolSize = 5;
         _connectionPool = new ConnectionMultiplexer[poolSize];
-        _metrics = config.Metrics;
 
-        try
+        // If a specific pool size is configured, use that instead
+        if (config.PoolSize > 0)
         {
-            _redisOptions = config.ToRedisOptions();
+            poolSize = config.PoolSize;
+            _connectionPool = new ConnectionMultiplexer[poolSize];
+        }
 
-            // Initialize connection pool
-            for (int i = 0; i < poolSize; i++)
-            {
-                _connectionPool[i] = ConnectionMultiplexer.Connect(_redisOptions);
-                SetupConnectionCallbacks(_connectionPool[i]);
-            }
+        _redisOptions = new ConfigurationOptions
+        {
+            AbortOnConnectFail = false,
+            ConnectTimeout = config.ConnectTimeout,
+            SyncTimeout = config.SyncTimeout,
+            Password = config.Password,
+            Ssl = config.Ssl,
+            AllowAdmin = config.AllowAdmin
+        };
 
-            // Configure retry policy with metrics tracking
-            _retryPolicy = Policy
-                .Handle<RedisConnectionException>()
-                .Or<RedisTimeoutException>()
-                .WaitAndRetryAsync(
-                    config.RetryCount,
-                    retryAttempt =>
+        // Add all endpoints
+        foreach (var endpoint in config.Endpoints)
+        {
+            _redisOptions.EndPoints.Add(endpoint);
+        }
+
+        // Configure retry policy
+        _retryPolicy = Policy
+            .Handle<RedisConnectionException>()
+            .Or<RedisTimeoutException>()
+            .Or<RedisServerException>()
+            .WaitAndRetryAsync(
+                config.RetryCount,
+                retryAttempt => TimeSpan.FromMilliseconds(config.RetryBaseDelayMs * Math.Pow(2, retryAttempt - 1)),
+                (ex, timeSpan, retryCount, _) =>
+                {
+                    // Log the retry but throttle the logging to avoid excessive messages
+                    if (!ShouldThrottleError(ex.ToString()))
                     {
-                        var delay = TimeSpan.FromMilliseconds(
-                            Math.Pow(2, retryAttempt) * config.RetryBaseDelayMs
+                        _logger.Warning(
+                            ex,
+                            "Redis operation failed, retrying ({RetryCount}/{MaxRetries}) in {DelayMs}ms",
+                            retryCount,
+                            config.RetryCount,
+                            timeSpan.TotalMilliseconds
                         );
-                        LogDebug($"Retry {retryAttempt}/{config.RetryCount} after {delay.TotalMilliseconds}ms");
-                        return delay;
-                    },
-                    (exception, timeSpan, retryCount, context) =>
-                    {
-                        LogWarning($"Redis operation failed. Retry {retryCount} after {timeSpan.TotalMilliseconds}ms. Error: {exception.Message}");
-                        _metrics.IncrementRetryCount();
-                        return Task.CompletedTask;
                     }
-                );
+                }
+            );
 
-            // Initialize health check
-            _healthCheck = config.HealthCheck;
-
-            LogInformation($"Redis service initialized with pool size: {poolSize}, endpoints: {string.Join(",", config.Endpoints)}");
-        }
-        catch (Exception ex)
-        {
-            LogError($"Failed to initialize Redis service: {ex.Message}", ex);
-            _metrics.RecordError("InitializationError");
-            throw;
-        }
+        // Create the metrics
+        _metrics = new RedisMetrics();
+        
+        // Create the health check
+        _healthCheck = new RedisHealthCheck(this, _logger);
+        
+        // Create connections in the background
+        Task.Run(InitializeConnectionsAsync);
     }
 
-    private void SetupConnectionCallbacks(ConnectionMultiplexer connection)
-    {
-        connection.ConnectionFailed += (sender, e) =>
-        {
-            LogError($"Redis connection failed: {e.Exception.Message}", e.Exception);
-            _metrics.RecordError("ConnectionFailed");
-            if (sender is ConnectionMultiplexer)
-            {
-                _metrics.UpdateConnectionCount(-1);
-            }
-        };
-
-        connection.ConnectionRestored += (sender, e) =>
-        {
-            LogInformation("Redis connection restored");
-            if (sender is ConnectionMultiplexer)
-            {
-                _metrics.UpdateConnectionCount(1);
-            }
-        };
-
-        connection.ErrorMessage += (sender, e) =>
-            LogWarning($"Redis error: {e.Message}");
-
-        connection.InternalError += (sender, e) =>
-        {
-            LogError($"Redis internal error", e.Exception);
-            _metrics.RecordError("InternalError");
-        };
-    }
-
-    private async Task TryReconnect(ConnectionMultiplexer connection)
+    private async Task InitializeConnectionsAsync()
     {
         try
         {
-            if (!connection.IsConnected)
+            await _connectionLock.WaitAsync();
+            try
             {
-                using var operation = _metrics.TrackOperation("Reconnect");
-                await ConnectionMultiplexer.ConnectAsync(_redisOptions);
-                LogInformation("Redis connection reconfigured successfully");
+                for (int i = 0; i < _connectionPool.Length; i++)
+                {
+                    try
+                    {
+                        _connectionPool[i] = await ConnectionMultiplexer.ConnectAsync(_redisOptions);
+                        _logger.Debug("Redis connection {ConnectionNumber} established", i);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Failed to establish Redis connection {ConnectionNumber}", i);
+                    }
+                }
             }
+            finally
+            {
+                _connectionLock.Release();
+            }
+            
+            _logger.Information("Redis connection pool initialized with {PoolSize} connections", _connectionPool.Length);
         }
         catch (Exception ex)
         {
-            LogError($"Failed to reconfigure Redis connection", ex);
-            _metrics.RecordError("ReconnectionError");
+            _logger.Error(ex, "Failed to initialize Redis connection pool");
         }
     }
 
     private ConnectionMultiplexer GetConnection()
     {
-        var index = _random.Next(_connectionPool.Length);
+        // Get a random connection from the pool
+        var index = _random.Next(0, _connectionPool.Length);
         var connection = _connectionPool[index];
-
-        if (!connection.IsConnected)
+        
+        // If the connection is null or not connected, try to create a new one
+        if (connection == null || !connection.IsConnected)
         {
-            LogWarning($"Connection {index} is disconnected, trying to reconnect");
-            TryReconnect(connection).Wait();
+            _logger.Warning("Redis connection {ConnectionNumber} is not available, attempting to reconnect", index);
+            
+            try
+            {
+                connection = ConnectionMultiplexer.Connect(_redisOptions);
+                _connectionPool[index] = connection;
+                _logger.Information("Redis connection {ConnectionNumber} reestablished", index);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Failed to reestablish Redis connection {ConnectionNumber}", index);
+                
+                // Try to find any working connection in the pool
+                for (int i = 0; i < _connectionPool.Length; i++)
+                {
+                    if (i == index) continue; // Skip the one we just tried
+                    
+                    var fallbackConnection = _connectionPool[i];
+                    if (fallbackConnection != null && fallbackConnection.IsConnected)
+                    {
+                        _logger.Information("Using fallback Redis connection {ConnectionNumber}", i);
+                        return fallbackConnection;
+                    }
+                }
+                
+                // If we couldn't find a working connection, create a new one synchronously
+                // This is a last resort and will block until a connection is established
+                _logger.Warning("No working Redis connections available, creating a new one synchronously");
+                connection = ConnectionMultiplexer.Connect(_redisOptions);
+                _connectionPool[index] = connection;
+            }
         }
-
+        
         return connection;
     }
 
-    // New methods to match the interface
+    private bool ShouldThrottleError(string errorKey)
+    {
+        var now = DateTime.UtcNow;
+        if (_lastErrorTime.TryGetValue(errorKey, out var lastTime))
+        {
+            if (now - lastTime < _errorThrottleWindow)
+            {
+                return true;
+            }
+        }
+        
+        _lastErrorTime[errorKey] = now;
+        return false;
+    }
+
+    /// <summary>
+    /// Gets all input values from Redis
+    /// </summary>
     public async Task<Dictionary<string, object>> GetAllInputsAsync()
     {
-        using var operation = _metrics.TrackOperation("GetAllInputs");
-        var result = new Dictionary<string, object>();
-        
         try
         {
-            await _connectionLock.WaitAsync();
-            await _retryPolicy.ExecuteAsync(async () =>
+            return await _retryPolicy.ExecuteAsync(async () =>
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
                 
-                // In a real implementation, we would get all keys with a specific pattern or from a specific set
-                // For this template, we'll use a simplified approach with a predefined list of sensors
-                var sensors = new[] { "input:a", "input:b", "input:c", "temperature", "humidity", "pressure" };
-                var batch = db.CreateBatch();
-                var tasks = new List<Task<HashEntry[]>>();
+                var keys = await db.ExecuteAsync("KEYS", $"{INPUT_PREFIX}*");
+                var result = new Dictionary<string, object>();
                 
-                foreach (var key in sensors)
+                if (keys.IsNull)
+                    return result;
+                
+                foreach (var key in (RedisResult[])keys)
                 {
-                    tasks.Add(batch.HashGetAllAsync(key));
-                }
-                
-                batch.Execute();
-                await Task.WhenAll(tasks);
-                
-                for (int i = 0; i < sensors.Length; i++)
-                {
-                    var hashValues = tasks[i].Result;
-                    var valueEntry = hashValues.FirstOrDefault(he => he.Name == "value");
-                    
-                    if (valueEntry.Value.HasValue)
+                    var keyStr = key.ToString();
+                    var value = await db.StringGetAsync(keyStr);
+                    if (!value.IsNull)
                     {
-                        if (double.TryParse(valueEntry.Value.ToString(), out double value))
+                        var sensorName = keyStr.Substring(INPUT_PREFIX.Length);
+                        if (double.TryParse(value, out var doubleValue))
                         {
-                            result[sensors[i]] = value;
-                        }
-                    }
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            LogError($"Error fetching all inputs from Redis", ex);
-            _metrics.RecordError("GetAllInputsError");
-        }
-        finally
-        {
-            _connectionLock.Release();
-        }
-        
-        return result;
-    }
-    
-    public async Task SetOutputsAsync(Dictionary<string, object> outputs)
-    {
-        if (!outputs.Any())
-            return;
-            
-        using var operation = _metrics.TrackOperation("SetOutputs");
-        try
-        {
-            await _connectionLock.WaitAsync();
-            await _retryPolicy.ExecuteAsync(async () =>
-            {
-                var connection = GetConnection();
-                var db = connection.GetDatabase();
-                var batch = db.CreateBatch();
-                var tasks = new List<Task>();
-                var timestamp = DateTime.UtcNow.Ticks;
-                
-                foreach (var kvp in outputs)
-                {
-                    var valueString = kvp.Value.ToString();
-                    tasks.Add(
-                        batch.HashSetAsync(
-                            kvp.Key,
-                            new HashEntry[]
-                            {
-                                new HashEntry("value", valueString),
-                                new HashEntry("timestamp", timestamp),
-                            }
-                        )
-                    );
-                }
-                
-                batch.Execute();
-                await Task.WhenAll(tasks);
-            });
-        }
-        catch (Exception ex)
-        {
-            LogError($"Error writing outputs to Redis", ex);
-            _metrics.RecordError("SetOutputsError");
-            throw;
-        }
-        finally
-        {
-            _connectionLock.Release();
-        }
-    }
-    
-    public async Task<(double Value, DateTime Timestamp)[]> GetValues(string sensor, int count)
-    {
-        if (count <= 0)
-            return Array.Empty<(double, DateTime)>();
-            
-        using var operation = _metrics.TrackOperation("GetValues");
-        var result = new List<(double Value, DateTime Timestamp)>();
-        
-        try
-        {
-            await _connectionLock.WaitAsync();
-            await _retryPolicy.ExecuteAsync(async () =>
-            {
-                var connection = GetConnection();
-                var db = connection.GetDatabase();
-                
-                // In a real implementation, we would get historical values from a time series
-                // For this template, we'll just get the current value
-                var hashValues = await db.HashGetAllAsync(sensor);
-                var valueEntry = hashValues.FirstOrDefault(he => he.Name == "value");
-                var timestampEntry = hashValues.FirstOrDefault(he => he.Name == "timestamp");
-                
-                if (valueEntry.Value.HasValue && timestampEntry.Value.HasValue)
-                {
-                    if (
-                        double.TryParse(valueEntry.Value.ToString(), out double value)
-                        && long.TryParse(timestampEntry.Value.ToString(), out long ticksValue)
-                    )
-                    {
-                        DateTime timestamp = new DateTime(ticksValue, DateTimeKind.Utc);
-                        result.Add((value, timestamp));
-                    }
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            LogError($"Error fetching historical values from Redis for sensor {sensor}", ex);
-            _metrics.RecordError("GetValuesError");
-        }
-        finally
-        {
-            _connectionLock.Release();
-        }
-        
-        // Pad with dummy values if necessary
-        while (result.Count < count)
-        {
-            result.Add((0, DateTime.UtcNow.AddSeconds(-result.Count)));
-        }
-        
-        return result.ToArray();
-    }
-    
-    // Original methods
-    public async Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(
-        IEnumerable<string> sensorKeys
-    )
-    {
-        using var operation = _metrics.TrackOperation("GetSensorValues");
-        var result = new Dictionary<string, (double Value, DateTime Timestamp)>();
-        var keyArray = sensorKeys.ToArray();
-
-        try
-        {
-            await _connectionLock.WaitAsync();
-            await _retryPolicy.ExecuteAsync(async () =>
-            {
-                var connection = GetConnection();
-                var db = connection.GetDatabase();
-                var batch = db.CreateBatch();
-                var tasks = new List<Task<HashEntry[]>>();
-
-                foreach (var key in keyArray)
-                {
-                    tasks.Add(batch.HashGetAllAsync(key));
-                }
-
-                batch.Execute();
-                await Task.WhenAll(tasks);
-
-                for (int i = 0; i < keyArray.Length; i++)
-                {
-                    var hashValues = tasks[i].Result;
-                    var valueEntry = hashValues.FirstOrDefault(he => he.Name == "value");
-                    var timestampEntry = hashValues.FirstOrDefault(he => he.Name == "timestamp");
-
-                    if (valueEntry.Value.HasValue && timestampEntry.Value.HasValue)
-                    {
-                        if (
-                            double.TryParse(valueEntry.Value.ToString(), out double value)
-                            && long.TryParse(timestampEntry.Value.ToString(), out long ticksValue)
-                        )
-                        {
-                            DateTime timestamp = new DateTime(ticksValue, DateTimeKind.Utc);
-                            result[keyArray[i]] = (value, timestamp);
+                            result[sensorName] = doubleValue;
                         }
                         else
                         {
-                            LogWarning($"Invalid value or timestamp format for sensor {keyArray[i]}");
+                            result[sensorName] = value.ToString();
                         }
                     }
                 }
+                
+                return result;
             });
         }
         catch (Exception ex)
         {
-            LogError($"Error fetching sensor values from Redis", ex);
-            _metrics.RecordError("GetSensorValuesError");
-            throw;
+            _logger.Error(ex, "Failed to get all input values from Redis");
+            return new Dictionary<string, object>();
         }
-        finally
-        {
-            _connectionLock.Release();
-        }
-
-        return result;
     }
 
-    public async Task SetOutputValuesAsync(Dictionary<string, double> outputs)
+    /// <summary>
+    /// Sets output values in Redis
+    /// </summary>
+    public async Task SetOutputsAsync(Dictionary<string, object> outputs)
     {
-        if (!outputs.Any())
+        if (outputs == null || outputs.Count == 0)
             return;
-
-        using var operation = _metrics.TrackOperation("SetOutputValues");
+            
         try
         {
-            await _connectionLock.WaitAsync();
             await _retryPolicy.ExecuteAsync(async () =>
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
                 var batch = db.CreateBatch();
                 var tasks = new List<Task>();
-                var timestamp = DateTime.UtcNow.Ticks;
-
-                foreach (var kvp in outputs)
+                
+                foreach (var (key, value) in outputs)
                 {
-                    tasks.Add(
-                        batch.HashSetAsync(
-                            kvp.Key,
-                            new HashEntry[]
-                            {
-                                new HashEntry("value", kvp.Value.ToString("G17")),
-                                new HashEntry("timestamp", timestamp),
-                            }
-                        )
-                    );
+                    var redisKey = $"{OUTPUT_PREFIX}{key}";
+                    tasks.Add(batch.StringSetAsync(redisKey, value.ToString()));
                 }
-
+                
                 batch.Execute();
                 await Task.WhenAll(tasks);
+                
+                return true;
             });
         }
         catch (Exception ex)
         {
-            LogError($"Error writing output values to Redis", ex);
-            _metrics.RecordError("SetOutputValuesError");
-            throw;
-        }
-        finally
-        {
-            _connectionLock.Release();
+            _logger.Error(ex, "Failed to set output values in Redis");
         }
     }
 
-    private void LogError(string message, Exception? ex = null)
+    /// <summary>
+    /// Gets specific sensor values with their timestamps from Redis
+    /// </summary>
+    public async Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(IEnumerable<string> sensorKeys)
     {
-        var now = DateTime.UtcNow;
-        var key = message + (ex?.Message ?? string.Empty);
-        
-        if (_lastErrorTime.TryGetValue(key, out var lastTime) && 
-            (now - lastTime) < _errorThrottleWindow)
+        try
         {
-            return; // Skip logging to avoid flooding logs
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var connection = GetConnection();
+                var db = connection.GetDatabase();
+                var result = new Dictionary<string, (double Value, DateTime Timestamp)>();
+                var now = DateTime.UtcNow;
+                
+                foreach (var key in sensorKeys)
+                {
+                    try
+                    {
+                        var redisKey = $"{INPUT_PREFIX}{key}";
+                        var value = await db.StringGetAsync(redisKey);
+                        
+                        if (!value.IsNull && double.TryParse(value, out var doubleValue))
+                        {
+                            result[key] = (doubleValue, now);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning(ex, "Failed to get value for sensor {SensorKey}", key);
+                    }
+                }
+                
+                return result;
+            });
         }
-        
-        _lastErrorTime[key] = now;
-        
-        if (ex != null)
+        catch (Exception ex)
         {
-            _logger.LogError(ex, message);
-        }
-        else
-        {
-            _logger.LogError(message);
+            _logger.Error(ex, "Failed to get sensor values from Redis");
+            return new Dictionary<string, (double Value, DateTime Timestamp)>();
         }
     }
-    
-    private void LogDebug(string message)
+
+    /// <summary>
+    /// Sets output values in Redis
+    /// </summary>
+    public async Task SetOutputValuesAsync(Dictionary<string, double> outputs)
     {
-        _logger.LogDebug(message);
+        if (outputs == null || outputs.Count == 0)
+            return;
+            
+        try
+        {
+            await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var connection = GetConnection();
+                var db = connection.GetDatabase();
+                var batch = db.CreateBatch();
+                var tasks = new List<Task>();
+                
+                foreach (var (key, value) in outputs)
+                {
+                    var redisKey = $"{OUTPUT_PREFIX}{key}";
+                    tasks.Add(batch.StringSetAsync(redisKey, value.ToString()));
+                    
+                    // Also store in history
+                    var historyKey = $"{HISTORY_PREFIX}{key}";
+                    var entry = $"{DateTime.UtcNow.Ticks}:{value}";
+                    tasks.Add(batch.ListRightPushAsync(historyKey, entry));
+                    tasks.Add(batch.ListTrimAsync(historyKey, 0, 999)); // Keep last 1000 entries
+                }
+                
+                batch.Execute();
+                await Task.WhenAll(tasks);
+                
+                return true;
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to set output values in Redis");
+        }
     }
-    
-    private void LogWarning(string message)
+
+    /// <summary>
+    /// Gets the values for a sensor over time
+    /// </summary>
+    public async Task<(double Value, DateTime Timestamp)[]> GetValues(string sensor, int count)
     {
-        _logger.LogWarning(message);
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var connection = GetConnection();
+                var db = connection.GetDatabase();
+                
+                var historyKey = $"{HISTORY_PREFIX}{sensor}";
+                var entries = await db.ListRangeAsync(historyKey, -count, -1);
+                
+                var result = new List<(double Value, DateTime Timestamp)>();
+                
+                foreach (var entry in entries)
+                {
+                    var parts = entry.ToString().Split(':');
+                    if (parts.Length == 2)
+                    {
+                        if (long.TryParse(parts[0], out var ticks) && 
+                            double.TryParse(parts[1], out var value))
+                        {
+                            var timestamp = new DateTime(ticks, DateTimeKind.Utc);
+                            result.Add((value, timestamp));
+                        }
+                    }
+                }
+                
+                return result.ToArray();
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to get historical values for sensor {SensorKey}", sensor);
+            return Array.Empty<(double, DateTime)>();
+        }
     }
-    
-    private void LogInformation(string message)
+
+    public async Task<bool> SetAsync(string key, string value, TimeSpan? expiry = null)
     {
-        _logger.LogInformation(message);
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var connection = GetConnection();
+                var db = connection.GetDatabase();
+                
+                var startTime = DateTime.UtcNow;
+                var result = await db.StringSetAsync(key, value, expiry);
+                var duration = DateTime.UtcNow - startTime;
+                
+                _metrics.RecordOperation("SET", duration);
+                
+                return result;
+            });
+        }
+        catch (Exception ex)
+        {
+            if (!ShouldThrottleError("SET"))
+            {
+                _logger.Error(ex, "Failed to set Redis key {Key}", key);
+            }
+            _metrics.RecordError("SET");
+            return false;
+        }
+    }
+
+    public async Task<bool> HashSetAsync(string key, string field, string value)
+    {
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var connection = GetConnection();
+                var db = connection.GetDatabase();
+                
+                var startTime = DateTime.UtcNow;
+                var result = await db.HashSetAsync(key, field, value);
+                var duration = DateTime.UtcNow - startTime;
+                
+                _metrics.RecordOperation("HSET", duration);
+                
+                return result;
+            });
+        }
+        catch (Exception ex)
+        {
+            if (!ShouldThrottleError("HSET"))
+            {
+                _logger.Error(ex, "Failed to set Redis hash field {Key}:{Field}", key, field);
+            }
+            _metrics.RecordError("HSET");
+            return false;
+        }
+    }
+
+    public async Task<Dictionary<string, string>> HashGetAllAsync(string key)
+    {
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var connection = GetConnection();
+                var db = connection.GetDatabase();
+                
+                var startTime = DateTime.UtcNow;
+                var hashEntries = await db.HashGetAllAsync(key);
+                var duration = DateTime.UtcNow - startTime;
+                
+                _metrics.RecordOperation("HGETALL", duration);
+                
+                return hashEntries.ToDictionary(
+                    he => he.Name.ToString(),
+                    he => he.Value.ToString()
+                );
+            });
+        }
+        catch (Exception ex)
+        {
+            if (!ShouldThrottleError("HGETALL"))
+            {
+                _logger.Error(ex, "Failed to get all Redis hash fields for key {Key}", key);
+            }
+            _metrics.RecordError("HGETALL");
+            return new Dictionary<string, string>();
+        }
+    }
+
+    public async Task<string?> GetAsync(string key)
+    {
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var connection = GetConnection();
+                var db = connection.GetDatabase();
+                
+                var startTime = DateTime.UtcNow;
+                var value = await db.StringGetAsync(key);
+                var duration = DateTime.UtcNow - startTime;
+                
+                _metrics.RecordOperation("GET", duration);
+                
+                return value.IsNull ? null : value.ToString();
+            });
+        }
+        catch (Exception ex)
+        {
+            if (!ShouldThrottleError("GET"))
+            {
+                _logger.Error(ex, "Failed to get Redis key {Key}", key);
+            }
+            _metrics.RecordError("GET");
+            return null;
+        }
+    }
+
+    // Add a convenience method for publishing messages to a channel
+    public async Task<long> PublishAsync(string channel, string message)
+    {
+        try
+        {
+            return await _retryPolicy.ExecuteAsync(async () =>
+            {
+                var connection = GetConnection();
+                var subscriber = connection.GetSubscriber();
+                
+                var startTime = DateTime.UtcNow;
+                var result = await subscriber.PublishAsync(channel, message);
+                var duration = DateTime.UtcNow - startTime;
+                
+                _metrics.RecordOperation("PUBLISH", duration);
+                
+                return result;
+            });
+        }
+        catch (Exception ex)
+        {
+            if (!ShouldThrottleError("PUBLISH"))
+            {
+                _logger.Error(ex, "Failed to publish message to Redis channel {Channel}", channel);
+            }
+            _metrics.RecordError("PUBLISH");
+            return 0;
+        }
     }
 
     public void Dispose()
     {
-        if (!_disposed)
+        if (_disposed) return;
+        
+        foreach (var connection in _connectionPool)
         {
-            LogDebug("Disposing RedisService");
-            _connectionLock.Dispose();
-            foreach (var connection in _connectionPool)
-            {
-                try
-                {
-                    connection.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    LogWarning($"Error disposing Redis connection: {ex.Message}");
-                }
-            }
-            _healthCheck?.Dispose();
-            _disposed = true;
+            connection?.Dispose();
         }
+        
+        _connectionLock.Dispose();
+        _disposed = true;
     }
 }

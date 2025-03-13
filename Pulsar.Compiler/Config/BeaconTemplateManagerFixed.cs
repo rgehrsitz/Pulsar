@@ -442,14 +442,24 @@ namespace Pulsar.Compiler.Config
                 }
             }
             
-            // Copy buffer files but skip RingBufferManager if it already exists
+            // Copy buffer files but skip RingBufferManager if CircularBuffer.cs already exists with a RingBufferManager
+            var circularBufferContent = GetTemplateContent("Runtime/Buffers/CircularBuffer.cs");
+            bool circularBufferHasRingBufferManager = circularBufferContent.Contains("public class RingBufferManager");
+            
+            // Copy CircularBuffer.cs first
             CopyTemplateFile("Runtime/Buffers/CircularBuffer.cs", Path.Combine(buffersDir, "CircularBuffer.cs"));
             CopyTemplateFile("Runtime/Buffers/IDateTimeProvider.cs", Path.Combine(buffersDir, "IDateTimeProvider.cs"));
             CopyTemplateFile("Runtime/Buffers/SystemDateTimeProvider.cs", Path.Combine(buffersDir, "SystemDateTimeProvider.cs"));
             
-            if (!hasRingBufferManager)
+            // Only copy RingBufferManager.cs if CircularBuffer.cs doesn't already contain it
+            if (!circularBufferHasRingBufferManager && !hasRingBufferManager)
             {
+                _logger.Information("Copying separate RingBufferManager implementation");
                 CopyTemplateFile("Runtime/Buffers/RingBufferManager.cs", Path.Combine(buffersDir, "RingBufferManager.cs"));
+            }
+            else
+            {
+                _logger.Information("Skipping RingBufferManager.cs as CircularBuffer.cs already contains it");
             }
         }
         

@@ -39,7 +39,7 @@ namespace Beacon.Runtime.Buffers
 
         public CircularBuffer(int capacity, IDateTimeProvider dateTimeProvider)
         {
-            _logger = LoggingConfig.GetLogger();
+            _logger = Log.ForContext<CircularBuffer>();
             if (capacity <= 0)
                 throw new ArgumentException("Capacity must be positive", nameof(capacity));
             _buffer = new TimestampedValue[capacity];
@@ -339,14 +339,14 @@ namespace Beacon.Runtime.Buffers
     public class RingBufferManager : IDisposable
     {
         private readonly ILogger _logger;
-        public readonly ConcurrentDictionary<string, CircularBuffer> _buffers;
+        private readonly ConcurrentDictionary<string, CircularBuffer> _buffers;
         private readonly int _capacity;
         private readonly IDateTimeProvider _dateTimeProvider;
         private bool _disposed;
 
         public RingBufferManager(int capacity = 100, IDateTimeProvider? dateTimeProvider = null)
         {
-            _logger = LoggingConfig.GetLogger();
+            _logger = Log.ForContext<RingBufferManager>();
             _capacity = capacity;
             _buffers = new ConcurrentDictionary<string, CircularBuffer>();
             _dateTimeProvider = dateTimeProvider ?? new SystemDateTimeProvider();
@@ -378,6 +378,16 @@ namespace Beacon.Runtime.Buffers
             {
                 UpdateBuffer(sensor, value, timestamp);
             }
+        }
+
+        // Add GetValues method that's needed by RuleGroup
+        public IEnumerable<TimestampedValue> GetValues(string sensor, TimeSpan duration, bool includeOlder = false)
+        {
+            if (_buffers.TryGetValue(sensor, out var buffer))
+            {
+                return buffer.GetValues(duration, includeOlder);
+            }
+            return Enumerable.Empty<TimestampedValue>();
         }
 
         public bool IsAboveThresholdForDuration(

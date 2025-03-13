@@ -53,5 +53,13 @@ namespace Beacon.Runtime.Interfaces
         /// </summary>
         /// <returns>True if Redis is healthy, false otherwise</returns>
         bool IsHealthy { get; }
+
+        /// <summary>
+        /// Publishes a message to a Redis channel
+        /// </summary>
+        /// <param name="channel">The channel to publish to</param>
+        /// <param name="message">The message to publish</param>
+        /// <returns>The number of clients that received the message</returns>
+        Task<long> PublishAsync(string channel, string message);
     }
 }

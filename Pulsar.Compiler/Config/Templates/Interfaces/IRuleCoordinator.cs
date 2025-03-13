@@ -9,6 +9,11 @@ namespace Beacon.Runtime.Interfaces
     public interface IRuleCoordinator
     {
         /// <summary>
+        /// Gets the count of rules managed by this coordinator
+        /// </summary>
+        int RuleCount { get; }
+        
+        /// <summary>
         /// Gets the list of sensor names required by all rule groups
         /// </summary>
         string[] RequiredSensors { get; }
@@ -17,11 +22,9 @@ namespace Beacon.Runtime.Interfaces
         /// Evaluates all rule groups with the given inputs and returns the combined outputs
         /// </summary>
         /// <param name="inputs">Dictionary of sensor values</param>
-        /// <param name="outputs">Dictionary of output values</param>
-        /// <returns></returns>
-        Task EvaluateRulesAsync(
-            Dictionary<string, object> inputs,
-            Dictionary<string, object> outputs
+        /// <returns>Dictionary of output values</returns>
+        Task<Dictionary<string, object>> ExecuteRulesAsync(
+            Dictionary<string, object> inputs
         );
     }
 }

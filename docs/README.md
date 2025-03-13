@@ -26,6 +26,7 @@ This directory contains the documentation for the Pulsar/Beacon project, a high-
 ### Development and Testing
 
 7. [**Testing Guide**](Testing-Guide.md) - Comprehensive guide to testing the Pulsar/Beacon system
+8. [**Directory Structure**](Directory-Structure.md) - Explanation of project directories and guidelines
 
 ## Getting Started
 
@@ -33,7 +34,8 @@ If you're new to the Pulsar/Beacon project, we recommend starting with the follo
 
 1. [**End-to-End Guide**](End-to-End-Guide.md) - Complete walkthrough for new users
 2. [**Rules Engine**](Rules-Engine.md) - To learn about rule definitions and capabilities
-3. [**Project Status**](Project-Status.md) - To understand the current state of the project
+3. [**Directory Structure**](Directory-Structure.md) - To understand the project organization
+4. [**Project Status**](Project-Status.md) - To understand the current state of the project
 
 ## Key Features
 

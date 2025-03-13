@@ -26,6 +26,11 @@ namespace Beacon.Runtime.Services
             TrackError(errorType);
         }
         
+        public void RecordOperation(string operationName, TimeSpan duration)
+        {
+            _operationCounts.AddOrUpdate(operationName, 1, (_, count) => count + 1);
+        }
+        
         public void IncrementRetryCount()
         {
             Interlocked.Increment(ref _retryCount);

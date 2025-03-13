@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using Beacon.Runtime.Services;
 using StackExchange.Redis;
 using YamlDotNet.Serialization;
 
@@ -61,23 +60,6 @@ namespace Beacon.Runtime.Models
         [JsonPropertyName("allowAdmin")]
         [YamlMember(Alias = "allowAdmin")]
         public bool AllowAdmin { get; set; } = false;
-        
-        // Metrics instance for tracking Redis operations
-        public RedisMetrics Metrics { get; } = new RedisMetrics();
-        
-        // Health check instance for monitoring Redis health
-        private RedisHealthCheck? _healthCheck;
-        public RedisHealthCheck HealthCheck 
-        { 
-            get 
-            {
-                if (_healthCheck == null)
-                {
-                    _healthCheck = new RedisHealthCheck(this);
-                }
-                return _healthCheck;
-            } 
-        }
         
         /// <summary>
         /// Converts the configuration to Redis connection options

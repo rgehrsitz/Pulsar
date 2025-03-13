@@ -35,7 +35,7 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using System.Linq;");
             sb.AppendLine("using System.Threading.Tasks;");
-            sb.AppendLine("using Microsoft.Extensions.Logging;");
+            sb.AppendLine("using Serilog;");
             sb.AppendLine("using Prometheus;");
             sb.AppendLine("using Beacon.Runtime.Buffers;");
             sb.AppendLine("using Beacon.Runtime.Services;");
@@ -48,9 +48,13 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("    public class RuleCoordinator : IRuleCoordinator");
             sb.AppendLine("    {");
             sb.AppendLine("        private readonly IRedisService _redis;");
-            sb.AppendLine("        private readonly Microsoft.Extensions.Logging.ILogger _logger;");
+            sb.AppendLine("        private readonly ILogger _logger;");
             sb.AppendLine("        private readonly RingBufferManager _bufferManager;");
             sb.AppendLine("        private readonly List<IRuleGroup> _ruleGroups;");
+            sb.AppendLine();
+            
+            // RuleCount property implementation
+            sb.AppendLine("        public int RuleCount => _ruleGroups.Count;");
             sb.AppendLine();
             
             // RequiredSensors property implementation
@@ -73,14 +77,14 @@ namespace Pulsar.Compiler.Generation.Generators
 
             // Constructor
             sb.AppendLine(
-                "        public RuleCoordinator(IRedisService redis, Microsoft.Extensions.Logging.ILogger logger, RingBufferManager bufferManager)"
+                "        public RuleCoordinator(IRedisService redis, ILogger logger, RingBufferManager bufferManager)"
             );
             sb.AppendLine("        {");
             sb.AppendLine(
                 "            _redis = redis ?? throw new ArgumentNullException(nameof(redis));"
             );
             sb.AppendLine(
-                "            _logger = logger ?? throw new ArgumentNullException(nameof(logger));"
+                "            _logger = logger?.ForContext<RuleCoordinator>() ?? throw new ArgumentNullException(nameof(logger));"
             );
             sb.AppendLine(
                 "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
@@ -99,29 +103,59 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // EvaluateRulesAsync method (implementation of IRuleCoordinator)
-            sb.AppendLine("        public async Task EvaluateRulesAsync(Dictionary<string, object> inputs, Dictionary<string, object> outputs)");
+            // ExecuteRulesAsync method (implementation of IRuleCoordinator)
+            sb.AppendLine("        public async Task<Dictionary<string, object>> ExecuteRulesAsync(Dictionary<string, object> inputs)");
             sb.AppendLine("        {");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                using var timer = RuleEvaluationDuration.NewTimer();");
+            sb.AppendLine("                var outputs = new Dictionary<string, object>();");
+            sb.AppendLine();
+            
+            // Update buffers
+            sb.AppendLine("                // Update buffers with current inputs");
+            sb.AppendLine("                UpdateBuffers(inputs);");
             sb.AppendLine();
 
             // Evaluate each rule group in sequence
             for (int i = 0; i < ruleGroups.Count; i++)
             {
-                sb.AppendLine($"                _logger.LogDebug(\"Evaluating rule group {i}\");");
+                sb.AppendLine($"                _logger.Debug(\"Evaluating rule group {i}\");");
                 sb.AppendLine(
                     $"                await _ruleGroups[{i}].EvaluateRulesAsync(inputs, outputs);"
                 );
                 sb.AppendLine($"                RuleEvaluationsTotal.Inc();");
             }
 
+            sb.AppendLine();
+            sb.AppendLine("                return outputs;");
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");
-            sb.AppendLine("                _logger.LogError(ex, \"Error evaluating rules\");");
+            sb.AppendLine("                _logger.Error(ex, \"Error evaluating rules\");");
             sb.AppendLine("                throw;");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            
+            // Helper method for buffer updates
+            sb.AppendLine("        private void UpdateBuffers(Dictionary<string, object> inputs)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            var now = DateTime.UtcNow;");
+            sb.AppendLine("            foreach (var kvp in inputs)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                string sensor = kvp.Key;");
+            sb.AppendLine("                object value = kvp.Value;");
+            sb.AppendLine();
+            sb.AppendLine("                // Only handle numeric values for the buffer");
+            sb.AppendLine("                if (value is double doubleValue)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    _bufferManager.UpdateBuffer(sensor, doubleValue, now);");
+            sb.AppendLine("                }");
+            sb.AppendLine("                else if (double.TryParse(value.ToString(), out doubleValue))");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    _bufferManager.UpdateBuffer(sensor, doubleValue, now);");
+            sb.AppendLine("                }");
             sb.AppendLine("            }");
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -132,15 +166,13 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                var inputs = await _redis.GetAllInputsAsync();");
-            sb.AppendLine("                var outputs = new Dictionary<string, object>();");
-            sb.AppendLine();
-            sb.AppendLine("                await EvaluateRulesAsync(inputs, outputs);");
+            sb.AppendLine("                var outputs = await ExecuteRulesAsync(inputs);");
             sb.AppendLine();
             sb.AppendLine("                await _redis.SetOutputsAsync(outputs);");
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");
-            sb.AppendLine("                _logger.LogError(ex, \"Error evaluating rules from Redis\");");
+            sb.AppendLine("                _logger.Error(ex, \"Error evaluating rules from Redis\");");
             sb.AppendLine("                throw;");
             sb.AppendLine("            }");
             sb.AppendLine("        }");
