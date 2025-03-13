@@ -1,4 +1,5 @@
 // File: Pulsar.Compiler/Generation/Generators/RuleGroupGenerator.cs
+// NOTE: This implementation includes AOT compatibility fixes.
 
 using System;
 using System.Collections.Generic;
@@ -9,6 +10,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Generation.Helpers;
 using Pulsar.Compiler.Models;
+using Serilog;
+using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace Pulsar.Compiler.Generation.Generators
 {
@@ -35,14 +38,16 @@ namespace Pulsar.Compiler.Generation.Generators
 
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
+            sb.AppendLine("using System.Linq; // Required for Any() and All() extension methods");
             sb.AppendLine("using System.Threading.Tasks;");
-            sb.AppendLine("using Microsoft.Extensions.Logging;");
+            sb.AppendLine("using Serilog;");
             sb.AppendLine("using Prometheus;");
             sb.AppendLine("using StackExchange.Redis;");
             sb.AppendLine("using Beacon.Runtime.Buffers;");
             sb.AppendLine("using Beacon.Runtime.Rules;");
             sb.AppendLine("using Beacon.Runtime.Interfaces;");
             sb.AppendLine("using Beacon.Runtime.Services;");
+            sb.AppendLine("using ILogger = Serilog.ILogger;");
             sb.AppendLine();
 
             sb.AppendLine($"namespace {buildConfig.Namespace}");
@@ -53,19 +58,20 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("    {");
 
             // Properties
+            sb.AppendLine($"        public string Name => \"RuleGroup{groupId}\";");
             sb.AppendLine("        public IRedisService Redis { get; }");
-            sb.AppendLine("        public Microsoft.Extensions.Logging.ILogger Logger { get; }");
+            sb.AppendLine("        public ILogger Logger { get; }");
             sb.AppendLine("        public RingBufferManager BufferManager { get; }");
             sb.AppendLine();
 
             // Constructor
             sb.AppendLine($"        public RuleGroup{groupId}(");
             sb.AppendLine("            IRedisService redis,");
-            sb.AppendLine("            Microsoft.Extensions.Logging.ILogger logger,");
+            sb.AppendLine("            ILogger logger,");
             sb.AppendLine("            RingBufferManager bufferManager)");
             sb.AppendLine("        {");
             sb.AppendLine("            Redis = redis;");
-            sb.AppendLine("            Logger = logger;");
+            sb.AppendLine($"            Logger = logger?.ForContext<RuleGroup{groupId}>();");
             sb.AppendLine("            BufferManager = bufferManager;");
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -151,7 +157,7 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine(
                 "            var values = BufferManager.GetValues(sensor, TimeSpan.FromMilliseconds(duration));"
             );
-            sb.AppendLine("            if (values.Count == 0) return false;");
+            sb.AppendLine("            if (values == null || !values.Any()) return false;");
             sb.AppendLine();
             sb.AppendLine("            switch (comparisonOperator)");
             sb.AppendLine("            {");
@@ -176,6 +182,22 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine(
                 "                default: throw new ArgumentException($\"Unsupported comparison operator: {comparisonOperator}\");"
             );
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            
+            // Add SendMessage method for rules that publish messages
+            sb.AppendLine("        private void SendMessage(string channel, string message)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            // Implementation of sending messages to Redis channel");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine("                Redis.PublishAsync(channel, message);");
+            sb.AppendLine("                Logger.Information(\"Sent message to channel {Channel}: {Message}\", channel, message);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            catch (Exception ex)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                Logger.Error(ex, \"Failed to send message to channel {Channel}\", channel);");
             sb.AppendLine("            }");
             sb.AppendLine("        }");
 

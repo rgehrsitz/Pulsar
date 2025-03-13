@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
-using Pulsar.Compiler.Generation.Generators;
+using Pulsar.Compiler.Generation.Generators; // Using RuleGroupGeneratorFixed now
 using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Core
@@ -28,7 +28,7 @@ namespace Pulsar.Compiler.Core
         {
             _logger = logger ?? NullLogger<AOTRuleCompiler>.Instance;
             _codeGenerator = new CodeGenerator();
-            _ruleGroupGenerator = new RuleGroupGenerator();
+            _ruleGroupGenerator = new RuleGroupGenerator(_logger);
             _ruleCoordinatorGenerator = new RuleCoordinatorGenerator();
             _metadataGenerator = new MetadataGenerator();
         }
@@ -116,8 +116,7 @@ namespace Pulsar.Compiler.Core
                 generatedFiles.Add(config);
                 _logger.LogDebug("Generated embedded config");
 
-                // Apply any necessary post-generation fixups
-                _codeGenerator.ApplyPostGenerationFixups(generatedFiles);
+                // Post-generation fixups no longer needed
 
                 // Write files to disk
                 foreach (var file in generatedFiles)

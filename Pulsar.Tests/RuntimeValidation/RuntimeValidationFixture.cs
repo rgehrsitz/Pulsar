@@ -169,7 +169,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 buildConfig.SystemConfig = SystemConfig.Load(systemConfigPath);
                 
                 // Build the Beacon project using the fixed orchestrator
-                var orchestrator = new BeaconBuildOrchestratorFixed();
+                var orchestrator = new BeaconBuildOrchestrator();
                 var result = await orchestrator.BuildBeaconAsync(buildConfig);
                 
                 if (!result.Success)

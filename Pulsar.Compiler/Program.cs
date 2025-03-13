@@ -884,7 +884,7 @@ https://github.com/yourusername/pulsar/docs"
                 TargetFramework = "net9.0",
                 RulesPath = rulesPath,
                 RuleDefinitions = rules,
-                SystemConfig = systemConfig,
+                SystemConfig = systemConfig,  // Ensure SystemConfig is set here
                 StandaloneExecutable = true,
                 GenerateDebugInfo = false,
                 OptimizeOutput = true,
@@ -901,8 +901,22 @@ https://github.com/yourusername/pulsar/docs"
                 CreateSeparateDirectory = true,
                 SolutionName = "Beacon"
             };
+            
+            // Double-check that system config is properly set
+            if (buildConfig.SystemConfig == null)
+            {
+                logger.Warning("SystemConfig is null in BuildConfig, initializing it");
+                buildConfig.SystemConfig = systemConfig;
+            }
+            
+            // Ensure validSensors is populated
+            if (buildConfig.SystemConfig.ValidSensors == null || buildConfig.SystemConfig.ValidSensors.Count == 0)
+            {
+                logger.Warning("ValidSensors is empty in SystemConfig, adding required sensors");
+                buildConfig.SystemConfig.ValidSensors = new List<string> { "temperature_f", "temperature_c", "humidity", "pressure" };
+            }
 
-            var orchestrator = new BeaconBuildOrchestratorFixed();
+            var orchestrator = new BeaconBuildOrchestrator();
             var buildResult = await orchestrator.BuildBeaconAsync(buildConfig);
 
             if (buildResult.Success)

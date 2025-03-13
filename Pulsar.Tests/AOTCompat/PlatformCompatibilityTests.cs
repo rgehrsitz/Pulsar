@@ -303,9 +303,9 @@ bufferCapacity: 100";
                     buildConfig.RuleDefinitions = ruleDefinitions.ToList();
                     _logger.LogInformation("Successfully parsed {Count} rules", buildConfig.RuleDefinitions.Count);
                     
-                    // Use BeaconBuildOrchestratorFixed
+                    // Use BeaconBuildOrchestrator
                     _logger.LogInformation("Building Beacon solution...");
-                    var orchestrator = new Pulsar.Compiler.Config.BeaconBuildOrchestratorFixed();
+                    var orchestrator = new Pulsar.Compiler.Config.BeaconBuildOrchestrator();
                     var result = await orchestrator.BuildBeaconAsync(buildConfig);
                     
                     _logger.LogInformation("Build result: {Success}", result.Success);

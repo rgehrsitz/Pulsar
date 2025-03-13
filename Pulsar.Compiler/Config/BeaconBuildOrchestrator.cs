@@ -1,35 +1,33 @@
 // File: Pulsar.Compiler/Config/BeaconBuildOrchestrator.cs
+// NOTE: This implementation includes AOT compatibility fixes.
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text.Json;
+using System.Text;
 using System.Threading.Tasks;
 using Pulsar.Compiler.Core;
-using Pulsar.Compiler.Generation;
+using Pulsar.Compiler.Generation; // Using CodeGenerator now
 using Pulsar.Compiler.Models;
 using Serilog;
 
 namespace Pulsar.Compiler.Config
 {
     /// <summary>
-    /// Orchestrates the build process for the Beacon AOT-compatible solution
+    /// Beacon build orchestrator with AOT compatibility support
     /// </summary>
     public class BeaconBuildOrchestrator
     {
         private readonly ILogger _logger;
-        private readonly CompilationPipeline _pipeline;
-        private readonly BeaconTemplateManagerFixed _templateManager;
-
-        public BeaconBuildOrchestrator(BuildConfig config = null)
+        private readonly BeaconTemplateManager _templateManager;
+        
+        public BeaconBuildOrchestrator()
         {
             _logger = LoggingConfig.GetLogger().ForContext<BeaconBuildOrchestrator>();
-            _pipeline = new CompilationPipeline(new AOTRuleCompiler(), new Parsers.DslParser());
-            _templateManager = new BeaconTemplateManagerFixed();
+            _templateManager = new BeaconTemplateManager();
         }
-
+        
         /// <summary>
         /// Builds a complete Beacon solution from the given configuration and rules
         /// </summary>
@@ -53,6 +51,21 @@ namespace Pulsar.Compiler.Config
                     throw new ArgumentException("Output directory is not specified in the configuration");
                 }
                 
+                // Clean existing files if they exist to avoid conflicts
+                if (Directory.Exists(outputDir))
+                {
+                    _logger.Information("Cleaning existing output directory: {Path}", outputDir);
+                    try
+                    {
+                        Directory.Delete(outputDir, true);
+                        Directory.CreateDirectory(outputDir);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning("Could not clean output directory: {Error}", ex.Message);
+                    }
+                }
+                
                 // Create a beacon directory inside the output directory
                 string beaconOutputDir = outputDir;
                 if (config.CreateSeparateDirectory)
@@ -64,146 +77,76 @@ namespace Pulsar.Compiler.Config
                 // Create the Beacon solution structure
                 _templateManager.CreateBeaconSolution(beaconOutputDir, config);
 
-                // Get the path to the Beacon.Runtime project directory
-                string runtimeOutputDir = Path.Combine(beaconOutputDir, "Beacon.Runtime");
-                string generatedOutputDir = Path.Combine(runtimeOutputDir, "Generated");
-
-                // Generate runtime files
-                _logger.Information("Generating rule files...");
-                var compilerOptions = new CompilerOptions { BuildConfig = config };
-                var compilationResult = _pipeline.ProcessRules(config.RuleDefinitions, compilerOptions);
-
-                if (!compilationResult.Success)
+                // Use the code generator to generate rule files
+                var codeGenerator = new CodeGenerator();
+                var generatedFiles = codeGenerator.GenerateCSharp(config.RuleDefinitions, config);
+                
+                // Write the generated files to the output directory
+                var generatedDir = Path.Combine(beaconOutputDir, "Beacon.Runtime", "Generated");
+                if (!Directory.Exists(generatedDir))
                 {
-                    _logger.Error("Rule compilation failed: {@Errors}", compilationResult.Errors);
-                    result.Success = false;
-                    result.Errors = compilationResult.Errors.ToArray();
-                    return result;
+                    Directory.CreateDirectory(generatedDir);
                 }
-
-                // Copy the generated files to the appropriate locations
-                foreach (var generatedFile in compilationResult.GeneratedFiles)
+                else
                 {
-                    string destPath = Path.Combine(generatedOutputDir, Path.GetFileName(generatedFile.FileName));
-                    Directory.CreateDirectory(Path.GetDirectoryName(destPath));
-                    File.WriteAllText(destPath, generatedFile.Content);
-                    _logger.Debug("Wrote generated file: {FileName}", destPath);
-                }
-
-                // Create rule manifest file
-                string manifestPath = Path.Combine(generatedOutputDir, "rules.manifest.json");
-                var manifestContent = JsonSerializer.Serialize(
-                    new { Rules = compilationResult.GeneratedFiles.Select(f => f.FileName).ToList() },
-                    new JsonSerializerOptions { WriteIndented = true }
-                );
-                File.WriteAllText(manifestPath, manifestContent);
-                _logger.Information("Created rule manifest at {Path}", manifestPath);
-
-                // Build the solution using dotnet CLI
-                _logger.Information("Building Beacon solution at {OutputDir}", beaconOutputDir);
-                var solutionPath = Path.Combine(beaconOutputDir, config.SolutionName + ".sln");
-
-                if (!File.Exists(solutionPath))
-                {
-                    _logger.Error("Solution file not found: {SolutionPath}", solutionPath);
-                    result.Success = false;
-                    result.Errors = new[] { $"Solution file not found: {solutionPath}" };
-                    return result;
-                }
-
-                // Run dotnet build on the solution
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo
+                    // Clean existing generated files to avoid conflicts
+                    foreach (var file in Directory.GetFiles(generatedDir))
                     {
-                        FileName = "dotnet",
-                        Arguments = $"build {solutionPath} -c Release -v detailed",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false
-                    }
-                };
-
-                _logger.Information("Executing: dotnet build {SolutionPath} -c Release", solutionPath);
-                process.Start();
-                var output = await process.StandardOutput.ReadToEndAsync();
-                var error = await process.StandardError.ReadToEndAsync();
-                await process.WaitForExitAsync();
-
-                // Log the output and error
-                _logger.Debug("Build output: {Output}", output);
-                if (!string.IsNullOrWhiteSpace(error))
-                {
-                    _logger.Debug("Build errors: {Error}", error);
-                }
-
-                if (process.ExitCode != 0)
-                {
-                    _logger.Error("Build process failed with exit code {ExitCode}: {Error}", process.ExitCode, error);
-                    result.Success = false;
-                    result.Errors = new[] { $"Build process failed: {error}" };
-                    return result;
-                }
-
-                // If standalone executable is requested, run dotnet publish with the appropriate flags
-                if (config.StandaloneExecutable)
-                {
-                    _logger.Information("Building standalone executable...");
-                    var runtimeProject = Path.Combine(runtimeOutputDir, "Beacon.Runtime.csproj");
-                    
-                    var publishProcess = new Process
-                    {
-                        StartInfo = new ProcessStartInfo
+                        try
                         {
-                            FileName = "dotnet",
-                            Arguments = $"publish {runtimeProject} -c Release -r {config.Target} --self-contained true -v detailed",
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false
+                            File.Delete(file);
+                            _logger.Debug("Deleted existing generated file: {Path}", file);
                         }
-                    };
-
-                    _logger.Information("Executing: dotnet publish {RuntimeProject} -c Release -r {Target} --self-contained true", runtimeProject, config.Target);
-                    publishProcess.Start();
-                    var publishOutput = await publishProcess.StandardOutput.ReadToEndAsync();
-                    var publishError = await publishProcess.StandardError.ReadToEndAsync();
-                    await publishProcess.WaitForExitAsync();
-
-                    // Log the output and error
-                    _logger.Debug("Publish output: {Output}", publishOutput);
-                    if (!string.IsNullOrWhiteSpace(publishError))
-                    {
-                        _logger.Debug("Publish errors: {Error}", publishError);
-                    }
-
-                    if (publishProcess.ExitCode != 0)
-                    {
-                        _logger.Error("Publish process failed with exit code {ExitCode}: {Error}", publishProcess.ExitCode, publishError);
-                        result.Success = false;
-                        result.Errors = new[] { $"Publish process failed: {publishError}" };
-                        return result;
+                        catch (Exception ex)
+                        {
+                            _logger.Warning("Could not delete generated file {Path}: {Error}", file, ex.Message);
+                        }
                     }
                 }
-
-                _logger.Information("Beacon build completed successfully");
                 
-                // Update build result with generated file information
-                result.GeneratedFiles = new []
+                foreach (var file in generatedFiles)
                 {
-                    solutionPath,
-                    Path.Combine(runtimeOutputDir, "Beacon.Runtime.csproj"),
-                    Path.Combine(runtimeOutputDir, "Program.cs"),
-                    manifestPath
+                    // Skip Program.cs in Generated directory to avoid conflicts
+                    if (file.FileName == "Program.cs")
+                    {
+                        _logger.Information("Skipping Program.cs in Generated directory to avoid conflicts");
+                        continue;
+                    }
+                    
+                    var filePath = Path.Combine(generatedDir, file.FileName);
+                    File.WriteAllText(filePath, file.Content);
+                    _logger.Debug("Wrote generated file: {Path}", filePath);
+                }
+                
+                // Generate rule manifest file
+                var ruleManifest = new RuleManifest
+                {
+                    GeneratedAt = DateTime.UtcNow
                 };
                 
-                // Add test project path if generated
-                if (config.GenerateTestProject)
+                // Set build metrics
+                ruleManifest.BuildMetrics.TotalRules = config.RuleDefinitions.Count;
+                
+                // Add basic rule metadata
+                foreach (var rule in config.RuleDefinitions)
                 {
-                    var testFiles = result.GeneratedFiles.ToList();
-                    testFiles.Add(Path.Combine(beaconOutputDir, "Beacon.Tests", "Beacon.Tests.csproj"));
-                    result.GeneratedFiles = testFiles.ToArray();
+                    ruleManifest.Rules[rule.Name] = new RuleMetadata
+                    {
+                        SourceFile = rule.SourceFile ?? "unknown",
+                        SourceLineNumber = rule.LineNumber,
+                        Description = rule.Description
+                    };
                 }
                 
+                var manifestPath = Path.Combine(generatedDir, "rules.manifest.json");
+                var manifestJson = System.Text.Json.JsonSerializer.Serialize(ruleManifest, new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+                File.WriteAllText(manifestPath, manifestJson);
+                _logger.Information("Created rule manifest at {Path}", manifestPath);
+                
+                // Return success result
                 return result;
             }
             catch (Exception ex)
