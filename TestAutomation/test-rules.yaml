@@ -1,0 +1,139 @@
+rules:
+  - name: SimpleTemperatureRule
+    description: Sets a flag when temperature exceeds threshold
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '>'
+            value: 30
+    actions:
+      - set_value:
+          key: output:high_temperature
+          value: 1
+
+  - name: TemperatureRateRule
+    description: Detects when temperature rate of change exceeds threshold 
+    conditions:
+      all:
+        - condition:
+            type: threshold_over_time
+            sensor: input:temperature
+            operator: '>'
+            threshold: 5
+            duration: 1000  # 1 second duration for test purposes
+    actions:
+      - set_value:
+          key: output:temperature_rising
+          value: 1
+
+  - name: ComplexCalcRule
+    description: Calculates a complex value based on multiple inputs
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '>'
+            value: 0
+        - condition:
+            type: comparison
+            sensor: input:humidity
+            operator: '>'
+            value: 0
+    actions:
+      - set_value:
+          key: output:heat_index
+          value_expression: '0.5 * (input:temperature + 61.0 + ((input:temperature - 68.0) * 1.2) + (input:humidity * 0.094))'
+          
+  # Rules with dependencies
+  - name: HeatAlertRule
+    description: Sets a heat alert when heat index is above threshold
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: output:heat_index
+            operator: '>'
+            value: 85
+    actions:
+      - set_value:
+          key: output:heat_alert
+          value: 1
+          
+  # Negative test rule (expected to never trigger)
+  - name: InvalidConditionRule
+    description: This rule should never trigger due to impossible condition
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '>'
+            value: 1000
+    actions:
+      - set_value:
+          key: output:impossible_condition
+          value: 1
+          
+  # More complex temporal rule
+  - name: TemperaturePatternRule
+    description: Detects a specific pattern of temperature changes
+    conditions:
+      all:
+        - condition:
+            type: threshold_over_time
+            sensor: input:temperature
+            operator: '>'
+            threshold: 3  # Temperature change
+            duration: 2000  # 2 second window
+        - condition:
+            type: comparison
+            sensor: input:pressure
+            operator: '<'
+            value: 990  # Low pressure
+    actions:
+      - set_value:
+          key: output:storm_approaching
+          value: 1
+          
+  # Rule depending on multiple outputs (complex dependency) - Path 1
+  - name: EmergencyAlertRule1
+    description: Triggers an emergency alert based on heat conditions
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: output:high_temperature
+            operator: '=='
+            value: 1
+        - condition:
+            type: comparison
+            sensor: output:heat_alert
+            operator: '=='
+            value: 1
+    actions:
+      - set_value:
+          key: output:emergency_alert
+          value: 1
+          
+  # Rule depending on multiple outputs (complex dependency) - Path 2
+  - name: EmergencyAlertRule2
+    description: Triggers an emergency alert based on storm conditions
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: output:storm_approaching
+            operator: '=='
+            value: 1
+        - condition:
+            type: comparison
+            sensor: output:temperature_rising
+            operator: '=='
+            value: 1
+    actions:
+      - set_value:
+          key: output:emergency_alert
+          value: 1
