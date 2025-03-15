@@ -1,0 +1,43 @@
+name: SimpleTestRule
+description: A simple rule for testing Pulsar
+
+inputs:
+  temperature:
+    type: number
+    key: input:temperature
+    description: Temperature sensor value
+  
+  humidity:
+    type: number
+    key: input:humidity
+    description: Humidity sensor value
+
+outputs:
+  is_hot:
+    type: boolean
+    key: output:is_hot
+    description: Whether it's hot or not
+    
+  temperature_celsius:
+    type: number
+    key: output:temperature_celsius
+    description: Temperature in Celsius
+
+rules:
+  - name: HotOrNot
+    description: Determine if it's hot
+    conditions:
+      - expression: temperature > 30
+        description: Temperature above 30°C is considered hot
+    action: |
+      set_output("is_hot", true);
+      set_output("temperature_celsius", inputs.temperature);
+      
+  - name: NotHot
+    description: Determine if it's not hot
+    conditions:
+      - expression: temperature <= 30
+        description: Temperature below or equal to 30°C is not hot
+    action: |
+      set_output("is_hot", false);
+      set_output("temperature_celsius", inputs.temperature);

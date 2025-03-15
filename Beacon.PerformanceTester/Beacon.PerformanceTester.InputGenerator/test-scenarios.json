@@ -1,0 +1,142 @@
+{
+  "Name": "Beacon Performance Tests",
+  "Description": "Performance tests for Beacon runtime processing",
+  "DelayBetweenTestsSeconds": 5,
+  "AbortOnFailure": false,
+  "TestCases": [
+    {
+      "Name": "BasicLatencyTest",
+      "Description": "Tests basic latency with constant values",
+      "DurationSeconds": 30,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Constant",
+          "ConstantValue": 35,
+          "UpdateFrequencyMs": 100
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": "Constant",
+          "ConstantValue": 70,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:high_temperature",
+          "Value": true,
+          "MaxLatencyMs": 100
+        },
+        {
+          "Key": "output:heat_index",
+          "Value": 86.48,
+          "Tolerance": 0.1,
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["latency", "baseline"]
+    },
+    {
+      "Name": "LoadEscalationTest",
+      "Description": "Tests performance under increasing load",
+      "DurationSeconds": 60,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Stepped",
+          "MinValue": 20,
+          "MaxValue": 40,
+          "RateOfChange": 2,
+          "UpdateFrequencyMs": 50
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": "Sinusoidal",
+          "MinValue": 30,
+          "MaxValue": 90,
+          "Period": 30,
+          "UpdateFrequencyMs": 50
+        },
+        {
+          "Key": "input:pressure",
+          "PatternType": "Random",
+          "MinValue": 980,
+          "MaxValue": 1020,
+          "UpdateFrequencyMs": 50
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:high_temperature",
+          "Value": true,
+          "MaxLatencyMs": 100
+        },
+        {
+          "Key": "output:heat_index",
+          "ExpectedTimeToValueMs": 30000,
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["load", "scalability"]
+    },
+    {
+      "Name": "TemporalRuleTest",
+      "Description": "Tests temporal buffer performance with rapid input changes",
+      "DurationSeconds": 60,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Stepped",
+          "MinValue": 20,
+          "MaxValue": 35,
+          "RateOfChange": 5,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:temperature_rising",
+          "Value": true,
+          "ExpectedTimeToValueMs": 5000,
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["temporal", "buffer"]
+    },
+    {
+      "Name": "LongRunningTest",
+      "Description": "Tests stability over longer period",
+      "DurationSeconds": 300,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Sinusoidal",
+          "MinValue": 20,
+          "MaxValue": 40,
+          "Period": 60,
+          "UpdateFrequencyMs": 100
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": "Sinusoidal",
+          "MinValue": 40,
+          "MaxValue": 80,
+          "Period": 120,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:high_temperature",
+          "MaxLatencyMs": 100
+        },
+        {
+          "Key": "output:heat_index",
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["stability", "longrun"]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "Name": "Basic Performance Test",
+  "Description": "Simple test to verify system functionality",
+  "DelayBetweenTestsSeconds": 2,
+  "AbortOnFailure": false,
+  "TestCases": [
+    {
+      "Name": "Basic Test",
+      "Description": "Tests basic latency with constant values",
+      "Type": 0,
+      "DurationSeconds": 10,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": 0,
+          "ConstantValue": 25,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:temperature_processed",
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["test"]
+    }
+  ]
+}

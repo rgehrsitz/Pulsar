@@ -1,0 +1,29 @@
+# Simple test rules for Beacon Performance Tester
+rules:
+  - name: "TemperatureProcessor"
+    description: "Process temperature values"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: 'input:temperature'
+            operator: '>'
+            value: 0
+    actions:
+      - set_value:
+          key: 'output:temperature_processed'
+          value_expression: 'input:temperature'
+  
+  - name: "HighTemperatureDetector"
+    description: "Detect high temperature"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: 'input:temperature'
+            operator: '>'
+            value: 30
+    actions:
+      - set_value:
+          key: 'output:high_temperature'
+          value_expression: '1'

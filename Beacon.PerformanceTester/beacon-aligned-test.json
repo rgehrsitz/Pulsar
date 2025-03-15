@@ -1,0 +1,145 @@
+{
+  "Name": "Beacon Performance Test",
+  "Description": "Performance tests aligned with beacon-test-rules.yaml",
+  "DelayBetweenTestsSeconds": 2,
+  "AbortOnFailure": false,
+  "TestCases": [
+    {
+      "Name": "Temperature Processing Test",
+      "Description": "Tests basic temperature processing",
+      "Type": 0,
+      "DurationSeconds": 10,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": 0,
+          "ConstantValue": 25,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:temperature_processed",
+          "Value": 25,
+          "Tolerance": 0.001,
+          "MaxLatencyMs": 100
+        },
+        {
+          "Key": "output:high_temperature",
+          "Value": false,
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["basic", "temperature"]
+    },
+    {
+      "Name": "High Temperature Alert Test",
+      "Description": "Tests high temperature alert trigger",
+      "Type": 0,
+      "DurationSeconds": 10,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": 0,
+          "ConstantValue": 35,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:high_temperature",
+          "Value": true,
+          "MaxLatencyMs": 100
+        },
+        {
+          "Key": "output:temperature_alert",
+          "Value": true,
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["alert", "temperature"]
+    },
+    {
+      "Name": "Heat Index Calculation Test",
+      "Description": "Tests heat index calculation",
+      "Type": 0,
+      "DurationSeconds": 10,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": 0,
+          "ConstantValue": 30,
+          "UpdateFrequencyMs": 100
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": 0, 
+          "ConstantValue": 70,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:heat_index",
+          "Value": 86.48,
+          "Tolerance": 0.1,
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["calculation", "heat-index"]
+    },
+    {
+      "Name": "Temperature Rising Detection Test",
+      "Description": "Tests detection of rising temperature",
+      "Type": 0,
+      "DurationSeconds": 30,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": 2,  
+          "MinValue": 20,
+          "MaxValue": 30,
+          "RateOfChange": 1,
+          "UpdateFrequencyMs": 1000
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:temperature_rising",
+          "Value": true,
+          "ExpectedTimeToValueMs": 5000,
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["temporal", "rising"]
+    },
+    {
+      "Name": "Multi-Condition Alert Test",
+      "Description": "Tests complex alert conditions with multiple inputs",
+      "Type": 0,
+      "DurationSeconds": 15,
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": 0,
+          "ConstantValue": 29,
+          "UpdateFrequencyMs": 100
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": 0,
+          "ConstantValue": 80,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:temperature_alert",
+          "Value": true,
+          "MaxLatencyMs": 100
+        }
+      ],
+      "Tags": ["complex", "multi-input"]
+    }
+  ]
+}

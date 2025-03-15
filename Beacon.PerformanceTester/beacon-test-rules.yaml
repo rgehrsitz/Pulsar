@@ -1,0 +1,148 @@
+# Beacon Performance Test Rules
+rules:
+  - name: "ProcessTemperature"
+    description: "Simple rule to pass through temperature values"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: not_equal_to
+            value: null
+    actions:
+      - set_value:
+          key: output:temperature_processed
+          value_expression: input:temperature
+
+  - name: "HighTemperatureAlert"
+    description: "Alert when temperature exceeds 30°C"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '>'
+            value: 30
+    actions:
+      - set_value:
+          key: output:high_temperature
+          value_expression: "1"
+
+  - name: "TemperatureNormal"
+    description: "Reset alert when temperature drops below threshold"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '<='
+            value: 30
+    actions:
+      - set_value:
+          key: output:high_temperature
+          value_expression: "0"
+
+  - name: "CalculateHeatIndex"
+    description: "Calculate and output heat index based on temperature and humidity"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: not_equal_to
+            value: null
+        - condition:
+            type: comparison
+            sensor: input:humidity
+            operator: not_equal_to
+            value: null
+    actions:
+      - set_value:
+          key: output:heat_index
+          value_expression: "0.5 * (input:temperature + 61.0 + ((input:temperature-68.0)*1.2) + (input:humidity*0.094))"
+
+  - name: "DetectTemperatureRising"
+    description: "Detect when temperature is rising"
+    conditions:
+      all:
+        - condition:
+            type: expression
+            expression: "input:temperature > 0 && input:temperature < 100"
+    actions:
+      - set_value:
+          key: output:temperature_rising
+          value_expression: "1"
+
+  - name: "ResetTemperatureRising"
+    description: "Reset rising flag when temperature is not increasing"
+    conditions:
+      all:
+        - condition:
+            type: expression
+            expression: "input:temperature <= 0 || input:temperature >= 100"
+    actions:
+      - set_value:
+          key: output:temperature_rising
+          value_expression: "0"
+
+  - name: "GeneralTemperatureAlert"
+    description: "General temperature alert based on multiple conditions"
+    conditions:
+      any:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '>'
+            value: 35
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '<'
+            value: 5
+        - condition:
+            all:
+              - condition:
+                  type: comparison
+                  sensor: input:temperature
+                  operator: '>'
+                  value: 28
+              - condition:
+                  type: comparison
+                  sensor: input:humidity
+                  operator: '>'
+                  value: 70
+    actions:
+      - set_value:
+          key: output:temperature_alert
+          value_expression: "1"
+
+  - name: "ClearTemperatureAlert"
+    description: "Clear temperature alert when conditions are normal"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '>='
+            value: 5
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '<='
+            value: 35
+        - condition:
+            any:
+              - condition:
+                  type: comparison
+                  sensor: input:humidity
+                  operator: '<='
+                  value: 70
+              - condition:
+                  type: comparison
+                  sensor: input:temperature
+                  operator: '<='
+                  value: 28
+    actions:
+      - set_value:
+          key: output:temperature_alert
+          value_expression: "0"

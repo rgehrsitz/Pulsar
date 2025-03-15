@@ -1,0 +1,248 @@
+{
+  "Name": "Beacon Advanced Performance Test Suite",
+  "Description": "Comprehensive performance tests for Beacon runtime including ramp-up, burst, and stability tests",
+  "AbortOnFailure": false,
+  "DelayBetweenTestsSeconds": 10,
+  "VerifyRedisConnection": true,
+  "VerifyBeaconProcess": true,
+  "Environment": {
+    "BeaconVersion": "1.0.0",
+    "TestMachine": "CI/CD Pipeline",
+    "RedisVersion": "7.0.0",
+    "Platform": "Linux"
+  },
+  "TestCases": [
+    {
+      "Name": "Basic Latency Baseline",
+      "Description": "Establishes baseline latency with constant inputs",
+      "Type": 0,
+      "DurationSeconds": 30,
+      "PerformWarmup": true,
+      "WarmupDurationSeconds": 5,
+      "DataCollectionInterval": 0,
+      "Tags": ["baseline", "latency"],
+      "SuccessCriteria": {
+        "MaxAvgLatencyMs": 50,
+        "MaxP95LatencyMs": 100,
+        "MaxCpuPercent": 50,
+        "MaxMemoryMB": 300,
+        "MaxErrorRate": 0
+      },
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Constant",
+          "ConstantValue": 25,
+          "UpdateFrequencyMs": 100
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": "Constant",
+          "ConstantValue": 60,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:heat_index",
+          "Value": 75.69,
+          "Tolerance": 0.1,
+          "MaxLatencyMs": 100,
+          "IsCritical": true
+        }
+      ]
+    },
+    {
+      "Name": "Ramp-Up Load Test",
+      "Description": "Tests performance under gradually increasing load",
+      "Type": 1,
+      "DurationSeconds": 60,
+      "Tags": ["load", "ramp-up"],
+      "DataCollectionInterval": 0,
+      "SuccessCriteria": {
+        "MaxAvgLatencyMs": 75,
+        "MaxP95LatencyMs": 150,
+        "MaxCpuPercent": 70,
+        "MaxMemoryMB": 300,
+        "MaxErrorRate": 0.1
+      },
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Sinusoidal",
+          "MinValue": 20,
+          "MaxValue": 35,
+          "Period": 30,
+          "StartFrequencyMs": 1000,
+          "TargetFrequencyMs": 10,
+          "RampDurationSeconds": 30
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": "Random",
+          "MinValue": 40,
+          "MaxValue": 80,
+          "StartFrequencyMs": 1000,
+          "TargetFrequencyMs": 10,
+          "RampDurationSeconds": 30
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:heat_index",
+          "MaxLatencyMs": 150
+        },
+        {
+          "Key": "output:temperature_alert",
+          "MaxLatencyMs": 150
+        }
+      ]
+    },
+    {
+      "Name": "Burst Load Test",
+      "Description": "Tests performance under sudden bursts of traffic",
+      "Type": 3,
+      "DurationSeconds": 60,
+      "Tags": ["load", "burst"],
+      "DataCollectionInterval": 0,
+      "SuccessCriteria": {
+        "MaxAvgLatencyMs": 75,
+        "MaxP95LatencyMs": 200,
+        "MaxCpuPercent": 80,
+        "MaxMemoryMB": 300,
+        "MaxErrorRate": 0.5
+      },
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Stepped",
+          "MinValue": 15,
+          "MaxValue": 40,
+          "RateOfChange": 0.5,
+          "UpdateFrequencyMs": 200
+        },
+        {
+          "Key": "input:pressure",
+          "PatternType": "Constant",
+          "ConstantValue": 1013.25,
+          "UpdateFrequencyMs": 200
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": "Random",
+          "MinValue": 40,
+          "MaxValue": 80,
+          "UpdateFrequencyMs": 200
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:heat_index",
+          "MaxLatencyMs": 200
+        },
+        {
+          "Key": "output:temperature_alert",
+          "MaxLatencyMs": 200
+        }
+      ]
+    },
+    {
+      "Name": "Saturation Point Test",
+      "Description": "Finds the maximum throughput before performance degradation",
+      "Type": 4,
+      "DurationSeconds": 120,
+      "Tags": ["load", "saturation"],
+      "DataCollectionInterval": 0,
+      "SuccessCriteria": {
+        "MaxAvgLatencyMs": 150,
+        "MaxP95LatencyMs": 300,
+        "MaxCpuPercent": 95,
+        "MaxMemoryMB": 400,
+        "MaxErrorRate": 1.0
+      },
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Sinusoidal",
+          "MinValue": 20,
+          "MaxValue": 35,
+          "Period": 30,
+          "UpdateFrequencyMs": 100
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": "Random",
+          "MinValue": 40,
+          "MaxValue": 80,
+          "UpdateFrequencyMs": 100
+        },
+        {
+          "Key": "input:pressure",
+          "PatternType": "Constant",
+          "ConstantValue": 1013.25,
+          "UpdateFrequencyMs": 100
+        },
+        {
+          "Key": "input:wind_speed",
+          "PatternType": "Random",
+          "MinValue": 0,
+          "MaxValue": 15,
+          "UpdateFrequencyMs": 100
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:heat_index",
+          "MaxLatencyMs": 300
+        },
+        {
+          "Key": "output:temperature_alert",
+          "MaxLatencyMs": 300
+        }
+      ]
+    },
+    {
+      "Name": "Stability Test",
+      "Description": "Tests long-running stability of the system",
+      "Type": 2,
+      "DurationSeconds": 600,
+      "Tags": ["stability", "long-running"],
+      "DataCollectionInterval": 2,
+      "SuccessCriteria": {
+        "MaxAvgLatencyMs": 100,
+        "MaxP95LatencyMs": 200,
+        "MaxCpuPercent": 50,
+        "MaxMemoryMB": 350,
+        "MaxErrorRate": 0.1
+      },
+      "Inputs": [
+        {
+          "Key": "input:temperature",
+          "PatternType": "Sinusoidal",
+          "MinValue": 20,
+          "MaxValue": 35,
+          "Period": 120,
+          "UpdateFrequencyMs": 500
+        },
+        {
+          "Key": "input:humidity",
+          "PatternType": "Sinusoidal",
+          "MinValue": 40,
+          "MaxValue": 80,
+          "Period": 180,
+          "UpdateFrequencyMs": 500
+        }
+      ],
+      "ExpectedOutputs": [
+        {
+          "Key": "output:heat_index",
+          "MaxLatencyMs": 200
+        },
+        {
+          "Key": "output:temperature_alert",
+          "MaxLatencyMs": 200
+        }
+      ]
+    }
+  ]
+}
