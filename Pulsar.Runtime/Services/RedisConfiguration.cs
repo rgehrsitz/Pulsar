@@ -9,6 +9,10 @@ namespace Beacon.Runtime.Services
 {
     public class RedisConfiguration
     {
+        [JsonPropertyName("keyDelimiter")]
+        [YamlMember(Alias = "keyDelimiter")]
+        public string KeyDelimiter { get; set; } = ":";  // Default to colon for backward compatibility
+
         [JsonPropertyName("endpoints")]
         [YamlMember(Alias = "endpoints")]
         public List<string> Endpoints { get; set; } = new() { "localhost:6379" };

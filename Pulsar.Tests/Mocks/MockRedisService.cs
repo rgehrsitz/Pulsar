@@ -38,6 +38,7 @@ namespace Pulsar.Tests.Mocks
     
     public class RedisConfiguration
     {
+        public string KeyDelimiter { get; set; } = ":";  // Added configurable key delimiter
         public SingleNodeConfig? SingleNode { get; set; }
         public ClusterConfig? Cluster { get; set; }
         public HighAvailabilityConfig? HighAvailability { get; set; }
@@ -57,9 +58,12 @@ namespace Pulsar.Tests.Mocks
     {
         private readonly Dictionary<string, object> _values = new();
         private readonly Dictionary<string, List<Action<string, object>>> _subscribers = new();
+        private readonly string _keyDelimiter;
         
         public RedisService(RedisConfiguration config, ILoggerFactory loggerFactory)
         {
+            // Store the delimiter for use in key construction
+            _keyDelimiter = config?.KeyDelimiter ?? ":";
             // In a real implementation, this would connect to Redis
         }
         
@@ -112,11 +116,15 @@ namespace Pulsar.Tests.Mocks
         public Task<Dictionary<string, object>> GetAllInputsAsync()
         {
             var result = new Dictionary<string, object>();
+            string inputPrefix = $"input{_keyDelimiter}";
+            
             foreach (var kvp in _values)
             {
-                if (kvp.Key.StartsWith("input:"))
+                if (kvp.Key.StartsWith(inputPrefix))
                 {
-                    result[kvp.Key] = kvp.Value;
+                    // Extract the sensor name by removing the prefix
+                    string sensorName = kvp.Key.Substring(inputPrefix.Length);
+                    result[sensorName] = kvp.Value;
                 }
             }
             return Task.FromResult(result);

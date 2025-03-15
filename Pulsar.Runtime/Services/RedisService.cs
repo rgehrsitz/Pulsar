@@ -16,11 +16,13 @@ namespace Beacon.Runtime.Services
         private readonly IDatabase _db;
         private readonly AsyncRetryPolicy _retryPolicy;
         private readonly RedisConfiguration _config;
+        private readonly string _keyDelimiter;
 
         public RedisService(RedisConfiguration config, ILogger<RedisService> logger)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _keyDelimiter = _config.KeyDelimiter; // Store the delimiter for use in key construction
 
             _retryPolicy = Policy
                 .Handle<RedisConnectionException>()
@@ -54,7 +56,7 @@ namespace Beacon.Runtime.Services
                 
                 foreach (var sensor in sensorNames)
                 {
-                    var value = await _db.StringGetAsync($"input:{sensor}");
+                    var value = await _db.StringGetAsync($"input{_keyDelimiter}{sensor}");
                     if (value.HasValue && double.TryParse(value.ToString(), out var doubleValue))
                     {
                         result[sensor] = doubleValue;
@@ -71,7 +73,7 @@ namespace Beacon.Runtime.Services
             {
                 foreach (var (key, value) in outputs)
                 {
-                    await _db.StringSetAsync($"output:{key}", value.ToString());
+                    await _db.StringSetAsync($"output{_keyDelimiter}{key}", value.ToString());
                 }
                 return true;
             });
@@ -83,14 +85,15 @@ namespace Beacon.Runtime.Services
             {
                 var result = new Dictionary<string, object>();
                 var server = _redis.GetServer(_redis.GetEndPoints()[0]);
-                var keys = server.Keys(pattern: "input:*");
+                var keys = server.Keys(pattern: $"input{_keyDelimiter}*");
 
                 foreach (var key in keys)
                 {
                     var value = await _db.StringGetAsync(key);
                     if (value.HasValue)
                     {
-                        var sensorName = key.ToString().Split(':')[1];
+                        var keyString = key.ToString();
+                        var sensorName = keyString.Substring(keyString.IndexOf(_keyDelimiter) + _keyDelimiter.Length);
                         result[sensorName] = value.ToString();
                     }
                 }
@@ -105,7 +108,7 @@ namespace Beacon.Runtime.Services
             {
                 foreach (var (key, value) in outputs)
                 {
-                    await _db.StringSetAsync($"output:{key}", value.ToString());
+                    await _db.StringSetAsync($"output{_keyDelimiter}{key}", value.ToString());
                 }
                 return true;
             });

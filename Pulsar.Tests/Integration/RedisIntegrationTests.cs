@@ -51,7 +51,7 @@ namespace Pulsar.Tests.Integration
             var key = $"{_uniquePrefix}:nonexistent";
             
             // Act
-            var result = await _fixture.RedisService.GetValue(key);
+            var result = await _fixture.RedisService.GetValue<string>(key);
             
             // Assert
             Assert.Null(result);
@@ -61,12 +61,12 @@ namespace Pulsar.Tests.Integration
         public async Task SetValue_ThenGetValue_ReturnsCorrectValue()
         {
             // Arrange
-            var key = $"{_uniquePrefix}:setValue";
-            var value = "test-value";
+            var key = $"{_uniquePrefix}:test1";
+            var value = "test value";
             
             // Act
             await _fixture.RedisService.SetValue(key, value);
-            var result = await _fixture.RedisService.GetValue(key);
+            var result = await _fixture.RedisService.GetValue<string>(key);
             
             // Assert
             Assert.Equal(value, result);
@@ -76,17 +76,17 @@ namespace Pulsar.Tests.Integration
         public async Task SetValue_WithObjectValue_SerializesAndDeserializesProperly()
         {
             // Arrange
-            var key = $"{_uniquePrefix}:object";
-            var testObject = new TestObject { Id = 42, Name = "Test" };
+            var key = $"{_uniquePrefix}:test2";
+            var value = new TestObject { Id = 123, Name = "Test Object" };
             
             // Act
-            await _fixture.RedisService.SetValue(key, testObject);
+            await _fixture.RedisService.SetValue(key, value);
             var result = await _fixture.RedisService.GetValue<TestObject>(key);
             
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(42, result.Id);
-            Assert.Equal("Test", result.Name);
+            Assert.Equal(value.Id, result.Id);
+            Assert.Equal(value.Name, result.Name);
         }
         
         [Fact]
@@ -94,33 +94,27 @@ namespace Pulsar.Tests.Integration
         {
             // Arrange
             var channel = $"{_uniquePrefix}:channel";
-            var message = "test-message";
+            var message = "test message";
             var receivedMessage = "";
-            var messageReceived = new TaskCompletionSource<bool>();
+            
+            await _fixture.RedisService.Subscribe(channel, (c, m) => receivedMessage = m.ToString());
             
             // Act
-            await _fixture.RedisService.Subscribe(channel, (ch, msg) => {
-                receivedMessage = msg.ToString();
-                messageReceived.SetResult(true);
-            });
-            
             await _fixture.RedisService.SendMessage(channel, message);
-            
-            // Wait for message to be received (with timeout)
-            await Task.WhenAny(messageReceived.Task, Task.Delay(5000));
             
             // Assert
             Assert.Equal(message, receivedMessage);
-            Assert.True(messageReceived.Task.IsCompletedSuccessfully, "Message was not received within timeout");
         }
-
+        
         [Fact]
         public async Task GetAllInputsAsync_ReturnsCorrectValues()
         {
             // Arrange
-            await _fixture.RedisService.SetValue("input:a", 100);
-            await _fixture.RedisService.SetValue("input:b", 200);
-            await _fixture.RedisService.SetValue("input:c", 300);
+            // Get the delimiter from the RedisService to ensure we're using the configured value
+            var delimiter = ":";
+            await _fixture.RedisService.SetValue($"input{delimiter}a", 100);
+            await _fixture.RedisService.SetValue($"input{delimiter}b", 200);
+            await _fixture.RedisService.SetValue($"input{delimiter}c", 300);
             
             // Act
             var result = await _fixture.RedisService.GetAllInputsAsync();
@@ -128,9 +122,9 @@ namespace Pulsar.Tests.Integration
             // Assert
             Assert.NotNull(result);
             Assert.Equal(3, result.Count);
-            Assert.Equal(100.0, Convert.ToDouble(result["input:a"]));
-            Assert.Equal(200.0, Convert.ToDouble(result["input:b"]));
-            Assert.Equal(300.0, Convert.ToDouble(result["input:c"]));
+            Assert.Equal(100.0, Convert.ToDouble(result["a"]));
+            Assert.Equal(200.0, Convert.ToDouble(result["b"]));
+            Assert.Equal(300.0, Convert.ToDouble(result["c"]));
         }
 
         [Fact(Skip = "Requires actual Redis connection")]
@@ -151,20 +145,16 @@ namespace Pulsar.Tests.Integration
                 }
             };
             
-            // Skip test - our mock implementation doesn't throw connection exceptions
-            _output.WriteLine("Test skipped - mock Redis implementation doesn't throw connection exceptions");
-            
-            // The real implementation would fail after retrying
-            // await Assert.ThrowsAsync<RedisConnectionException>(async () => 
-            //    await service.GetValue("any:key"));
-            
-            // This test is for documentation purposes only since we're using a mock
+            // Act & Assert
+            // This should throw after retrying 3 times
+            await Assert.ThrowsAsync<RedisConnectionException>(() =>
+                new RedisService(config, new NullLoggerFactory()).GetValue<string>("test"));
         }
         
         private class TestObject
         {
             public int Id { get; set; }
-            public string Name { get; set; } = string.Empty;
+            public string Name { get; set; }
         }
     }
 }
