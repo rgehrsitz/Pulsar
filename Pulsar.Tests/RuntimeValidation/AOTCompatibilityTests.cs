@@ -362,7 +362,20 @@ namespace Beacon.Runtime
 
             // Create temporary output directory
             var outputDir = Path.Combine(_fixture.OutputPath, "BufferTest");
+            if (Directory.Exists(outputDir))
+            {
+                try
+                {
+                    Directory.Delete(outputDir, true);
+                    _output.WriteLine($"Deleted existing directory: {outputDir}");
+                }
+                catch (Exception ex)
+                {
+                    _output.WriteLine($"Warning: Could not delete directory {outputDir}: {ex.Message}");
+                }
+            }
             Directory.CreateDirectory(outputDir);
+            _output.WriteLine($"Created directory: {outputDir}");
 
             // Create a test implementation of CircularBuffer
             var bufferPath = Path.Combine(outputDir, "CircularBuffer.cs");

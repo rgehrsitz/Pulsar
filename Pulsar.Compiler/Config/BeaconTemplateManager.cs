@@ -523,19 +523,29 @@ namespace Pulsar.Compiler.Config
             var buffersDir = Path.Combine(runtimeDir, "Buffers");
             var generatedDir = Path.Combine(runtimeDir, "Generated");
 
+            // Ensure the Generated directory exists
+            if (!Directory.Exists(generatedDir))
+            {
+                Directory.CreateDirectory(generatedDir);
+                _logger.Information("Created Generated directory at {Path}", generatedDir);
+            }
+
             // Check if RingBufferManager is already in Generated directory (from code generation)
             bool hasRingBufferManager = false;
-            foreach (var file in Directory.GetFiles(generatedDir))
+            if (Directory.Exists(generatedDir)) // Double-check to be safe
             {
-                // If we find RingBufferManager in any generated file, don't copy the template version
-                var content = File.ReadAllText(file);
-                if (content.Contains("class RingBufferManager"))
+                foreach (var file in Directory.GetFiles(generatedDir))
                 {
-                    hasRingBufferManager = true;
-                    _logger.Information(
-                        "RingBufferManager already exists in generated files, skipping template copy"
-                    );
-                    break;
+                    // If we find RingBufferManager in any generated file, don't copy the template version
+                    var content = File.ReadAllText(file);
+                    if (content.Contains("class RingBufferManager"))
+                    {
+                        hasRingBufferManager = true;
+                        _logger.Information(
+                            "RingBufferManager already exists in generated files, skipping template copy"
+                        );
+                        break;
+                    }
                 }
             }
 
@@ -652,6 +662,9 @@ namespace Pulsar.Compiler.Config
             );
             sb.AppendLine();
 
+            // Add AOT compatibility attributes
+            sb.AppendLine(Generation.CodeGenHelpers.GenerateAOTAttributes(buildConfig.Namespace));
+
             // Add standard using statements first
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
@@ -661,6 +674,8 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("using System.Threading.Tasks;");
             sb.AppendLine("using Microsoft.Extensions.Logging;");
             sb.AppendLine("using Serilog;");
+            sb.AppendLine("using StackExchange.Redis;"); // Add Redis namespace explicitly
+            sb.AppendLine("using Prometheus;"); // Add Prometheus namespace explicitly
             sb.AppendLine($"using {buildConfig.Namespace}.Buffers;");
             sb.AppendLine($"using {buildConfig.Namespace}.Services;");
             sb.AppendLine($"using {buildConfig.Namespace}.Interfaces;");

@@ -128,14 +128,68 @@ namespace Pulsar.Tests.RuntimeValidation
             }
             Directory.CreateDirectory(testOutputPath);
 
-            // Test rule file paths - copy from fixture's test rules
+            // Test rule file paths - create or copy from fixture's test rules
             var complexRuleFile = Path.Combine(testOutputPath, "complex-rule.yaml");
             var systemConfigFile = Path.Combine(testOutputPath, "system_config.yaml");
 
-            // Copy files from fixture's test output directory
-            File.Copy(Path.Combine(_fixture.OutputPath, "complex-rule.yaml"), complexRuleFile);
+            // Create or copy the complex rule file
+            var sourceComplexRuleFile = Path.Combine(_fixture.OutputPath, "complex-rule.yaml");
+            if (File.Exists(sourceComplexRuleFile))
+            {
+                File.Copy(sourceComplexRuleFile, complexRuleFile);
+                _output.WriteLine($"Copied complex rule file from {sourceComplexRuleFile} to {complexRuleFile}");
+            }
+            else
+            {
+                // Create the complex rule file directly if it doesn't exist in the fixture's output path
+                var ruleContent = @"rules:
+  - name: ComplexRule
+    description: A complex test rule with nested conditions
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:a
+            operator: '>'
+            value: 100
+        - condition:
+            type: comparison
+            sensor: input:b
+            operator: '<'
+            value: 50
+    actions:
+      - set_value:
+          key: output:complex
+          value_expression: 'input:a * input:b'
+";
+                File.WriteAllText(complexRuleFile, ruleContent);
+                _output.WriteLine($"Created complex rule file at {complexRuleFile}");
+            }
 
-            File.Copy(Path.Combine(_fixture.OutputPath, "system_config.yaml"), systemConfigFile);
+            // Create or copy the system config file
+            var sourceSystemConfigFile = Path.Combine(_fixture.OutputPath, "system_config.yaml");
+            if (File.Exists(sourceSystemConfigFile))
+            {
+                File.Copy(sourceSystemConfigFile, systemConfigFile);
+                _output.WriteLine($"Copied system config file from {sourceSystemConfigFile} to {systemConfigFile}");
+            }
+            else
+            {
+                // Create the system config file directly if it doesn't exist in the fixture's output path
+                var configContent = @"validSensors:
+  - name: input:a
+    type: double
+  - name: input:b
+    type: double
+  - name: input:c
+    type: double
+redis:
+  connectionString: localhost:6379
+  database: 0
+";
+                File.WriteAllText(systemConfigFile, configContent);
+                _output.WriteLine($"Created system config file at {systemConfigFile}");
+            }
 
             // Act
             // Skip building for test since copying files might fail

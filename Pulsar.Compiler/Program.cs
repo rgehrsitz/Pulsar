@@ -917,9 +917,9 @@ https://github.com/yourusername/pulsar/docs"
                 GenerateDebugInfo = false,
                 OptimizeOutput = true,
                 Namespace = "Beacon.Runtime",
-                RedisConnection =
-                    systemConfig.Redis?.Endpoints?.Count > 0
-                        ? systemConfig.Redis.Endpoints[0]
+                RedisConnection = 
+                    systemConfig.Redis != null && systemConfig.Redis.TryGetValue("endpoints", out var endpoints) && endpoints is List<string> endpointList && endpointList.Count > 0
+                        ? endpointList[0].ToString()
                         : "localhost:6379",
                 CycleTime = systemConfig.CycleTime,
                 BufferCapacity = systemConfig.BufferCapacity,

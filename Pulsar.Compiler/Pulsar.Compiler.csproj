@@ -52,8 +52,6 @@
     <Compile Remove="Config\Templates\**\*.cs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Pulsar.Runtime\Pulsar.Runtime.csproj" />
-  </ItemGroup>
+  <!-- Runtime reference removed as part of migration to template-based approach -->
 
 </Project>

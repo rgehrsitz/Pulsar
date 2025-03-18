@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using Beacon.Runtime.Services;
+// Template-based approach
 using Pulsar.Compiler;
 using Serilog;
 using YamlDotNet.Serialization;
@@ -25,7 +25,7 @@ namespace Pulsar.Compiler.Models
         public int CycleTime { get; set; } = 100; // Default 100ms
 
         [YamlMember(Alias = "redis")]
-        public RedisConfiguration Redis { get; set; } = new();
+        public Dictionary<string, object> Redis { get; set; } = new();
 
         [YamlMember(Alias = "bufferCapacity")]
         public int BufferCapacity { get; set; } = 100;
