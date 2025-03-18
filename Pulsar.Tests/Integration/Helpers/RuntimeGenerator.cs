@@ -27,7 +27,8 @@ namespace Pulsar.Tests.Integration.Helpers
 
                 // Create project file
                 var projectPath = Path.Combine(runtimeDir, "Beacon.Runtime.csproj");
-                var projectContent = @"<Project Sdk=""Microsoft.NET.Sdk"">
+                var projectContent =
+                    @"<Project Sdk=""Microsoft.NET.Sdk"">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
@@ -43,7 +44,8 @@ namespace Pulsar.Tests.Integration.Helpers
 
                 // Create minimal program
                 var programPath = Path.Combine(runtimeDir, "Program.cs");
-                var programContent = @"// All using statements must be outside the namespace
+                var programContent =
+                    @"// All using statements must be outside the namespace
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -73,7 +75,9 @@ namespace Beacon.Runtime
             try
             {
                 // Get Redis connection from environment or use provided
-                var redisConnection = """ + redisConnectionString + @""";
+                var redisConnection = """
+                    + redisConnectionString
+                    + @""";
                 _logger.LogInformation($""Connecting to Redis: {redisConnection}"");
                 
                 _redis = await ConnectionMultiplexer.ConnectAsync(redisConnection);
@@ -196,9 +200,12 @@ namespace Beacon.Runtime
 
                 // Create app settings
                 var settingsPath = Path.Combine(runtimeDir, "appsettings.json");
-                var settingsContent = @"{
+                var settingsContent =
+                    @"{
   ""Redis"": {
-    ""Endpoints"": [ """ + redisConnectionString + @""" ],
+    ""Endpoints"": [ """
+                    + redisConnectionString
+                    + @""" ],
     ""PoolSize"": 4,
     ""RetryCount"": 3
   },

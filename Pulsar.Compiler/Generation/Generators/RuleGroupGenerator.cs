@@ -19,7 +19,7 @@ namespace Pulsar.Compiler.Generation.Generators
     {
         private readonly ILogger _logger;
 
-        public RuleGroupGenerator(ILogger logger = null)
+        public RuleGroupGenerator(ILogger? logger = null)
         {
             _logger = logger ?? NullLogger.Instance;
         }
@@ -185,7 +185,7 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("            }");
             sb.AppendLine("        }");
             sb.AppendLine();
-            
+
             // Add SendMessage method for rules that publish messages
             sb.AppendLine("        private void SendMessage(string channel, string message)");
             sb.AppendLine("        {");
@@ -193,11 +193,15 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                Redis.PublishAsync(channel, message);");
-            sb.AppendLine("                Logger.Information(\"Sent message to channel {Channel}: {Message}\", channel, message);");
+            sb.AppendLine(
+                "                Logger.Information(\"Sent message to channel {Channel}: {Message}\", channel, message);"
+            );
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");
-            sb.AppendLine("                Logger.Error(ex, \"Failed to send message to channel {Channel}\", channel);");
+            sb.AppendLine(
+                "                Logger.Error(ex, \"Failed to send message to channel {Channel}\", channel);"
+            );
             sb.AppendLine("            }");
             sb.AppendLine("        }");
 

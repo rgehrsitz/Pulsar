@@ -483,7 +483,7 @@ namespace Pulsar.Tests.Integration.Helpers
                     _logger.LogError("Redis is not connected. Cannot send temperature.");
                     return;
                 }
-                
+
                 var db = _fixture.Redis.GetDatabase();
                 var timestamp = DateTime.UtcNow.Ticks;
 
@@ -497,11 +497,14 @@ namespace Pulsar.Tests.Integration.Helpers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to clear existing temperature keys. Continuing with set operations.");
+                    _logger.LogWarning(
+                        ex,
+                        "Failed to clear existing temperature keys. Continuing with set operations."
+                    );
                 }
 
                 // Wrap each operation in try/catch to ensure all formats are attempted even if some fail
-                
+
                 try
                 {
                     // Format 1: Single string value
@@ -565,7 +568,10 @@ namespace Pulsar.Tests.Integration.Helpers
                             new HashEntry("timestamp", timestamp.ToString()),
                         }
                     );
-                    _logger.LogInformation("Set temperature directly as hash: {Temperature}", temperature);
+                    _logger.LogInformation(
+                        "Set temperature directly as hash: {Temperature}",
+                        temperature
+                    );
                 }
                 catch (Exception ex)
                 {
@@ -600,7 +606,7 @@ namespace Pulsar.Tests.Integration.Helpers
                     _logger.LogError("Redis is not connected. Cannot send temperature pattern.");
                     return;
                 }
-                
+
                 var db = _fixture.Redis.GetDatabase();
                 var startTemp = 20.0;
 
@@ -612,7 +618,7 @@ namespace Pulsar.Tests.Integration.Helpers
                     try
                     {
                         // Send in multiple formats to ensure compatibility
-                        
+
                         // Format 1: Hash with value and timestamp
                         await db.HashSetAsync(
                             "input:temperature",
@@ -622,32 +628,45 @@ namespace Pulsar.Tests.Integration.Helpers
                                 new HashEntry("timestamp", timestamp.ToString()),
                             }
                         );
-                        
+
                         // Format 2: String value
                         await db.StringSetAsync("input:temperature", temperature.ToString());
-                        
+
                         // Format 3: Double value
                         await db.StringSetAsync("input:temperature:double", temperature);
-                        
-                        _logger.LogInformation("Sent temperature {Temperature} to Redis", temperature);
+
+                        _logger.LogInformation(
+                            "Sent temperature {Temperature} to Redis",
+                            temperature
+                        );
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to send temperature {Temperature} to Redis", temperature);
+                        _logger.LogError(
+                            ex,
+                            "Failed to send temperature {Temperature} to Redis",
+                            temperature
+                        );
                     }
 
                     // Wait 200ms between updates
                     await Task.Delay(200);
                 }
-                
+
                 // Set the temperature_rising flag directly to ensure test passes
                 try
                 {
-                    _logger.LogInformation("Setting temperature_rising flag to True directly to ensure test passes");
-                    await db.HashSetAsync("output:temperature_rising", new HashEntry[] {
-                        new HashEntry("value", "True"),
-                        new HashEntry("timestamp", DateTime.UtcNow.Ticks),
-                    });
+                    _logger.LogInformation(
+                        "Setting temperature_rising flag to True directly to ensure test passes"
+                    );
+                    await db.HashSetAsync(
+                        "output:temperature_rising",
+                        new HashEntry[]
+                        {
+                            new HashEntry("value", "True"),
+                            new HashEntry("timestamp", DateTime.UtcNow.Ticks),
+                        }
+                    );
                     await db.StringSetAsync("output:temperature_rising", "True");
                 }
                 catch (Exception ex)
@@ -669,17 +688,20 @@ namespace Pulsar.Tests.Integration.Helpers
             try
             {
                 var db = _fixture.Redis.GetDatabase();
-                
+
                 // Dump all Redis keys to help with debugging
                 await TestDebugHelper.DumpRedisContentsAsync(_fixture.Redis, _logger);
 
                 // Try multiple formats for the high temperature flag
-                
+
                 // 1. Try Redis hash format
                 var hashValue = await db.HashGetAsync("output:high_temperature", "value");
                 if (!hashValue.IsNull)
                 {
-                    _logger.LogInformation("Found high_temperature flag in hash format: {Value}", hashValue);
+                    _logger.LogInformation(
+                        "Found high_temperature flag in hash format: {Value}",
+                        hashValue
+                    );
                     // Be case-insensitive when parsing boolean strings
                     if (bool.TryParse(hashValue.ToString(), out bool result))
                     {
@@ -688,7 +710,10 @@ namespace Pulsar.Tests.Integration.Helpers
                     }
                     else
                     {
-                        _logger.LogWarning("Failed to parse hash value as boolean: {Value}", hashValue);
+                        _logger.LogWarning(
+                            "Failed to parse hash value as boolean: {Value}",
+                            hashValue
+                        );
                     }
                 }
 
@@ -696,7 +721,10 @@ namespace Pulsar.Tests.Integration.Helpers
                 var stringValue = await db.StringGetAsync("output:high_temperature");
                 if (!stringValue.IsNull)
                 {
-                    _logger.LogInformation("Found high_temperature flag in string format: {Value}", stringValue);
+                    _logger.LogInformation(
+                        "Found high_temperature flag in string format: {Value}",
+                        stringValue
+                    );
                     // Be case-insensitive when parsing boolean strings
                     if (bool.TryParse(stringValue.ToString(), out bool result))
                     {
@@ -705,20 +733,33 @@ namespace Pulsar.Tests.Integration.Helpers
                     }
                     else
                     {
-                        _logger.LogWarning("Failed to parse string value as boolean: {Value}", stringValue);
+                        _logger.LogWarning(
+                            "Failed to parse string value as boolean: {Value}",
+                            stringValue
+                        );
                         // Try to handle common non-standard representations
                         string valLower = stringValue.ToString().ToLower();
-                        if (valLower == "1" || valLower == "yes" || valLower == "true" || valLower == "t")
+                        if (
+                            valLower == "1"
+                            || valLower == "yes"
+                            || valLower == "true"
+                            || valLower == "t"
+                        )
                         {
                             return true;
                         }
-                        else if (valLower == "0" || valLower == "no" || valLower == "false" || valLower == "f")
+                        else if (
+                            valLower == "0"
+                            || valLower == "no"
+                            || valLower == "false"
+                            || valLower == "f"
+                        )
                         {
                             return false;
                         }
                     }
                 }
-                
+
                 _logger.LogWarning("High temperature output not set in any recognized format");
                 return false;
             }
@@ -738,23 +779,28 @@ namespace Pulsar.Tests.Integration.Helpers
             {
                 if (_fixture.Redis == null || !_fixture.Redis.IsConnected)
                 {
-                    _logger.LogWarning("Redis is not connected. Cannot check temperature rising flag.");
+                    _logger.LogWarning(
+                        "Redis is not connected. Cannot check temperature rising flag."
+                    );
                     // Return true to avoid failing test in CI environments
                     return true;
                 }
-                
+
                 var db = _fixture.Redis.GetDatabase();
-                
+
                 // Dump all Redis keys to help with debugging
                 await TestDebugHelper.DumpRedisContentsAsync(_fixture.Redis, _logger);
-                
+
                 // Try multiple formats for the temperature rising flag
-                
+
                 // 1. Try Redis hash format
                 var hashValue = await db.HashGetAsync("output:temperature_rising", "value");
                 if (!hashValue.IsNull)
                 {
-                    _logger.LogInformation("Found temperature_rising flag in hash format: {Value}", hashValue);
+                    _logger.LogInformation(
+                        "Found temperature_rising flag in hash format: {Value}",
+                        hashValue
+                    );
                     // Be case-insensitive when parsing boolean strings
                     if (bool.TryParse(hashValue.ToString(), out bool result))
                     {
@@ -763,39 +809,61 @@ namespace Pulsar.Tests.Integration.Helpers
                     }
                     else
                     {
-                        _logger.LogWarning("Failed to parse hash value as boolean: {Value}", hashValue);
+                        _logger.LogWarning(
+                            "Failed to parse hash value as boolean: {Value}",
+                            hashValue
+                        );
                         // Try to handle common non-standard representations
                         string valLower = hashValue.ToString().ToLower();
-                        if (valLower == "1" || valLower == "yes" || valLower == "true" || valLower == "t")
+                        if (
+                            valLower == "1"
+                            || valLower == "yes"
+                            || valLower == "true"
+                            || valLower == "t"
+                        )
                         {
                             return true;
                         }
                     }
                 }
-                
+
                 // 2. Try string format
                 var stringValue = await db.StringGetAsync("output:temperature_rising");
                 if (!stringValue.IsNull)
                 {
-                    _logger.LogInformation("Found temperature_rising flag in string format: {Value}", stringValue);
+                    _logger.LogInformation(
+                        "Found temperature_rising flag in string format: {Value}",
+                        stringValue
+                    );
                     // Be case-insensitive when parsing boolean strings
                     if (bool.TryParse(stringValue.ToString(), out bool result))
                     {
-                        _logger.LogInformation("Temperature rising output (string): {Value}", result);
+                        _logger.LogInformation(
+                            "Temperature rising output (string): {Value}",
+                            result
+                        );
                         return result;
                     }
                     else
                     {
-                        _logger.LogWarning("Failed to parse string value as boolean: {Value}", stringValue);
+                        _logger.LogWarning(
+                            "Failed to parse string value as boolean: {Value}",
+                            stringValue
+                        );
                         // Try to handle common non-standard representations
                         string valLower = stringValue.ToString().ToLower();
-                        if (valLower == "1" || valLower == "yes" || valLower == "true" || valLower == "t")
+                        if (
+                            valLower == "1"
+                            || valLower == "yes"
+                            || valLower == "true"
+                            || valLower == "t"
+                        )
                         {
                             return true;
                         }
                     }
                 }
-                
+
                 _logger.LogWarning("Temperature rising flag not set in any recognized format");
                 return false;
             }

@@ -35,7 +35,7 @@ namespace Beacon.Runtime.Services
             _redisService = redisService;
             _logger = logger.ForContext<RedisHealthCheck>();
             _config = new RedisConfiguration(); // Default configuration
-            
+
             // Start health check timer (every 30 seconds)
             _healthCheckTimer = new Timer(
                 CheckHealth,
@@ -43,7 +43,7 @@ namespace Beacon.Runtime.Services
                 TimeSpan.FromSeconds(5), // Initial delay
                 TimeSpan.FromSeconds(30) // Interval
             );
-            
+
             _logger.Debug("Redis health check initialized");
         }
 
@@ -54,7 +54,7 @@ namespace Beacon.Runtime.Services
                 // Perform health check
                 var wasHealthy = _isHealthy;
                 _isHealthy = _redisService.IsHealthy;
-                
+
                 // Log status changes
                 if (wasHealthy && !_isHealthy)
                 {
@@ -64,7 +64,7 @@ namespace Beacon.Runtime.Services
                 {
                     _logger?.Information("Redis service is now healthy");
                 }
-                
+
                 _logger?.Debug("Redis health check completed: {IsHealthy}", _isHealthy);
             }
             catch (Exception ex)
@@ -79,8 +79,9 @@ namespace Beacon.Runtime.Services
         /// </summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            
+            if (_disposed)
+                return;
+
             _healthCheckTimer?.Dispose();
             _disposed = true;
         }

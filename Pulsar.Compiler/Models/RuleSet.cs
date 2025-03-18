@@ -28,7 +28,7 @@ namespace Pulsar.Compiler.Models
 
             string yaml = File.ReadAllText(path);
             Console.WriteLine($"Loading rule file content:\n{yaml}");
-            
+
             var deserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .IgnoreUnmatchedProperties()

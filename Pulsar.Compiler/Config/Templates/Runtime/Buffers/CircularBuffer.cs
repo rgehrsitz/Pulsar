@@ -2,11 +2,11 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Serilog;
-using System.Collections.Generic;
 
 namespace Beacon.Runtime.Buffers
 {
@@ -104,7 +104,10 @@ namespace Beacon.Runtime.Buffers
                         if (candidate.Timestamp < cutoff)
                         {
                             // Found a candidate; choose the one with the greatest timestamp (i.e. the most recent before cutoff)
-                            if (guardValue == null || candidate.Timestamp > guardValue.Value.Timestamp)
+                            if (
+                                guardValue == null
+                                || candidate.Timestamp > guardValue.Value.Timestamp
+                            )
                             {
                                 guardValue = candidate;
                             }
@@ -234,7 +237,8 @@ namespace Beacon.Runtime.Buffers
             bool windowValid = windowValues.All(v => Convert.ToDouble(v.Value) > threshold);
             // Validate that the guard reading (if present) is above threshold.
             bool previousValid =
-                previousReading.Timestamp == default || Convert.ToDouble(previousReading.Value) > threshold;
+                previousReading.Timestamp == default
+                || Convert.ToDouble(previousReading.Value) > threshold;
 
             Debug.WriteLine($"Window valid: {windowValid}");
             Debug.WriteLine($"Previous reading valid: {previousValid}");
@@ -381,7 +385,11 @@ namespace Beacon.Runtime.Buffers
         }
 
         // Add GetValues method that's needed by RuleGroup
-        public IEnumerable<TimestampedValue> GetValues(string sensor, TimeSpan duration, bool includeOlder = false)
+        public IEnumerable<TimestampedValue> GetValues(
+            string sensor,
+            TimeSpan duration,
+            bool includeOlder = false
+        )
         {
             if (_buffers.TryGetValue(sensor, out var buffer))
             {

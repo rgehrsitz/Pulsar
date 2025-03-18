@@ -10,9 +10,12 @@ namespace Beacon.Runtime.Services
 {
     public class RedisMetrics
     {
-        private readonly ConcurrentDictionary<string, long> _errorCounts = new ConcurrentDictionary<string, long>();
-        private readonly ConcurrentDictionary<string, long> _operationCounts = new ConcurrentDictionary<string, long>();
-        private readonly ConcurrentDictionary<string, Stopwatch> _operationTimers = new ConcurrentDictionary<string, Stopwatch>();
+        private readonly ConcurrentDictionary<string, long> _errorCounts =
+            new ConcurrentDictionary<string, long>();
+        private readonly ConcurrentDictionary<string, long> _operationCounts =
+            new ConcurrentDictionary<string, long>();
+        private readonly ConcurrentDictionary<string, Stopwatch> _operationTimers =
+            new ConcurrentDictionary<string, Stopwatch>();
         private int _connectionCount = 0;
         private int _retryCount = 0;
 
@@ -20,17 +23,17 @@ namespace Beacon.Runtime.Services
         {
             _errorCounts.AddOrUpdate(errorType, 1, (_, count) => count + 1);
         }
-        
+
         public void RecordError(string errorType)
         {
             TrackError(errorType);
         }
-        
+
         public void RecordOperation(string operationName, TimeSpan duration)
         {
             _operationCounts.AddOrUpdate(operationName, 1, (_, count) => count + 1);
         }
-        
+
         public void IncrementRetryCount()
         {
             Interlocked.Increment(ref _retryCount);

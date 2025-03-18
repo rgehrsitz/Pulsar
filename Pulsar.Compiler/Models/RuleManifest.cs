@@ -5,8 +5,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Serilog;
 using Pulsar.Compiler;
+using Serilog;
 
 namespace Pulsar.Compiler.Models
 {
@@ -66,9 +66,13 @@ namespace Pulsar.Compiler.Models
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 };
 
-                var manifest = JsonSerializer.Deserialize<RuleManifest>(json, options)
+                var manifest =
+                    JsonSerializer.Deserialize<RuleManifest>(json, options)
                     ?? throw new InvalidOperationException("Failed to deserialize manifest");
-                _logger.Information("Successfully loaded manifest with {Count} rules", manifest.Rules.Count);
+                _logger.Information(
+                    "Successfully loaded manifest with {Count} rules",
+                    manifest.Rules.Count
+                );
                 return manifest;
             }
             catch (Exception ex)

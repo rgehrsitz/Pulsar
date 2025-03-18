@@ -37,7 +37,7 @@ namespace Pulsar.Tests.Integration
                 var builder = new RedisBuilder()
                     .WithImage("redis:latest")
                     .WithPortBinding(6379, true);
-                
+
                 _redisContainer = builder.Build();
 
                 await _redisContainer.StartAsync();
@@ -56,7 +56,10 @@ namespace Pulsar.Tests.Integration
                 if (string.IsNullOrEmpty(RedisConnectionString))
                 {
                     RedisConnectionString = "localhost:6379";
-                    _logger.LogWarning("Using fallback Redis connection: {ConnectionString}", RedisConnectionString);
+                    _logger.LogWarning(
+                        "Using fallback Redis connection: {ConnectionString}",
+                        RedisConnectionString
+                    );
                 }
 
                 // Configure connection with retry options
@@ -64,32 +67,41 @@ namespace Pulsar.Tests.Integration
                 options.AbortOnConnectFail = false;
                 options.ConnectRetry = 5;
                 options.ConnectTimeout = 10000;
-                
+
                 Redis = await ConnectionMultiplexer.ConnectAsync(options);
                 _logger.LogInformation("Connected to Redis test container");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to start Redis container. Using local Redis if available.");
-                
+                _logger.LogError(
+                    ex,
+                    "Failed to start Redis container. Using local Redis if available."
+                );
+
                 // Try to connect to a local Redis instance as fallback
                 try
                 {
                     RedisConnectionString = "localhost:6379";
-                    _logger.LogWarning("Attempting to connect to local Redis at: {ConnectionString}", RedisConnectionString);
-                    
+                    _logger.LogWarning(
+                        "Attempting to connect to local Redis at: {ConnectionString}",
+                        RedisConnectionString
+                    );
+
                     // Configure connection with retry options
                     var options = ConfigurationOptions.Parse(RedisConnectionString);
                     options.AbortOnConnectFail = false;
                     options.ConnectRetry = 3;
                     options.ConnectTimeout = 5000;
-                    
+
                     Redis = await ConnectionMultiplexer.ConnectAsync(options);
                     _logger.LogInformation("Connected to local Redis instance");
                 }
                 catch (Exception fallbackEx)
                 {
-                    _logger.LogError(fallbackEx, "Failed to connect to local Redis instance as fallback. Tests requiring Redis will fail.");
+                    _logger.LogError(
+                        fallbackEx,
+                        "Failed to connect to local Redis instance as fallback. Tests requiring Redis will fail."
+                    );
                     throw;
                 }
             }
@@ -124,9 +136,9 @@ namespace Pulsar.Tests.Integration
                     _logger.LogWarning("Redis is not connected. Cannot clear keys.");
                     return;
                 }
-                
+
                 var db = Redis.GetDatabase();
-                
+
                 // Get a server endpoint to use for listing keys
                 var serverEndPoint = Redis.GetEndPoints().FirstOrDefault();
                 if (serverEndPoint == null)
@@ -134,9 +146,9 @@ namespace Pulsar.Tests.Integration
                     _logger.LogWarning("No Redis server endpoints available. Cannot clear keys.");
                     return;
                 }
-                
+
                 var server = Redis.GetServer(serverEndPoint);
-                
+
                 // Use pattern to get all keys and delete them
                 try
                 {
@@ -145,7 +157,7 @@ namespace Pulsar.Tests.Integration
                     {
                         await db.KeyDeleteAsync(key);
                     }
-                    
+
                     _logger.LogInformation("Cleared all keys from Redis");
                 }
                 catch (Exception ex)

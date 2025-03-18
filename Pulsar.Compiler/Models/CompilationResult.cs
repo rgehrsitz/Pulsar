@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
-using Serilog;
-using Pulsar.Compiler.Config;
 using Pulsar.Compiler;
+using Pulsar.Compiler.Config;
+using Serilog;
 
 namespace Pulsar.Compiler.Models
 {
@@ -47,10 +47,7 @@ namespace Pulsar.Compiler.Models
             }
             else
             {
-                _logger.Error(
-                    "Compilation failed with {ErrorCount} errors",
-                    Errors.Count
-                );
+                _logger.Error("Compilation failed with {ErrorCount} errors", Errors.Count);
             }
         }
     }

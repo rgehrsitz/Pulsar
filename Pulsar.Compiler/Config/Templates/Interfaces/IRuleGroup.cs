@@ -15,7 +15,7 @@ namespace Beacon.Runtime.Interfaces
         /// Gets the name of this rule group
         /// </summary>
         string Name { get; }
-        
+
         /// <summary>
         /// Gets the list of sensor names required by this rule group
         /// </summary>

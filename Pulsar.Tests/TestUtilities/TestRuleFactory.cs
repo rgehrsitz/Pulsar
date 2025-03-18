@@ -5,8 +5,8 @@ using System.Collections.Generic;
 using System.Threading;
 using Pulsar.Compiler;
 using Pulsar.Compiler.Models;
-using Serilog;
 using Pulsar.Tests.TestUtilities;
+using Serilog;
 
 namespace Pulsar.Tests.TestUtilities
 {
@@ -17,14 +17,12 @@ namespace Pulsar.Tests.TestUtilities
     public static class TestRuleFactory
     {
         // Use our adapter to convert MS Logger to Serilog
-        private static readonly ILogger _logger = LoggingConfig
-            .GetLogger()
-            .ToSerilogLogger();
+        private static readonly ILogger _logger = LoggingConfig.GetLogger().ToSerilogLogger();
         private static int _ruleCounter = 0;
 
         public static RuleDefinition CreateTestRule(string name = "", string description = "")
         {
-            var ruleName = string.IsNullOrEmpty(name) 
+            var ruleName = string.IsNullOrEmpty(name)
                 ? $"TestRule_{Interlocked.Increment(ref _ruleCounter)}"
                 : name;
 
@@ -43,9 +41,9 @@ namespace Pulsar.Tests.TestUtilities
                             Type = ConditionType.Comparison,
                             Sensor = "TestSensor",
                             Operator = ComparisonOperator.GreaterThan,
-                            Value = 0
-                        }
-                    }
+                            Value = 0,
+                        },
+                    },
                 },
                 Actions = new List<ActionDefinition>
                 {
@@ -53,9 +51,9 @@ namespace Pulsar.Tests.TestUtilities
                     {
                         Type = ActionType.SetValue,
                         Key = "TestOutput",
-                        Value = 1.0
-                    }
-                }
+                        Value = 1.0,
+                    },
+                },
             };
         }
 
@@ -69,14 +67,15 @@ namespace Pulsar.Tests.TestUtilities
                 Name = "",
                 Description = "Invalid test rule",
                 Conditions = null,
-                Actions = new List<ActionDefinition>()
+                Actions = new List<ActionDefinition>(),
             };
         }
 
         public static RuleDefinition CreateComplexRule(
             string name,
             List<ConditionDefinition> conditions,
-            List<ActionDefinition> actions)
+            List<ActionDefinition> actions
+        )
         {
             _logger.Debug("Creating complex test rule: {RuleName}", name);
 
@@ -84,11 +83,8 @@ namespace Pulsar.Tests.TestUtilities
             {
                 Name = name,
                 Description = "Complex test rule created by TestRuleFactory",
-                Conditions = new ConditionGroup
-                {
-                    All = conditions
-                },
-                Actions = actions
+                Conditions = new ConditionGroup { All = conditions },
+                Actions = actions,
             };
         }
     }

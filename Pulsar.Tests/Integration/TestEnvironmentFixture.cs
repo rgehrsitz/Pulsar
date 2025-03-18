@@ -3,12 +3,12 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
-using Xunit;
+using DotNet.Testcontainers.Containers;
+using Pulsar.Compiler;
 using Serilog;
 using StackExchange.Redis;
 using Testcontainers.Redis;
-using DotNet.Testcontainers.Containers;
-using Pulsar.Compiler;
+using Xunit;
 
 namespace Pulsar.Tests.Integration
 {
@@ -33,7 +33,10 @@ namespace Pulsar.Tests.Integration
             }
             catch (Exception ex)
             {
-                _logger.Warning(ex, "Failed to start Redis container. Tests requiring Redis will be skipped.");
+                _logger.Warning(
+                    ex,
+                    "Failed to start Redis container. Tests requiring Redis will be skipped."
+                );
                 // Continue without Redis - tests that need it will be skipped
             }
             await CreateSampleRules();
@@ -42,7 +45,7 @@ namespace Pulsar.Tests.Integration
         private async Task<IDatabase> StartRedisContainer()
         {
             _logger.Information("Starting Redis container...");
-            
+
             if (_redisContainer == null)
             {
                 _redisContainer = new RedisBuilder()
@@ -57,7 +60,9 @@ namespace Pulsar.Tests.Integration
                 try
                 {
                     await _redisContainer.StartAsync();
-                    var connection = await ConnectionMultiplexer.ConnectAsync(_redisContainer.GetConnectionString());
+                    var connection = await ConnectionMultiplexer.ConnectAsync(
+                        _redisContainer.GetConnectionString()
+                    );
                     _logger.Information("Successfully connected to Redis container");
                     return connection.GetDatabase();
                 }
@@ -66,14 +71,24 @@ namespace Pulsar.Tests.Integration
                     retryCount++;
                     if (retryCount >= _maxRetries)
                     {
-                        _logger.Error(ex, "Failed to start Redis container after {RetryCount} attempts", _maxRetries);
+                        _logger.Error(
+                            ex,
+                            "Failed to start Redis container after {RetryCount} attempts",
+                            _maxRetries
+                        );
                         throw new InvalidOperationException(
-                            "Redis is required to run integration tests. Please ensure Docker is running and Redis container can be started.", 
-                            ex);
+                            "Redis is required to run integration tests. Please ensure Docker is running and Redis container can be started.",
+                            ex
+                        );
                     }
 
-                    _logger.Warning(ex, "Failed to start Redis container, attempt {Attempt} of {MaxRetries}. Retrying in {DelayMs}ms...",
-                        retryCount, _maxRetries, _retryDelayMs);
+                    _logger.Warning(
+                        ex,
+                        "Failed to start Redis container, attempt {Attempt} of {MaxRetries}. Retrying in {DelayMs}ms...",
+                        retryCount,
+                        _maxRetries,
+                        _retryDelayMs
+                    );
                     await Task.Delay(_retryDelayMs);
                 }
             }
@@ -105,7 +120,7 @@ namespace Pulsar.Tests.Integration
             {
                 { "rules", "TestData/sample-rules.yaml" },
                 { "output", outputPath },
-                { "config", Path.Combine("TestData", "system_config.yaml") }
+                { "config", Path.Combine("TestData", "system_config.yaml") },
             };
 
             var result = await Program.GenerateBuildableProject(options, Logger);
@@ -117,14 +132,16 @@ namespace Pulsar.Tests.Integration
 
         public async Task CompileProject(string projectPath)
         {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "dotnet",
-                Arguments = "publish -c Release -r win-x64 --self-contained true",
-                WorkingDirectory = projectPath,
-                RedirectStandardOutput = true,
-                UseShellExecute = false
-            });
+            var process = Process.Start(
+                new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = "publish -c Release -r win-x64 --self-contained true",
+                    WorkingDirectory = projectPath,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                }
+            );
             await process!.WaitForExitAsync();
         }
 
@@ -134,10 +151,7 @@ namespace Pulsar.Tests.Integration
             Directory.CreateDirectory("TestData");
             Directory.CreateDirectory("TestOutput");
 
-            var options = new Dictionary<string, string>
-            {
-                { "output", "TestData" }
-            };
+            var options = new Dictionary<string, string> { { "output", "TestData" } };
             var result = Program.InitializeProject(options, Logger).Result;
 
             // Create system configuration file
@@ -146,7 +160,8 @@ namespace Pulsar.Tests.Integration
 
         private async Task CreateSampleRules()
         {
-            var sampleRules = @"
+            var sampleRules =
+                @"
 rules:
   - name: 'TestRule'
     description: 'Simple test rule that copies input to output'
@@ -168,7 +183,8 @@ rules:
         private async Task CreateSystemConfig()
         {
             // Create system configuration file
-            var systemConfig = @"
+            var systemConfig =
+                @"
 version: 1
 validSensors:
   - test:input
@@ -188,7 +204,10 @@ redis:
   allowAdmin: false
 bufferCapacity: 100
 ";
-            await File.WriteAllTextAsync(Path.Combine("TestData", "system_config.yaml"), systemConfig);
+            await File.WriteAllTextAsync(
+                Path.Combine("TestData", "system_config.yaml"),
+                systemConfig
+            );
         }
     }
 }

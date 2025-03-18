@@ -2,9 +2,9 @@
 
 using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging; // For MS logging
 using Pulsar.Compiler;
 using Pulsar.Compiler.Models;
-using Microsoft.Extensions.Logging; // For MS logging
 using Serilog; // For Serilog logging
 using Serilog.Extensions.Logging; // Added to enable AddSerilog extension
 
@@ -64,17 +64,26 @@ namespace Pulsar.Compiler.Core
                 var msLogger = loggerFactory.CreateLogger<DependencyAnalyzer>();
                 var analyzer = new DependencyAnalyzer(logger: msLogger);
                 var depResult = analyzer.ValidateDependencies(new List<RuleDefinition> { rule });
-                
-                _logger.Debug("Dependency analysis result for rule {RuleName}: IsValid={IsValid}, Cycles={Cycles}",
+
+                _logger.Debug(
+                    "Dependency analysis result for rule {RuleName}: IsValid={IsValid}, Cycles={Cycles}",
                     rule.Name,
                     depResult.IsValid,
-                    string.Join(" | ", depResult.CircularDependencies.Select(cycle => string.Join(" -> ", cycle))));
-                
+                    string.Join(
+                        " | ",
+                        depResult.CircularDependencies.Select(cycle => string.Join(" -> ", cycle))
+                    )
+                );
+
                 if (!depResult.IsValid)
                 {
-                    errors.Add("Circular dependency detected in rule: " 
-                               + rule.Name 
-                               + " (" + string.Join(" -> ", depResult.CircularDependencies.First()) + ")");
+                    errors.Add(
+                        "Circular dependency detected in rule: "
+                            + rule.Name
+                            + " ("
+                            + string.Join(" -> ", depResult.CircularDependencies.First())
+                            + ")"
+                    );
                 }
 
                 bool isValid = errors.Count == 0;
@@ -116,11 +125,15 @@ namespace Pulsar.Compiler.Core
                 case SendMessageAction sendMessage:
                     if (string.IsNullOrWhiteSpace(sendMessage.Channel))
                     {
-                        errors.Add($"Rule '{ruleName}' has a SendMessage action with an empty channel");
+                        errors.Add(
+                            $"Rule '{ruleName}' has a SendMessage action with an empty channel"
+                        );
                     }
                     if (string.IsNullOrWhiteSpace(sendMessage.Message))
                     {
-                        errors.Add($"Rule '{ruleName}' has a SendMessage action with an empty message");
+                        errors.Add(
+                            $"Rule '{ruleName}' has a SendMessage action with an empty message"
+                        );
                     }
                     break;
                 default:

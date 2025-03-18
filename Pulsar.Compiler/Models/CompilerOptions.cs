@@ -11,14 +11,15 @@ namespace Pulsar.Compiler.Models
     {
         private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
-        public BuildConfig BuildConfig { get; set; } = new BuildConfig
-        {
-            OutputPath = "build",
-            Target = "library",
-            ProjectName = "PulsarRules",
-            TargetFramework = "net9.0",
-            RulesPath = "rules"
-        };
+        public BuildConfig BuildConfig { get; set; } =
+            new BuildConfig
+            {
+                OutputPath = "build",
+                Target = "library",
+                ProjectName = "PulsarRules",
+                TargetFramework = "net9.0",
+                RulesPath = "rules",
+            };
         public List<string> ValidSensors { get; set; } = new();
         public bool StrictMode { get; set; }
         public bool AllowInvalidSensors { get; set; }
@@ -41,7 +42,10 @@ namespace Pulsar.Compiler.Models
                 if (string.IsNullOrEmpty(BuildConfig.OutputPath))
                 {
                     _logger.Error("BuildConfig.OutputPath is required but was empty");
-                    throw new ArgumentException("OutputPath is required", nameof(BuildConfig.OutputPath));
+                    throw new ArgumentException(
+                        "OutputPath is required",
+                        nameof(BuildConfig.OutputPath)
+                    );
                 }
 
                 _logger.Debug("Compiler options validation successful");

@@ -24,13 +24,13 @@ public class Program
         try
         {
             var options = ParseArguments(args);
-            
+
             if (options.Count == 0 || !options.ContainsKey("command"))
             {
                 PrintUsage(_logger);
                 return 1;
             }
-            
+
             var command = options["command"];
 
             try
@@ -40,7 +40,7 @@ public class Program
             catch (ArgumentException ex)
             {
                 _logger.Error(ex.Message);
-                
+
                 // Print specific usage based on the command
                 switch (command)
                 {
@@ -51,7 +51,7 @@ public class Program
                         PrintUsage(_logger);
                         break;
                 }
-                
+
                 return 1;
             }
 
@@ -294,10 +294,12 @@ https://github.com/yourusername/pulsar/docs"
         logger.Information("Options:");
         logger.Information("  --output=<path>  Output directory (required for compile/generate)");
         logger.Information("  --config=<path>  System configuration file (optional)");
-        logger.Information("  --target=<id>    Target runtime identifier for AOT (e.g., win-x64, linux-x64)");
+        logger.Information(
+            "  --target=<id>    Target runtime identifier for AOT (e.g., win-x64, linux-x64)"
+        );
         logger.Information("  --verbose        Enable verbose logging");
     }
-    
+
     private static Dictionary<string, string> ParseArguments(string[] args)
     {
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -313,12 +315,12 @@ https://github.com/yourusername/pulsar/docs"
         for (int i = 1; i < args.Length; i++)
         {
             string arg = args[i];
-            
+
             // Handle different argument formats (--key=value, --key value, or --flag)
             if (arg.StartsWith("--"))
             {
                 string key = arg.Substring(2);
-                
+
                 // Handle --key=value format
                 if (key.Contains("="))
                 {
@@ -326,14 +328,14 @@ https://github.com/yourusername/pulsar/docs"
                     options[parts[0]] = parts[1];
                     continue;
                 }
-                
+
                 // Handle flags without values
                 if (IsFlagOption(key))
                 {
                     options[key] = "true";
                     continue;
                 }
-                
+
                 // Handle --key value format
                 if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
                 {
@@ -362,7 +364,7 @@ https://github.com/yourusername/pulsar/docs"
 
         return options;
     }
-    
+
     private static bool IsFlagOption(string option)
     {
         return option switch
@@ -393,18 +395,20 @@ https://github.com/yourusername/pulsar/docs"
                     throw new ArgumentException("--rules argument is required for validation");
                 }
                 break;
-                
+
             case "test":
                 if (!options.ContainsKey("rules"))
                 {
                     throw new ArgumentException("--rules argument is required for testing");
                 }
                 break;
-                
+
             case "beacon":
                 if (!options.ContainsKey("rules"))
                 {
-                    throw new ArgumentException("--rules argument is required for Beacon solution generation");
+                    throw new ArgumentException(
+                        "--rules argument is required for Beacon solution generation"
+                    );
                 }
                 // Validate target runtime if specified
                 if (options.TryGetValue("target", out var target))
@@ -461,12 +465,12 @@ https://github.com/yourusername/pulsar/docs"
     private static async Task<int> CompileRules(Dictionary<string, string> options, ILogger logger)
     {
         logger.Information("Starting rule compilation...");
- 
+
         var buildConfig = CreateBuildConfig(options);
         var systemConfig = await LoadSystemConfig(
             options.GetValueOrDefault("config", "system_config.yaml")
         );
-        
+
         var compilerOptions = new Models.CompilerOptions
         {
             BuildConfig = buildConfig,
@@ -481,13 +485,13 @@ https://github.com/yourusername/pulsar/docs"
             logger.Information(
                 $"Successfully generated {result.GeneratedFiles.Length} files from rules"
             );
-            
+
             // Log any optimizations or special handling
             if (options.GetValueOrDefault("aot") == "true")
             {
                 logger.Information("Generated AOT-compatible code");
             }
-            
+
             if (options.GetValueOrDefault("debug") == "true")
             {
                 logger.Information("Included debug symbols and enhanced logging");
@@ -734,7 +738,6 @@ https://github.com/yourusername/pulsar/docs"
         }
     }
 
-    
     public static async Task<bool> GenerateBeaconSolution(
         Dictionary<string, string> options,
         Serilog.ILogger logger
@@ -792,13 +795,15 @@ https://github.com/yourusername/pulsar/docs"
                 var configContent = await File.ReadAllTextAsync(configPath);
                 logger.Debug("Config file content:\n{Content}", configContent);
             }
-            
+
             var systemConfig = SystemConfig.Load(configPath);
-            
+
             // Debug validSensors
-            logger.Information("System configuration loaded with {SensorCount} valid sensors: {Sensors}", 
+            logger.Information(
+                "System configuration loaded with {SensorCount} valid sensors: {Sensors}",
                 systemConfig.ValidSensors?.Count ?? 0,
-                string.Join(", ", systemConfig.ValidSensors ?? new List<string>()));
+                string.Join(", ", systemConfig.ValidSensors ?? new List<string>())
+            );
 
             // Ensure validSensors is not null and contains required sensors
             if (systemConfig.ValidSensors == null)
@@ -808,7 +813,13 @@ https://github.com/yourusername/pulsar/docs"
             }
 
             // Manually add required sensors if they're not already in the list
-            var requiredSensors = new List<string> { "temperature_f", "temperature_c", "humidity", "pressure" };
+            var requiredSensors = new List<string>
+            {
+                "temperature_f",
+                "temperature_c",
+                "humidity",
+                "pressure",
+            };
             foreach (var sensor in requiredSensors)
             {
                 if (!systemConfig.ValidSensors.Contains(sensor))
@@ -818,7 +829,10 @@ https://github.com/yourusername/pulsar/docs"
                 }
             }
 
-            logger.Information("Final valid sensors list: {Sensors}", string.Join(", ", systemConfig.ValidSensors));
+            logger.Information(
+                "Final valid sensors list: {Sensors}",
+                string.Join(", ", systemConfig.ValidSensors)
+            );
 
             // Parse rules
             var parser = new DslParser();
@@ -831,22 +845,34 @@ https://github.com/yourusername/pulsar/docs"
                 AllowInvalidSensors = true, // Bypass sensor validation
                 OutputDirectory = outputPath,
                 TargetFramework = "net9.0",
-                RuntimeIdentifier = target
+                RuntimeIdentifier = target,
             };
 
             // Try to load rules directly first
             if (File.Exists(rulesPath))
             {
                 var content = await File.ReadAllTextAsync(rulesPath);
-                var parsedRules = parser.ParseRules(content, systemConfig.ValidSensors, Path.GetFileName(rulesPath), true);
+                var parsedRules = parser.ParseRules(
+                    content,
+                    systemConfig.ValidSensors,
+                    Path.GetFileName(rulesPath),
+                    true
+                );
                 rules.AddRange(parsedRules);
             }
             else if (Directory.Exists(rulesPath))
             {
-                foreach (var file in Directory.GetFiles(rulesPath, "*.yaml", SearchOption.AllDirectories))
+                foreach (
+                    var file in Directory.GetFiles(rulesPath, "*.yaml", SearchOption.AllDirectories)
+                )
                 {
                     var content = await File.ReadAllTextAsync(file);
-                    var parsedRules = parser.ParseRules(content, systemConfig.ValidSensors, Path.GetFileName(file), true);
+                    var parsedRules = parser.ParseRules(
+                        content,
+                        systemConfig.ValidSensors,
+                        Path.GetFileName(file),
+                        true
+                    );
                     rules.AddRange(parsedRules);
                 }
             }
@@ -861,16 +887,18 @@ https://github.com/yourusername/pulsar/docs"
             if (rules.Count == 0)
             {
                 // If no rules were parsed directly, try using the compilation pipeline
-                logger.Warning("No rules were parsed directly, attempting to use compilation pipeline");
+                logger.Warning(
+                    "No rules were parsed directly, attempting to use compilation pipeline"
+                );
                 var pipeline = new CompilationPipeline(new AOTRuleCompiler(), new DslParser());
                 var compilationResult = pipeline.ProcessRules(rulesPath, compilerOptions);
-                
+
                 if (!compilationResult.Success)
                 {
                     logger.Error("No rules could be parsed from the specified path");
                     return false;
                 }
-                
+
                 rules = compilationResult.Rules;
             }
 
@@ -884,13 +912,15 @@ https://github.com/yourusername/pulsar/docs"
                 TargetFramework = "net9.0",
                 RulesPath = rulesPath,
                 RuleDefinitions = rules,
-                SystemConfig = systemConfig,  // Ensure SystemConfig is set here
+                SystemConfig = systemConfig, // Ensure SystemConfig is set here
                 StandaloneExecutable = true,
                 GenerateDebugInfo = false,
                 OptimizeOutput = true,
                 Namespace = "Beacon.Runtime",
-                RedisConnection = systemConfig.Redis?.Endpoints?.Count > 0 ? 
-                    systemConfig.Redis.Endpoints[0] : "localhost:6379",
+                RedisConnection =
+                    systemConfig.Redis?.Endpoints?.Count > 0
+                        ? systemConfig.Redis.Endpoints[0]
+                        : "localhost:6379",
                 CycleTime = systemConfig.CycleTime,
                 BufferCapacity = systemConfig.BufferCapacity,
                 MaxRulesPerFile = 50,
@@ -899,21 +929,30 @@ https://github.com/yourusername/pulsar/docs"
                 GroupParallelRules = true,
                 GenerateTestProject = true,
                 CreateSeparateDirectory = true,
-                SolutionName = "Beacon"
+                SolutionName = "Beacon",
             };
-            
+
             // Double-check that system config is properly set
             if (buildConfig.SystemConfig == null)
             {
                 logger.Warning("SystemConfig is null in BuildConfig, initializing it");
                 buildConfig.SystemConfig = systemConfig;
             }
-            
+
             // Ensure validSensors is populated
-            if (buildConfig.SystemConfig.ValidSensors == null || buildConfig.SystemConfig.ValidSensors.Count == 0)
+            if (
+                buildConfig.SystemConfig.ValidSensors == null
+                || buildConfig.SystemConfig.ValidSensors.Count == 0
+            )
             {
                 logger.Warning("ValidSensors is empty in SystemConfig, adding required sensors");
-                buildConfig.SystemConfig.ValidSensors = new List<string> { "temperature_f", "temperature_c", "humidity", "pressure" };
+                buildConfig.SystemConfig.ValidSensors = new List<string>
+                {
+                    "temperature_f",
+                    "temperature_c",
+                    "humidity",
+                    "pressure",
+                };
             }
 
             var orchestrator = new BeaconBuildOrchestrator();
@@ -922,16 +961,20 @@ https://github.com/yourusername/pulsar/docs"
             if (buildResult.Success)
             {
                 logger.Information("Beacon solution generated successfully");
-                
+
                 // List the generated files
                 var generatedFiles = Directory.GetFiles(outputPath);
                 logger.Information("Generated {Count} files:", generatedFiles.Length);
                 foreach (var file in generatedFiles)
                 {
                     var fileInfo = new FileInfo(file);
-                    logger.Information("  {Name} ({Size} bytes)", Path.GetFileName(file), fileInfo.Length);
+                    logger.Information(
+                        "  {Name} ({Size} bytes)",
+                        Path.GetFileName(file),
+                        fileInfo.Length
+                    );
                 }
-                
+
                 return true;
             }
             else
@@ -953,16 +996,28 @@ https://github.com/yourusername/pulsar/docs"
 
     private static void PrintBeaconUsage(ILogger logger)
     {
-        logger.Information("Usage: dotnet run --project Pulsar.Compiler.csproj beacon --rules <rules-path> --config <config-path> --output <output-path> [--target <runtime-id>] [--verbose]");
+        logger.Information(
+            "Usage: dotnet run --project Pulsar.Compiler.csproj beacon --rules <rules-path> --config <config-path> --output <output-path> [--target <runtime-id>] [--verbose]"
+        );
         logger.Information("");
         logger.Information("Options:");
-        logger.Information("  --rules <path>      Path to YAML rule file or directory containing rule files (required)");
-        logger.Information("  --config <path>     Path to system configuration YAML file (default: system_config.yaml)");
-        logger.Information("  --output <path>     Output directory for the Beacon solution (default: current directory)");
-        logger.Information("  --target <runtime>  Target runtime identifier for AOT compilation (default: win-x64)");
+        logger.Information(
+            "  --rules <path>      Path to YAML rule file or directory containing rule files (required)"
+        );
+        logger.Information(
+            "  --config <path>     Path to system configuration YAML file (default: system_config.yaml)"
+        );
+        logger.Information(
+            "  --output <path>     Output directory for the Beacon solution (default: current directory)"
+        );
+        logger.Information(
+            "  --target <runtime>  Target runtime identifier for AOT compilation (default: win-x64)"
+        );
         logger.Information("  --verbose          Enable verbose logging");
         logger.Information("");
         logger.Information("Example:");
-        logger.Information("  dotnet run --project Pulsar.Compiler.csproj beacon --rules ./rules.yaml --config ./system_config.yaml --output ./output --target win-x64");
+        logger.Information(
+            "  dotnet run --project Pulsar.Compiler.csproj beacon --rules ./rules.yaml --config ./system_config.yaml --output ./output --target win-x64"
+        );
     }
 }

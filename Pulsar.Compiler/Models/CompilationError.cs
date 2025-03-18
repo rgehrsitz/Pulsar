@@ -11,7 +11,13 @@ namespace Pulsar.Compiler.Models
         public string? RuleName { get; }
         public Exception? Exception { get; }
 
-        public CompilationError(string message, string? fileName = null, int? lineNumber = null, string? ruleName = null, Exception? exception = null)
+        public CompilationError(
+            string message,
+            string? fileName = null,
+            int? lineNumber = null,
+            string? ruleName = null,
+            Exception? exception = null
+        )
         {
             Message = message ?? throw new ArgumentNullException(nameof(message));
             FileName = fileName;

@@ -22,13 +22,14 @@ namespace Beacon.Runtime
         protected readonly List<IRuleGroup> _ruleGroups;
 
         public string[] RequiredSensors => Array.Empty<string>();
-        
+
         public int RuleCount => _ruleGroups.Count;
 
         public TemplateRuleCoordinator(
             IRedisService redis,
             ILogger logger,
-            RingBufferManager bufferManager)
+            RingBufferManager bufferManager
+        )
         {
             _redis = redis;
             _logger = logger.ForContext<TemplateRuleCoordinator>();
@@ -59,16 +60,18 @@ namespace Beacon.Runtime
         /// <summary>
         /// Evaluates all rule groups with the given inputs
         /// </summary>
-        public virtual async Task<Dictionary<string, object>> ExecuteRulesAsync(Dictionary<string, object> inputs)
+        public virtual async Task<Dictionary<string, object>> ExecuteRulesAsync(
+            Dictionary<string, object> inputs
+        )
         {
             try
             {
                 // Update the buffer with new values
                 UpdateBuffers(inputs);
-                
+
                 // Create an output dictionary to hold results
                 var outputs = new Dictionary<string, object>();
-                
+
                 // Evaluate each rule group
                 foreach (var ruleGroup in _ruleGroups)
                 {
@@ -79,10 +82,14 @@ namespace Beacon.Runtime
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ex, "Error evaluating rule group {RuleGroup}", ruleGroup.Name);
+                        _logger.Error(
+                            ex,
+                            "Error evaluating rule group {RuleGroup}",
+                            ruleGroup.Name
+                        );
                     }
                 }
-                
+
                 return outputs;
             }
             catch (Exception ex)

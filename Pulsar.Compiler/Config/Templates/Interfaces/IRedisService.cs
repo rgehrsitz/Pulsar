@@ -23,7 +23,7 @@ namespace Beacon.Runtime.Interfaces
         /// <param name="outputs">Dictionary of output values</param>
         /// <returns>Task representing the asynchronous operation</returns>
         Task SetOutputsAsync(Dictionary<string, object> outputs);
-        
+
         /// <summary>
         /// Gets specific sensor values from Redis
         /// </summary>

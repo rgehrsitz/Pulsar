@@ -138,7 +138,7 @@ namespace Pulsar.Compiler.Generation.Helpers
         public static string GenerateSendMessageAction(SendMessageAction sendMessage)
         {
             // Generate code to send a message to the specified channel
-            return $"SendMessage(\"{sendMessage.Channel}\", \"{sendMessage.Message}\");";  
+            return $"SendMessage(\"{sendMessage.Channel}\", \"{sendMessage.Message}\");";
         }
 
         public static string FixupExpression(string expression)

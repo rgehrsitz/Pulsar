@@ -2,11 +2,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Xunit;
-using Pulsar.Compiler.Models;
-using Pulsar.Compiler.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Pulsar.Compiler.Core;
+using Pulsar.Compiler.Models;
+using Xunit;
 
 namespace Pulsar.Tests.RuleValidation
 {
@@ -38,14 +38,14 @@ namespace Pulsar.Tests.RuleValidation
                                 Type = ConditionType.Comparison,
                                 Sensor = "Rule2_Output",
                                 Operator = ComparisonOperator.GreaterThan,
-                                Value = 10
-                            }
-                        }
+                                Value = 10,
+                            },
+                        },
                     },
                     Actions = new List<ActionDefinition>
                     {
-                        new SetValueAction { Key = "Rule1_Output", Value = 1.0 }
-                    }
+                        new SetValueAction { Key = "Rule1_Output", Value = 1.0 },
+                    },
                 },
                 new RuleDefinition
                 {
@@ -60,15 +60,15 @@ namespace Pulsar.Tests.RuleValidation
                                 Type = ConditionType.Comparison,
                                 Sensor = "Rule1_Output",
                                 Operator = ComparisonOperator.LessThan,
-                                Value = 5
-                            }
-                        }
+                                Value = 5,
+                            },
+                        },
                     },
                     Actions = new List<ActionDefinition>
                     {
-                        new SetValueAction { Key = "Rule2_Output", Value = 2.0 }
-                    }
-                }
+                        new SetValueAction { Key = "Rule2_Output", Value = 2.0 },
+                    },
+                },
             };
 
             // Act
@@ -77,8 +77,10 @@ namespace Pulsar.Tests.RuleValidation
 
             // Assert
             Assert.False(result.IsValid);
-            Assert.Contains(result.CircularDependencies, cycle => 
-                cycle.Contains("Rule1") && cycle.Contains("Rule2"));
+            Assert.Contains(
+                result.CircularDependencies,
+                cycle => cycle.Contains("Rule1") && cycle.Contains("Rule2")
+            );
         }
 
         [Fact]
@@ -100,15 +102,15 @@ namespace Pulsar.Tests.RuleValidation
                                 Type = ConditionType.ThresholdOverTime,
                                 Sensor = "temperature",
                                 Threshold = 30,
-                                Duration = 300000 // 5 minutes
-                            }
-                        }
+                                Duration = 300000, // 5 minutes
+                            },
+                        },
                     },
                     Actions = new List<ActionDefinition>
                     {
-                        new SetValueAction { Key = "temp_alert", Value = 1.0 }
-                    }
-                }
+                        new SetValueAction { Key = "temp_alert", Value = 1.0 },
+                    },
+                },
             };
 
             // Act
@@ -138,19 +140,16 @@ namespace Pulsar.Tests.RuleValidation
                             new ExpressionCondition
                             {
                                 Type = ConditionType.Expression,
-                                Expression = "(temp1 + temp2) / 2 > 30 && pressure * 1.5 < Max(150, ambient_pressure)"
-                            }
-                        }
+                                Expression =
+                                    "(temp1 + temp2) / 2 > 30 && pressure * 1.5 < Max(150, ambient_pressure)",
+                            },
+                        },
                     },
                     Actions = new List<ActionDefinition>
                     {
-                        new SetValueAction 
-                        { 
-                            Key = "complex_alert",
-                            Value = 1.0
-                        }
-                    }
-                }
+                        new SetValueAction { Key = "complex_alert", Value = 1.0 },
+                    },
+                },
             };
 
             // Act
@@ -161,10 +160,13 @@ namespace Pulsar.Tests.RuleValidation
             Assert.True(result.IsValid);
             var dependencies = analyzer.AnalyzeDependencies(rules);
             Assert.Single(dependencies); // Should have one rule
-            
+
             // The expression should depend on temp1, temp2, pressure, and ambient_pressure
             var complexityScore = result.RuleComplexityScores["ExpressionRule"];
-            Assert.True(complexityScore > 0, "Complex expression should have non-zero complexity score");
+            Assert.True(
+                complexityScore > 0,
+                "Complex expression should have non-zero complexity score"
+            );
         }
 
         [Fact]
@@ -178,14 +180,11 @@ namespace Pulsar.Tests.RuleValidation
                 {
                     Name = $"Rule{i}",
                     Description = $"Rule {i} in deep chain",
-                    Conditions = new ConditionGroup
-                    {
-                        All = new List<ConditionDefinition>()
-                    },
+                    Conditions = new ConditionGroup { All = new List<ConditionDefinition>() },
                     Actions = new List<ActionDefinition>
                     {
-                        new SetValueAction { Key = $"Rule{i}_Output", Value = i }
-                    }
+                        new SetValueAction { Key = $"Rule{i}_Output", Value = i },
+                    },
                 };
 
                 if (i > 1)
@@ -195,9 +194,9 @@ namespace Pulsar.Tests.RuleValidation
                         new ComparisonCondition
                         {
                             Type = ConditionType.Comparison,
-                            Sensor = $"Rule{i-1}_Output",
+                            Sensor = $"Rule{i - 1}_Output",
                             Operator = ComparisonOperator.GreaterThan,
-                            Value = 0
+                            Value = 0,
                         }
                     );
                 }

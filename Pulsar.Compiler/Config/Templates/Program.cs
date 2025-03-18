@@ -1,15 +1,15 @@
 // File: Pulsar.Compiler/Config/Templates/Program.cs
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
-using System.Diagnostics.CodeAnalysis;
-using Beacon.Runtime.Services;
-using Beacon.Runtime.Models;
+using System.Threading;
+using System.Threading.Tasks;
 using Beacon.Runtime.Buffers;
 using Beacon.Runtime.Interfaces;
+using Beacon.Runtime.Models;
+using Beacon.Runtime.Services;
 // Removed Generated namespace import
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -20,7 +20,7 @@ namespace Beacon.Runtime
     [JsonSerializable(typeof(RuntimeConfig))]
     [JsonSerializable(typeof(RedisConfiguration))]
     public partial class SerializationContext : JsonSerializerContext { }
-    
+
     public class Program
     {
         [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuntimeOrchestrator))]
@@ -33,7 +33,7 @@ namespace Beacon.Runtime
             {
                 builder.AddConsole();
             });
-            
+
             // Get a logger for the Program class
             var logger = loggerFactory.CreateLogger<Program>();
             logger.LogInformation("Starting Beacon Runtime Engine");
@@ -42,7 +42,10 @@ namespace Beacon.Runtime
             {
                 // Load configuration
                 var config = Models.RuntimeConfig.LoadFromEnvironment();
-                logger.LogInformation("Loaded configuration with {SensorCount} sensors", config.ValidSensors.Count);
+                logger.LogInformation(
+                    "Loaded configuration with {SensorCount} sensors",
+                    config.ValidSensors.Count
+                );
 
                 // Initialize Redis service
                 var redisConfig = config.Redis;
@@ -55,14 +58,14 @@ namespace Beacon.Runtime
                 var orchestratorLogger = loggerFactory.CreateLogger<RuntimeOrchestrator>();
                 var ruleCoordinatorLogger = loggerFactory.CreateLogger<RuleCoordinator>();
                 var orchestrator = new RuntimeOrchestrator(
-                    redisService, 
-                    orchestratorLogger, 
+                    redisService,
+                    orchestratorLogger,
                     new RuleCoordinator(redisService, ruleCoordinatorLogger, bufferManager)
                 );
 
                 // Start the orchestrator
                 await orchestrator.StartAsync();
-                
+
                 // Wait for Ctrl+C
                 var cancellationSource = new CancellationTokenSource();
                 Console.CancelKeyPress += (sender, e) =>
@@ -71,7 +74,7 @@ namespace Beacon.Runtime
                     cancellationSource.Cancel();
                     e.Cancel = true;
                 };
-                
+
                 // Wait until cancellation is requested
                 try
                 {
@@ -81,7 +84,7 @@ namespace Beacon.Runtime
                 {
                     // Cancellation was requested
                 }
-                
+
                 // Stop the orchestrator
                 await orchestrator.StopAsync();
             }

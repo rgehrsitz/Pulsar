@@ -4,8 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using Pulsar.Compiler;
 using Beacon.Runtime.Services;
+using Pulsar.Compiler;
 using Serilog;
 using YamlDotNet.Serialization;
 
@@ -29,10 +29,10 @@ namespace Pulsar.Compiler.Models
 
         [YamlMember(Alias = "bufferCapacity")]
         public int BufferCapacity { get; set; } = 100;
-        
+
         [YamlMember(Alias = "logLevel")]
         public string LogLevel { get; set; } = "Information";
-        
+
         [YamlMember(Alias = "logFile")]
         public string LogFile { get; set; } = "logs/pulsar.log";
 
@@ -50,17 +50,28 @@ namespace Pulsar.Compiler.Models
 
                 var yaml = File.ReadAllText(path);
                 _logger.Debug("YAML content: {Content}", yaml);
-                
+
                 var deserializer = new DeserializerBuilder()
-                    .WithNamingConvention(YamlDotNet.Serialization.NamingConventions.CamelCaseNamingConvention.Instance)
+                    .WithNamingConvention(
+                        YamlDotNet
+                            .Serialization
+                            .NamingConventions
+                            .CamelCaseNamingConvention
+                            .Instance
+                    )
                     .IgnoreUnmatchedProperties()
                     .Build();
                 var config = deserializer.Deserialize<SystemConfig>(yaml);
 
+                // Initialize ValidSensors if null to avoid null reference
+                config.ValidSensors ??= new List<string>();
+
                 // Manually parse validSensors if they weren't deserialized properly
-                if (config.ValidSensors == null || config.ValidSensors.Count == 0)
+                if (config.ValidSensors.Count == 0) // Fix: Null check removed as we ensure it's not null above
                 {
-                    _logger.Warning("ValidSensors not properly deserialized, attempting manual parsing");
+                    _logger.Warning(
+                        "ValidSensors not properly deserialized, attempting manual parsing"
+                    );
                     try
                     {
                         // Parse the YAML manually to extract validSensors
@@ -72,17 +83,22 @@ namespace Pulsar.Compiler.Models
                             if (trimmedLine.StartsWith("validSensors:"))
                             {
                                 inValidSensors = true;
-                                config.ValidSensors = new List<string>();
+                                // No need to reinitialize ValidSensors as we already ensured it's not null
                                 continue;
                             }
-                            
+
                             if (inValidSensors && trimmedLine.StartsWith("-"))
                             {
                                 var sensor = trimmedLine.Substring(1).Trim();
                                 config.ValidSensors.Add(sensor);
                                 _logger.Debug("Manually added sensor: {Sensor}", sensor);
                             }
-                            else if (inValidSensors && !string.IsNullOrWhiteSpace(trimmedLine) && !trimmedLine.StartsWith("#") && !trimmedLine.StartsWith("-"))
+                            else if (
+                                inValidSensors
+                                && !string.IsNullOrWhiteSpace(trimmedLine)
+                                && !trimmedLine.StartsWith("#")
+                                && !trimmedLine.StartsWith("-")
+                            )
                             {
                                 inValidSensors = false;
                             }
@@ -94,10 +110,17 @@ namespace Pulsar.Compiler.Models
                     }
                 }
 
+                // Ensure ValidSensors is not null before accessing .Count
+                var sensorCount = config.ValidSensors?.Count ?? 0;
+                var sensorsString =
+                    config.ValidSensors != null
+                        ? string.Join(", ", config.ValidSensors)
+                        : string.Empty;
+
                 _logger.Information(
                     "Successfully loaded system configuration with {SensorCount} valid sensors: {Sensors}",
-                    config.ValidSensors.Count,
-                    string.Join(", ", config.ValidSensors)
+                    sensorCount,
+                    sensorsString
                 );
                 return config;
             }

@@ -15,7 +15,8 @@ namespace Pulsar.Compiler.Generation.Generators
     {
         private readonly ILogger _logger;
 
-        public RuleCoordinatorGenerator(ILogger logger = null)
+        // Fix CS8625 by marking the logger parameter as nullable
+        public RuleCoordinatorGenerator(ILogger? logger = null)
         {
             _logger = logger ?? NullLogger.Instance;
         }
@@ -52,13 +53,15 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("        private readonly RingBufferManager _bufferManager;");
             sb.AppendLine("        private readonly List<IRuleGroup> _ruleGroups;");
             sb.AppendLine();
-            
+
             // RuleCount property implementation
             sb.AppendLine("        public int RuleCount => _ruleGroups.Count;");
             sb.AppendLine();
-            
+
             // RequiredSensors property implementation
-            sb.AppendLine("        public string[] RequiredSensors => _ruleGroups.SelectMany(g => g.RequiredSensors).Distinct().ToArray();");
+            sb.AppendLine(
+                "        public string[] RequiredSensors => _ruleGroups.SelectMany(g => g.RequiredSensors).Distinct().ToArray();"
+            );
             sb.AppendLine();
 
             // Add Prometheus metrics
@@ -104,14 +107,16 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine();
 
             // ExecuteRulesAsync method (implementation of IRuleCoordinator)
-            sb.AppendLine("        public async Task<Dictionary<string, object>> ExecuteRulesAsync(Dictionary<string, object> inputs)");
+            sb.AppendLine(
+                "        public async Task<Dictionary<string, object>> ExecuteRulesAsync(Dictionary<string, object> inputs)"
+            );
             sb.AppendLine("        {");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine("                using var timer = RuleEvaluationDuration.NewTimer();");
             sb.AppendLine("                var outputs = new Dictionary<string, object>();");
             sb.AppendLine();
-            
+
             // Update buffers
             sb.AppendLine("                // Update buffers with current inputs");
             sb.AppendLine("                UpdateBuffers(inputs);");
@@ -137,7 +142,7 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("            }");
             sb.AppendLine("        }");
             sb.AppendLine();
-            
+
             // Helper method for buffer updates
             sb.AppendLine("        private void UpdateBuffers(Dictionary<string, object> inputs)");
             sb.AppendLine("        {");
@@ -150,16 +155,22 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("                // Only handle numeric values for the buffer");
             sb.AppendLine("                if (value is double doubleValue)");
             sb.AppendLine("                {");
-            sb.AppendLine("                    _bufferManager.UpdateBuffer(sensor, doubleValue, now);");
+            sb.AppendLine(
+                "                    _bufferManager.UpdateBuffer(sensor, doubleValue, now);"
+            );
             sb.AppendLine("                }");
-            sb.AppendLine("                else if (double.TryParse(value.ToString(), out doubleValue))");
+            sb.AppendLine(
+                "                else if (double.TryParse(value.ToString(), out doubleValue))"
+            );
             sb.AppendLine("                {");
-            sb.AppendLine("                    _bufferManager.UpdateBuffer(sensor, doubleValue, now);");
+            sb.AppendLine(
+                "                    _bufferManager.UpdateBuffer(sensor, doubleValue, now);"
+            );
             sb.AppendLine("                }");
             sb.AppendLine("            }");
             sb.AppendLine("        }");
             sb.AppendLine();
-            
+
             // EvaluateAllRulesAsync method - convenience method that gets inputs from Redis
             sb.AppendLine("        public async Task EvaluateAllRulesAsync()");
             sb.AppendLine("        {");
@@ -172,7 +183,9 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");
-            sb.AppendLine("                _logger.Error(ex, \"Error evaluating rules from Redis\");");
+            sb.AppendLine(
+                "                _logger.Error(ex, \"Error evaluating rules from Redis\");"
+            );
             sb.AppendLine("                throw;");
             sb.AppendLine("            }");
             sb.AppendLine("        }");

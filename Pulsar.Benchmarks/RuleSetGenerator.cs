@@ -8,27 +8,27 @@ namespace Pulsar.Benchmarks
     {
         private readonly DslParser _parser;
         private readonly List<string> _validSensors;
-        
+
         public RuleSetGenerator()
         {
             _parser = new DslParser();
             _validSensors = GenerateValidSensors(100);
         }
-        
+
         public List<RuleDefinition> GenerateRules(int count, int complexity = 1)
         {
             // Build the YAML content based on count and complexity
             var yaml = GenerateRulesYaml(count, complexity);
-            
+
             // Parse the YAML into rule definitions
             return _parser.ParseRules(yaml, _validSensors, "benchmark.yaml").ToList();
         }
-        
+
         private string GenerateRulesYaml(int count, int complexity)
         {
             var sb = new StringBuilder();
             sb.AppendLine("rules:");
-            
+
             for (int i = 0; i < count; i++)
             {
                 switch (complexity)
@@ -47,10 +47,10 @@ namespace Pulsar.Benchmarks
                         break;
                 }
             }
-            
+
             return sb.ToString();
         }
-        
+
         private string GenerateSimpleRule(int index)
         {
             return $@"  - name: SimpleRule{index}
@@ -68,7 +68,7 @@ namespace Pulsar.Benchmarks
           value: 1
 ";
         }
-        
+
         private string GenerateComplexRule(int index)
         {
             return $@"  - name: ComplexRule{index}
@@ -101,7 +101,7 @@ namespace Pulsar.Benchmarks
           value: 1
 ";
         }
-        
+
         private string GenerateTemporalRule(int index)
         {
             return $@"  - name: TemporalRule{index}
@@ -126,7 +126,7 @@ namespace Pulsar.Benchmarks
           value_expression: sensor{index % 100} * 2
 ";
         }
-        
+
         private List<string> GenerateValidSensors(int count)
         {
             var sensors = new List<string>();

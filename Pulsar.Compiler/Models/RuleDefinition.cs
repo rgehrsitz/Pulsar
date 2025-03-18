@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
-using Serilog;
 using Pulsar.Compiler;
 using Pulsar.Compiler.Exceptions;
+using Serilog;
 
 namespace Pulsar.Compiler.Models
 {
@@ -106,7 +106,9 @@ namespace Pulsar.Compiler.Models
             if ((All == null || All.Count == 0) && (Any == null || Any.Count == 0))
             {
                 _logger.Error("Condition group must have at least one condition in All or Any");
-                throw new ValidationException("Condition group must have at least one condition in All or Any");
+                throw new ValidationException(
+                    "Condition group must have at least one condition in All or Any"
+                );
             }
 
             foreach (var condition in All ?? Enumerable.Empty<ConditionDefinition>())
@@ -191,8 +193,8 @@ namespace Pulsar.Compiler.Models
 
     public enum ThresholdOverTimeMode
     {
-        Strict,      // Only trust explicit data points
-        Extended     // Use last known value for missing points
+        Strict, // Only trust explicit data points
+        Extended, // Use last known value for missing points
     }
 
     public class ThresholdOverTimeCondition : ConditionDefinition
@@ -209,7 +211,9 @@ namespace Pulsar.Compiler.Models
             if (string.IsNullOrEmpty(Sensor))
             {
                 _logger.Error("Sensor is required for threshold over time condition");
-                throw new ValidationException("Sensor is required for threshold over time condition");
+                throw new ValidationException(
+                    "Sensor is required for threshold over time condition"
+                );
             }
 
             if (Duration <= 0)

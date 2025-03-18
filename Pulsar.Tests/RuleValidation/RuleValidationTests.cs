@@ -1,11 +1,11 @@
 // File: Pulsar.Tests/RuleValidation/RuleValidationTests.cs
 using System;
 using System.Collections.Generic;
-using Xunit;
-using Pulsar.Compiler.Models;
-using Serilog;
 using Pulsar.Compiler;
 using Pulsar.Compiler.Core;
+using Pulsar.Compiler.Models;
+using Serilog;
+using Xunit;
 
 namespace Pulsar.Tests.RuleValidation
 {
@@ -15,7 +15,9 @@ namespace Pulsar.Tests.RuleValidation
 
         public RuleValidationTests()
         {
-            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger());
+            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
+                Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
+            );
         }
 
         [Fact]
@@ -47,26 +49,23 @@ namespace Pulsar.Tests.RuleValidation
             var rule = new RuleDefinition
             {
                 Name = "ValidRule",
-                Conditions = new ConditionGroup  // Changed from 'Conditions' to 'ConditionGroup'
+                Conditions = new ConditionGroup // Changed from 'Conditions' to 'ConditionGroup'
                 {
                     All = new List<ConditionDefinition>
                     {
-                        new ComparisonCondition 
-                        { 
-                            Sensor = "Temperature", 
+                        new ComparisonCondition
+                        {
+                            Sensor = "Temperature",
                             Operator = ComparisonOperator.GreaterThan, // Changed operator from string to enum value
-                            Value = 20 
-                        }
+                            Value = 20,
+                        },
                     },
-                    Any = new List<ConditionDefinition>()
+                    Any = new List<ConditionDefinition>(),
                 },
                 Actions = new List<ActionDefinition>
                 {
-                    new SetValueAction 
-                    { 
-                        ValueExpression = "Temperature" 
-                    }
-                }
+                    new SetValueAction { ValueExpression = "Temperature" },
+                },
             };
 
             var analyzer = new DependencyAnalyzer();
@@ -88,18 +87,18 @@ namespace Pulsar.Tests.RuleValidation
                 {
                     All = new List<ConditionDefinition>
                     {
-                        new ComparisonCondition 
+                        new ComparisonCondition
                         {
                             Sensor = "Dummy",
                             Operator = ComparisonOperator.EqualTo, // Updated from 'Equals'
-                            Value = 1
-                        }
-                    }
+                            Value = 1,
+                        },
+                    },
                 },
                 Actions = new List<ActionDefinition>
                 {
-                    new SetValueAction { Key = "output", Value = 1.0 }
-                }
+                    new SetValueAction { Key = "output", Value = 1.0 },
+                },
             };
 
             // Act

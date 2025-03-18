@@ -16,7 +16,8 @@ namespace Pulsar.Compiler.Generation.Generators
     {
         private readonly ILogger _logger;
 
-        public MetadataGenerator(ILogger logger = null)
+        // Fix the CS8625 warning by making the logger parameter nullable
+        public MetadataGenerator(ILogger? logger = null)
         {
             _logger = logger ?? NullLogger.Instance;
         }

@@ -8,11 +8,12 @@ namespace Pulsar.Compiler.Exceptions
 {
     public class RuleCompilationException : Exception
     {
-        public string RuleName { get; }
+        public string RuleName { get; } = string.Empty; // Initialize to avoid CS8618
         public string? RuleSource { get; }
         public int? LineNumber { get; }
         public string? ErrorType { get; }
         public Dictionary<string, object>? Context { get; }
+        public string? SourceCode { get; private set; } // Add missing SourceCode property
 
         private static readonly ILogger _logger = LoggingConfig.GetLogger();
 
@@ -22,7 +23,8 @@ namespace Pulsar.Compiler.Exceptions
             string? ruleSource = null,
             int? lineNumber = null,
             string? errorType = "CompilationError",
-            Dictionary<string, object>? context = null)
+            Dictionary<string, object>? context = null
+        )
             : base(message)
         {
             RuleName = ruleName;
@@ -41,7 +43,8 @@ namespace Pulsar.Compiler.Exceptions
             string? ruleSource = null,
             int? lineNumber = null,
             string? errorType = "CompilationError",
-            Dictionary<string, object>? context = null)
+            Dictionary<string, object>? context = null
+        )
             : base(message, innerException)
         {
             RuleName = ruleName;
@@ -53,12 +56,41 @@ namespace Pulsar.Compiler.Exceptions
             LogError();
         }
 
+        public RuleCompilationException(string message, IDictionary<string, object>? context = null)
+            : base(message)
+        {
+            RuleName = string.Empty; // Set default for non-nullable property
+            // Fix CS8604: Ensure context is not null before creating Dictionary
+            Context =
+                context != null
+                    ? new Dictionary<string, object>(context)
+                    : new Dictionary<string, object>();
+
+            // Fix CS8601: Add proper null checks
+            if (context != null && context.TryGetValue("SourceCode", out var sourceCode))
+            {
+                SourceCode = sourceCode?.ToString();
+            }
+
+            if (
+                context != null
+                && context.TryGetValue("RuleName", out var ruleName)
+                && ruleName is string ruleName2
+            )
+            {
+                RuleName = ruleName2;
+            }
+
+            // Set default for ErrorType
+            ErrorType = "CompilationError";
+        }
+
         private void LogError()
         {
             var errorContext = new Dictionary<string, object>(Context)
             {
                 ["RuleName"] = RuleName,
-                ["ErrorType"] = ErrorType
+                ["ErrorType"] = ErrorType,
             };
 
             if (RuleSource != null)

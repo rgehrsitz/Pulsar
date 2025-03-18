@@ -2,9 +2,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
-using System.Diagnostics;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
 using Pulsar.Compiler.Models;
@@ -36,13 +36,16 @@ namespace Pulsar.Compiler.Config
         {
             try
             {
-                _logger.Information("Starting build for project: {ProjectName}", config.ProjectName);
+                _logger.Information(
+                    "Starting build for project: {ProjectName}",
+                    config.ProjectName
+                );
 
                 var result = new BuildResult
                 {
                     Success = true,
                     OutputPath = config.OutputPath,
-                    Metrics = new RuleMetrics()
+                    Metrics = new RuleMetrics(),
                 };
 
                 var compilerOptions = new CompilerOptions { BuildConfig = config };
@@ -67,7 +70,7 @@ namespace Pulsar.Compiler.Config
                 return new BuildResult
                 {
                     Success = false,
-                    Errors = new List<string> { ex.Message }.ToArray()
+                    Errors = new List<string> { ex.Message }.ToArray(),
                 };
             }
         }
@@ -76,31 +79,42 @@ namespace Pulsar.Compiler.Config
         {
             try
             {
-                _logger.Information("Starting async build for project: {ProjectName}", config.ProjectName);
+                _logger.Information(
+                    "Starting async build for project: {ProjectName}",
+                    config.ProjectName
+                );
 
                 // Ensure output directory exists
                 var outputDir = config.OutputDirectory ?? config.OutputPath;
                 if (string.IsNullOrEmpty(outputDir))
                 {
-                    throw new ArgumentException("Output directory is not specified in the configuration");
+                    throw new ArgumentException(
+                        "Output directory is not specified in the configuration"
+                    );
                 }
-                
+
                 Directory.CreateDirectory(outputDir);
 
                 var result = new BuildResult
                 {
                     Success = true,
                     OutputPath = outputDir,
-                    Metrics = new RuleMetrics()
+                    Metrics = new RuleMetrics(),
                 };
 
                 // Copy templates to output directory
-                _logger.Information("Copying templates to output directory: {OutputDir}", outputDir);
+                _logger.Information(
+                    "Copying templates to output directory: {OutputDir}",
+                    outputDir
+                );
                 _templateManager.CopyTemplates(outputDir);
 
                 // Generate runtime files
                 var compilerOptions = new CompilerOptions { BuildConfig = config };
-                var compilationResult = _pipeline.ProcessRules(config.RuleDefinitions, compilerOptions);
+                var compilationResult = _pipeline.ProcessRules(
+                    config.RuleDefinitions,
+                    compilerOptions
+                );
 
                 if (!compilationResult.Success)
                 {
@@ -131,8 +145,8 @@ namespace Pulsar.Compiler.Config
                         Arguments = $"build {projectPath} -c Release -v detailed",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
-                        UseShellExecute = false
-                    }
+                        UseShellExecute = false,
+                    },
                 };
 
                 process.Start();
@@ -142,7 +156,11 @@ namespace Pulsar.Compiler.Config
 
                 if (process.ExitCode != 0)
                 {
-                    _logger.Error("Build process failed with exit code {ExitCode}: {Error}", process.ExitCode, error);
+                    _logger.Error(
+                        "Build process failed with exit code {ExitCode}: {Error}",
+                        process.ExitCode,
+                        error
+                    );
                     result.Success = false;
                     result.Errors = new[] { $"Build process failed: {error}" };
                     return result;
@@ -154,11 +172,7 @@ namespace Pulsar.Compiler.Config
             catch (Exception ex)
             {
                 _logger.Error(ex, "Build failed with exception");
-                return new BuildResult
-                {
-                    Success = false,
-                    Errors = new[] { ex.Message }
-                };
+                return new BuildResult { Success = false, Errors = new[] { ex.Message } };
             }
         }
     }

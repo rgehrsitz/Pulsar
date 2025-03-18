@@ -12,7 +12,7 @@ namespace Beacon.Runtime.Interfaces
         /// Gets the count of rules managed by this coordinator
         /// </summary>
         int RuleCount { get; }
-        
+
         /// <summary>
         /// Gets the list of sensor names required by all rule groups
         /// </summary>
@@ -23,8 +23,6 @@ namespace Beacon.Runtime.Interfaces
         /// </summary>
         /// <param name="inputs">Dictionary of sensor values</param>
         /// <returns>Dictionary of output values</returns>
-        Task<Dictionary<string, object>> ExecuteRulesAsync(
-            Dictionary<string, object> inputs
-        );
+        Task<Dictionary<string, object>> ExecuteRulesAsync(Dictionary<string, object> inputs);
     }
 }

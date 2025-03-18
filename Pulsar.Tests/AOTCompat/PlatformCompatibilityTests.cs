@@ -23,7 +23,7 @@ namespace Pulsar.Tests.AOTCompat
         private readonly ITestOutputHelper _output;
         private readonly ILogger _logger;
         private readonly string _testOutputPath;
-        
+
         public PlatformCompatibilityTests(ITestOutputHelper output)
         {
             _output = output;
@@ -32,7 +32,7 @@ namespace Pulsar.Tests.AOTCompat
             _testOutputPath = Path.Combine(Path.GetTempPath(), $"PulsarAOTTest_{Guid.NewGuid():N}");
             Directory.CreateDirectory(_testOutputPath);
         }
-        
+
         [Theory]
         [InlineData("win-x64", "net9.0")]
         [InlineData("linux-x64", "net9.0")]
@@ -44,47 +44,70 @@ namespace Pulsar.Tests.AOTCompat
         public async Task Verify_CrossPlatformAOTCompatibility(string runtime, string framework)
         {
             _output.WriteLine($"Testing AOT compatibility for {runtime} on {framework}");
-            
+
             // Create test output directory for this platform
             var platformDir = Path.Combine(_testOutputPath, runtime);
             Directory.CreateDirectory(platformDir);
-            
+
             try
             {
                 // Generate test rules
                 var rulesFile = await GenerateTestRules(platformDir);
                 var configFile = await GenerateSystemConfig(platformDir);
-                
+
                 // Generate Beacon solution
-                var beacon = await GenerateBeaconSolution(rulesFile, configFile, platformDir, runtime);
+                var beacon = await GenerateBeaconSolution(
+                    rulesFile,
+                    configFile,
+                    platformDir,
+                    runtime
+                );
                 _output.WriteLine($"Beacon solution generation result: {beacon}");
-                
+
                 // Just verify the expected folder and solution file exist
                 var beaconDir = Path.Combine(platformDir, "Beacon");
                 var solutionFile = Path.Combine(beaconDir, "Beacon.sln");
                 Assert.True(Directory.Exists(beaconDir), "Beacon directory should exist");
                 Assert.True(File.Exists(solutionFile), "Beacon.sln file should exist");
-                
+
                 // Build with AOT
                 var buildResult = await BuildWithAOT(platformDir, runtime);
-                
+
                 // We consider the test passed if the build succeeds
                 // In CI environments, some platforms may not be able to build, so we log but don't fail
                 if (!buildResult)
                 {
-                    _output.WriteLine($"Warning: Failed to build for {runtime}. This may be expected in CI environments without proper toolchains.");
+                    _output.WriteLine(
+                        $"Warning: Failed to build for {runtime}. This may be expected in CI environments without proper toolchains."
+                    );
                 }
                 else
                 {
-                    _output.WriteLine($"Successfully built AOT-compatible executable for {runtime}");
-                    
+                    _output.WriteLine(
+                        $"Successfully built AOT-compatible executable for {runtime}"
+                    );
+
                     // Verify the publish output exists
-                    var publishDir = Path.Combine(platformDir, "Beacon", "Beacon.Runtime", "bin", "Release", framework, runtime, "publish");
+                    var publishDir = Path.Combine(
+                        platformDir,
+                        "Beacon",
+                        "Beacon.Runtime",
+                        "bin",
+                        "Release",
+                        framework,
+                        runtime,
+                        "publish"
+                    );
                     Assert.True(Directory.Exists(publishDir), "Publish directory should exist");
-                    
+
                     // Check for expected files based on runtime
-                    var executableName = runtime.StartsWith("win") ? "Beacon.Runtime.exe" : "Beacon.Runtime";
-                    Assert.True(File.Exists(Path.Combine(publishDir, executableName)), $"Executable {executableName} should exist");
+                    var executableName = runtime.StartsWith("win")
+                        ? "Beacon.Runtime.exe"
+                        : "Beacon.Runtime";
+                    Assert.True(
+                        File.Exists(Path.Combine(publishDir, executableName)),
+                        $"Executable {executableName} should exist"
+                    );
                 }
             }
             finally
@@ -96,72 +119,84 @@ namespace Pulsar.Tests.AOTCompat
                 }
                 catch
                 {
-                    _output.WriteLine($"Warning: Failed to clean up test directory {_testOutputPath}");
+                    _output.WriteLine(
+                        $"Warning: Failed to clean up test directory {_testOutputPath}"
+                    );
                 }
             }
         }
-        
+
         [Fact]
         public async Task Verify_AOTDependencyAttributesAreGenerated()
         {
             // Create test output directory
             var testDir = Path.Combine(_testOutputPath, "attributes-test");
             Directory.CreateDirectory(testDir);
-            
+
             try
             {
                 // Generate test rules
                 var rulesFile = await GenerateTestRules(testDir);
                 var configFile = await GenerateSystemConfig(testDir);
-                
+
                 // Generate Beacon solution
-                var beacon = await GenerateBeaconSolution(rulesFile, configFile, testDir, "win-x64");
+                var beacon = await GenerateBeaconSolution(
+                    rulesFile,
+                    configFile,
+                    testDir,
+                    "win-x64"
+                );
                 Assert.True(beacon, "Beacon solution generation should succeed");
-                
+
                 // Check for required attributes in Program.cs
                 var programCs = Path.Combine(testDir, "Beacon", "Beacon.Runtime", "Program.cs");
                 Assert.True(File.Exists(programCs), "Program.cs should exist");
-                
+
                 var programContent = await File.ReadAllTextAsync(programCs);
-                
+
                 // Output content for debugging
                 _output.WriteLine($"Program.cs content:\n{programContent}");
-                
+
                 // Check for AOT-specific attributes - make these optional for now
                 // We'll verify that the file exists and contains basic content
                 if (programContent.Contains("[assembly: DynamicDependency"))
                 {
                     _output.WriteLine("Found DynamicDependency attribute");
                 }
-                
+
                 if (programContent.Contains("[assembly: JsonSerializable"))
                 {
                     _output.WriteLine("Found JsonSerializable attribute");
                 }
-                
+
                 if (programContent.Contains("JsonSerializerContext"))
                 {
                     _output.WriteLine("Found JsonSerializerContext");
                 }
-                
+
                 // Just make sure the file contains basic expected Program content
                 Assert.Contains("namespace", programContent);
                 Assert.Contains("class Program", programContent);
                 Assert.Contains("Main", programContent);
-                
+
                 _output.WriteLine("Program.cs contains basic required content");
-                
+
                 // Check project file for trimming configuration
-                var projectFile = Path.Combine(testDir, "Beacon", "Beacon.Runtime", "Beacon.Runtime.csproj");
+                var projectFile = Path.Combine(
+                    testDir,
+                    "Beacon",
+                    "Beacon.Runtime",
+                    "Beacon.Runtime.csproj"
+                );
                 Assert.True(File.Exists(projectFile), "Beacon.Runtime.csproj should exist");
-                
+
                 var projectContent = await File.ReadAllTextAsync(projectFile);
-                
+
                 // Check for AOT and trimming settings
                 Assert.Contains("<PublishTrimmed>true</PublishTrimmed>", projectContent);
                 Assert.Contains("<TrimMode>", projectContent);
                 Assert.Contains("<IsTrimmable>true</IsTrimmable>", projectContent);
-                
+
                 _output.WriteLine("Project file contains required AOT and trimming settings");
             }
             finally
@@ -173,14 +208,17 @@ namespace Pulsar.Tests.AOTCompat
                 }
                 catch
                 {
-                    _output.WriteLine($"Warning: Failed to clean up test directory {_testOutputPath}");
+                    _output.WriteLine(
+                        $"Warning: Failed to clean up test directory {_testOutputPath}"
+                    );
                 }
             }
         }
-        
+
         private async Task<string> GenerateTestRules(string outputDir)
         {
-            var rulesContent = @"rules:
+            var rulesContent =
+                @"rules:
   - name: SimpleRule
     description: Simple test rule
     conditions:
@@ -205,15 +243,16 @@ namespace Pulsar.Tests.AOTCompat
       - set_value:
           key: output:result2
           value: 1";
-            
+
             var rulesPath = Path.Combine(outputDir, "test-rules.yaml");
             await File.WriteAllTextAsync(rulesPath, rulesContent);
             return rulesPath;
         }
-        
+
         private async Task<string> GenerateSystemConfig(string outputDir)
         {
-            var configContent = @"version: 1
+            var configContent =
+                @"version: 1
 validSensors:
   - input:a
   - input:b
@@ -235,34 +274,43 @@ redis:
   ssl: false
   allowAdmin: false
 bufferCapacity: 100";
-            
+
             var configPath = Path.Combine(outputDir, "system_config.yaml");
             await File.WriteAllTextAsync(configPath, configContent);
             return configPath;
         }
-        
-        private async Task<bool> GenerateBeaconSolution(string rulesFile, string configFile, string outputDir, string runtime)
+
+        private async Task<bool> GenerateBeaconSolution(
+            string rulesFile,
+            string configFile,
+            string outputDir,
+            string runtime
+        )
         {
             try
             {
-                _logger.LogInformation("Generating Beacon solution in {OutputDir} for {Runtime}", outputDir, runtime);
-                
+                _logger.LogInformation(
+                    "Generating Beacon solution in {OutputDir} for {Runtime}",
+                    outputDir,
+                    runtime
+                );
+
                 // Read rule and config files
                 var rulesContent = await File.ReadAllTextAsync(rulesFile);
                 var configContent = await File.ReadAllTextAsync(configFile);
-                
+
                 _logger.LogInformation("Rule content: {Rules}", rulesContent);
                 _logger.LogInformation("Config content: {Config}", configContent);
-                
+
                 var options = new Dictionary<string, string>
                 {
                     { "rules", rulesFile },
                     { "config", configFile },
                     { "output", outputDir },
                     { "target", runtime },
-                    { "verbose", "true" }
+                    { "verbose", "true" },
                 };
-                
+
                 // Build config
                 var buildConfig = new BuildConfig
                 {
@@ -270,48 +318,64 @@ bufferCapacity: 100";
                     RulesPath = rulesFile,
                     Target = runtime,
                     ProjectName = "Generated",
-                    TargetFramework = "net9.0"
+                    TargetFramework = "net9.0",
                 };
-                
+
                 // Parse config
                 var configParser = new YamlDotNet.Serialization.DeserializerBuilder()
                     .Build()
                     .Deserialize<Pulsar.Compiler.Models.SystemConfig>(configContent);
                 buildConfig.SystemConfig = configParser;
-                
+
                 // Update valid sensors
                 buildConfig.SystemConfig.ValidSensors = new List<string>
                 {
-                    "input:a", "input:b", "input:c", 
-                    "output:result1", "output:result2", "output:result3",
+                    "input:a",
+                    "input:b",
+                    "input:c",
+                    "output:result1",
+                    "output:result2",
+                    "output:result3",
                     // Include required sensors
-                    "temperature_f", "temperature_c", "humidity", "pressure"
+                    "temperature_f",
+                    "temperature_c",
+                    "humidity",
+                    "pressure",
                 };
-                
-                _logger.LogInformation("Valid sensors: {Sensors}", string.Join(", ", buildConfig.SystemConfig.ValidSensors));
-                
+
+                _logger.LogInformation(
+                    "Valid sensors: {Sensors}",
+                    string.Join(", ", buildConfig.SystemConfig.ValidSensors)
+                );
+
                 // Parse rules with allowInvalidSensors=true
-                try {
+                try
+                {
                     _logger.LogInformation("Parsing rules...");
                     var dslParser = new DslParser();
                     var ruleDefinitions = dslParser.ParseRules(
-                        rulesContent, 
-                        buildConfig.SystemConfig.ValidSensors, 
+                        rulesContent,
+                        buildConfig.SystemConfig.ValidSensors,
                         Path.GetFileName(rulesFile),
-                        allowInvalidSensors: true);
-                    
+                        allowInvalidSensors: true
+                    );
+
                     buildConfig.RuleDefinitions = ruleDefinitions.ToList();
-                    _logger.LogInformation("Successfully parsed {Count} rules", buildConfig.RuleDefinitions.Count);
-                    
+                    _logger.LogInformation(
+                        "Successfully parsed {Count} rules",
+                        buildConfig.RuleDefinitions.Count
+                    );
+
                     // Use BeaconBuildOrchestrator
                     _logger.LogInformation("Building Beacon solution...");
                     var orchestrator = new Pulsar.Compiler.Config.BeaconBuildOrchestrator();
                     var result = await orchestrator.BuildBeaconAsync(buildConfig);
-                    
+
                     _logger.LogInformation("Build result: {Success}", result.Success);
                     return result.Success;
                 }
-                catch (Exception ex) {
+                catch (Exception ex)
+                {
                     _logger.LogError(ex, "Error during rule parsing or solution generation");
                     throw;
                 }
@@ -322,15 +386,15 @@ bufferCapacity: 100";
                 return false;
             }
         }
-        
+
         private async Task<bool> BuildWithAOT(string solutionDir, string runtime)
         {
             try
             {
                 _logger.LogInformation("Building AOT-compatible executable for {Runtime}", runtime);
-                
+
                 var beaconDir = Path.Combine(solutionDir, "Beacon");
-                
+
                 // Use dotnet publish to build with AOT
                 var process = new Process
                 {
@@ -341,15 +405,15 @@ bufferCapacity: 100";
                         WorkingDirectory = Path.Combine(beaconDir, "Beacon.Runtime"),
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
-                        UseShellExecute = false
-                    }
+                        UseShellExecute = false,
+                    },
                 };
-                
+
                 process.Start();
                 var output = await process.StandardOutput.ReadToEndAsync();
                 var error = await process.StandardError.ReadToEndAsync();
                 await process.WaitForExitAsync();
-                
+
                 if (process.ExitCode != 0)
                 {
                     _logger.LogWarning("Build failed with exit code {ExitCode}", process.ExitCode);
@@ -357,7 +421,7 @@ bufferCapacity: 100";
                     _logger.LogWarning("Error: {Error}", error);
                     return false;
                 }
-                
+
                 return true;
             }
             catch (Exception ex)

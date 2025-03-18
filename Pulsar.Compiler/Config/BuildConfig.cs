@@ -15,7 +15,7 @@ namespace Pulsar.Compiler.Config
         public string AssemblyName { get; set; } // Added for AOT compilation
         public required string TargetFramework { get; set; }
         public required string RulesPath { get; set; } = string.Empty;
-        
+
         // Added for handling list of rule definitions directly
         public List<RuleDefinition> RuleDefinitions { get; set; } = new List<RuleDefinition>();
         public SystemConfig? SystemConfig { get; set; }
@@ -40,7 +40,7 @@ namespace Pulsar.Compiler.Config
         public int BufferCapacity { get; set; } = 100;
         public string AdditionalUsings { get; set; } = "";
         public int MaxLinesPerFile { get; set; } = 1000;
-        
+
         public BuildConfig()
         {
             // Default constructor

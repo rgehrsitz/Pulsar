@@ -27,6 +27,9 @@ namespace Beacon.Runtime.Rules
         /// </summary>
         /// <param name="inputs">Dictionary of sensor values</param>
         /// <param name="outputs">Dictionary of output values</param>
-        public abstract void Evaluate(Dictionary<string, double> inputs, Dictionary<string, double> outputs);
+        public abstract void Evaluate(
+            Dictionary<string, double> inputs,
+            Dictionary<string, double> outputs
+        );
     }
 }

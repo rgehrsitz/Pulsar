@@ -10,8 +10,8 @@ using Beacon.Runtime.Interfaces;
 using Beacon.Runtime.Models;
 using Polly;
 using Polly.Retry;
-using StackExchange.Redis;
 using Serilog;
+using StackExchange.Redis;
 
 namespace Beacon.Runtime.Services;
 
@@ -58,7 +58,7 @@ public class RedisService : IRedisService, IDisposable
             SyncTimeout = config.SyncTimeout,
             Password = config.Password,
             Ssl = config.Ssl,
-            AllowAdmin = config.AllowAdmin
+            AllowAdmin = config.AllowAdmin,
         };
 
         // Add all endpoints
@@ -74,7 +74,10 @@ public class RedisService : IRedisService, IDisposable
             .Or<RedisServerException>()
             .WaitAndRetryAsync(
                 config.RetryCount,
-                retryAttempt => TimeSpan.FromMilliseconds(config.RetryBaseDelayMs * Math.Pow(2, retryAttempt - 1)),
+                retryAttempt =>
+                    TimeSpan.FromMilliseconds(
+                        config.RetryBaseDelayMs * Math.Pow(2, retryAttempt - 1)
+                    ),
                 (ex, timeSpan, retryCount, _) =>
                 {
                     // Log the retry but throttle the logging to avoid excessive messages
@@ -93,10 +96,10 @@ public class RedisService : IRedisService, IDisposable
 
         // Create the metrics
         _metrics = new RedisMetrics();
-        
+
         // Create the health check
         _healthCheck = new RedisHealthCheck(this, _logger);
-        
+
         // Create connections in the background
         Task.Run(InitializeConnectionsAsync);
     }
@@ -112,12 +115,18 @@ public class RedisService : IRedisService, IDisposable
                 {
                     try
                     {
-                        _connectionPool[i] = await ConnectionMultiplexer.ConnectAsync(_redisOptions);
+                        _connectionPool[i] = await ConnectionMultiplexer.ConnectAsync(
+                            _redisOptions
+                        );
                         _logger.Debug("Redis connection {ConnectionNumber} established", i);
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ex, "Failed to establish Redis connection {ConnectionNumber}", i);
+                        _logger.Error(
+                            ex,
+                            "Failed to establish Redis connection {ConnectionNumber}",
+                            i
+                        );
                     }
                 }
             }
@@ -125,8 +134,11 @@ public class RedisService : IRedisService, IDisposable
             {
                 _connectionLock.Release();
             }
-            
-            _logger.Information("Redis connection pool initialized with {PoolSize} connections", _connectionPool.Length);
+
+            _logger.Information(
+                "Redis connection pool initialized with {PoolSize} connections",
+                _connectionPool.Length
+            );
         }
         catch (Exception ex)
         {
@@ -139,12 +151,15 @@ public class RedisService : IRedisService, IDisposable
         // Get a random connection from the pool
         var index = _random.Next(0, _connectionPool.Length);
         var connection = _connectionPool[index];
-        
+
         // If the connection is null or not connected, try to create a new one
         if (connection == null || !connection.IsConnected)
         {
-            _logger.Warning("Redis connection {ConnectionNumber} is not available, attempting to reconnect", index);
-            
+            _logger.Warning(
+                "Redis connection {ConnectionNumber} is not available, attempting to reconnect",
+                index
+            );
+
             try
             {
                 connection = ConnectionMultiplexer.Connect(_redisOptions);
@@ -153,29 +168,39 @@ public class RedisService : IRedisService, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Failed to reestablish Redis connection {ConnectionNumber}", index);
-                
+                _logger.Error(
+                    ex,
+                    "Failed to reestablish Redis connection {ConnectionNumber}",
+                    index
+                );
+
                 // Try to find any working connection in the pool
                 for (int i = 0; i < _connectionPool.Length; i++)
                 {
-                    if (i == index) continue; // Skip the one we just tried
-                    
+                    if (i == index)
+                        continue; // Skip the one we just tried
+
                     var fallbackConnection = _connectionPool[i];
                     if (fallbackConnection != null && fallbackConnection.IsConnected)
                     {
-                        _logger.Information("Using fallback Redis connection {ConnectionNumber}", i);
+                        _logger.Information(
+                            "Using fallback Redis connection {ConnectionNumber}",
+                            i
+                        );
                         return fallbackConnection;
                     }
                 }
-                
+
                 // If we couldn't find a working connection, create a new one synchronously
                 // This is a last resort and will block until a connection is established
-                _logger.Warning("No working Redis connections available, creating a new one synchronously");
+                _logger.Warning(
+                    "No working Redis connections available, creating a new one synchronously"
+                );
                 connection = ConnectionMultiplexer.Connect(_redisOptions);
                 _connectionPool[index] = connection;
             }
         }
-        
+
         return connection;
     }
 
@@ -189,7 +214,7 @@ public class RedisService : IRedisService, IDisposable
                 return true;
             }
         }
-        
+
         _lastErrorTime[errorKey] = now;
         return false;
     }
@@ -205,13 +230,13 @@ public class RedisService : IRedisService, IDisposable
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
-                
+
                 var keys = await db.ExecuteAsync("KEYS", $"{INPUT_PREFIX}*");
                 var result = new Dictionary<string, object>();
-                
+
                 if (keys.IsNull)
                     return result;
-                
+
                 foreach (var key in (RedisResult[])keys)
                 {
                     var keyStr = key.ToString();
@@ -229,7 +254,7 @@ public class RedisService : IRedisService, IDisposable
                         }
                     }
                 }
-                
+
                 return result;
             });
         }
@@ -247,7 +272,7 @@ public class RedisService : IRedisService, IDisposable
     {
         if (outputs == null || outputs.Count == 0)
             return;
-            
+
         try
         {
             await _retryPolicy.ExecuteAsync(async () =>
@@ -256,16 +281,16 @@ public class RedisService : IRedisService, IDisposable
                 var db = connection.GetDatabase();
                 var batch = db.CreateBatch();
                 var tasks = new List<Task>();
-                
+
                 foreach (var (key, value) in outputs)
                 {
                     var redisKey = $"{OUTPUT_PREFIX}{key}";
                     tasks.Add(batch.StringSetAsync(redisKey, value.ToString()));
                 }
-                
+
                 batch.Execute();
                 await Task.WhenAll(tasks);
-                
+
                 return true;
             });
         }
@@ -278,7 +303,9 @@ public class RedisService : IRedisService, IDisposable
     /// <summary>
     /// Gets specific sensor values with their timestamps from Redis
     /// </summary>
-    public async Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(IEnumerable<string> sensorKeys)
+    public async Task<Dictionary<string, (double Value, DateTime Timestamp)>> GetSensorValuesAsync(
+        IEnumerable<string> sensorKeys
+    )
     {
         try
         {
@@ -288,14 +315,14 @@ public class RedisService : IRedisService, IDisposable
                 var db = connection.GetDatabase();
                 var result = new Dictionary<string, (double Value, DateTime Timestamp)>();
                 var now = DateTime.UtcNow;
-                
+
                 foreach (var key in sensorKeys)
                 {
                     try
                     {
                         var redisKey = $"{INPUT_PREFIX}{key}";
                         var value = await db.StringGetAsync(redisKey);
-                        
+
                         if (!value.IsNull && double.TryParse(value, out var doubleValue))
                         {
                             result[key] = (doubleValue, now);
@@ -306,7 +333,7 @@ public class RedisService : IRedisService, IDisposable
                         _logger.Warning(ex, "Failed to get value for sensor {SensorKey}", key);
                     }
                 }
-                
+
                 return result;
             });
         }
@@ -324,7 +351,7 @@ public class RedisService : IRedisService, IDisposable
     {
         if (outputs == null || outputs.Count == 0)
             return;
-            
+
         try
         {
             await _retryPolicy.ExecuteAsync(async () =>
@@ -333,22 +360,22 @@ public class RedisService : IRedisService, IDisposable
                 var db = connection.GetDatabase();
                 var batch = db.CreateBatch();
                 var tasks = new List<Task>();
-                
+
                 foreach (var (key, value) in outputs)
                 {
                     var redisKey = $"{OUTPUT_PREFIX}{key}";
                     tasks.Add(batch.StringSetAsync(redisKey, value.ToString()));
-                    
+
                     // Also store in history
                     var historyKey = $"{HISTORY_PREFIX}{key}";
                     var entry = $"{DateTime.UtcNow.Ticks}:{value}";
                     tasks.Add(batch.ListRightPushAsync(historyKey, entry));
                     tasks.Add(batch.ListTrimAsync(historyKey, 0, 999)); // Keep last 1000 entries
                 }
-                
+
                 batch.Execute();
                 await Task.WhenAll(tasks);
-                
+
                 return true;
             });
         }
@@ -369,26 +396,28 @@ public class RedisService : IRedisService, IDisposable
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
-                
+
                 var historyKey = $"{HISTORY_PREFIX}{sensor}";
                 var entries = await db.ListRangeAsync(historyKey, -count, -1);
-                
+
                 var result = new List<(double Value, DateTime Timestamp)>();
-                
+
                 foreach (var entry in entries)
                 {
                     var parts = entry.ToString().Split(':');
                     if (parts.Length == 2)
                     {
-                        if (long.TryParse(parts[0], out var ticks) && 
-                            double.TryParse(parts[1], out var value))
+                        if (
+                            long.TryParse(parts[0], out var ticks)
+                            && double.TryParse(parts[1], out var value)
+                        )
                         {
                             var timestamp = new DateTime(ticks, DateTimeKind.Utc);
                             result.Add((value, timestamp));
                         }
                     }
                 }
-                
+
                 return result.ToArray();
             });
         }
@@ -407,13 +436,13 @@ public class RedisService : IRedisService, IDisposable
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
-                
+
                 var startTime = DateTime.UtcNow;
                 var result = await db.StringSetAsync(key, value, expiry);
                 var duration = DateTime.UtcNow - startTime;
-                
+
                 _metrics.RecordOperation("SET", duration);
-                
+
                 return result;
             });
         }
@@ -436,13 +465,13 @@ public class RedisService : IRedisService, IDisposable
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
-                
+
                 var startTime = DateTime.UtcNow;
                 var result = await db.HashSetAsync(key, field, value);
                 var duration = DateTime.UtcNow - startTime;
-                
+
                 _metrics.RecordOperation("HSET", duration);
-                
+
                 return result;
             });
         }
@@ -465,13 +494,13 @@ public class RedisService : IRedisService, IDisposable
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
-                
+
                 var startTime = DateTime.UtcNow;
                 var hashEntries = await db.HashGetAllAsync(key);
                 var duration = DateTime.UtcNow - startTime;
-                
+
                 _metrics.RecordOperation("HGETALL", duration);
-                
+
                 return hashEntries.ToDictionary(
                     he => he.Name.ToString(),
                     he => he.Value.ToString()
@@ -497,13 +526,13 @@ public class RedisService : IRedisService, IDisposable
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
-                
+
                 var startTime = DateTime.UtcNow;
                 var value = await db.StringGetAsync(key);
                 var duration = DateTime.UtcNow - startTime;
-                
+
                 _metrics.RecordOperation("GET", duration);
-                
+
                 return value.IsNull ? null : value.ToString();
             });
         }
@@ -527,13 +556,13 @@ public class RedisService : IRedisService, IDisposable
             {
                 var connection = GetConnection();
                 var subscriber = connection.GetSubscriber();
-                
+
                 var startTime = DateTime.UtcNow;
                 var result = await subscriber.PublishAsync(channel, message);
                 var duration = DateTime.UtcNow - startTime;
-                
+
                 _metrics.RecordOperation("PUBLISH", duration);
-                
+
                 return result;
             });
         }
@@ -550,13 +579,14 @@ public class RedisService : IRedisService, IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
-        
+        if (_disposed)
+            return;
+
         foreach (var connection in _connectionPool)
         {
             connection?.Dispose();
         }
-        
+
         _connectionLock.Dispose();
         _disposed = true;
     }

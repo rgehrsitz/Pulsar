@@ -85,7 +85,7 @@ namespace Pulsar.Compiler.Generation
             var embeddedConfig = GenerateEmbeddedConfig(buildConfig);
             embeddedConfig.Namespace = buildConfig.Namespace;
             generatedFiles.Add(embeddedConfig);
-            
+
             // Generate Program.cs with AOT compatibility attributes
             var programFile = GenerateProgramFile(buildConfig);
             programFile.Namespace = buildConfig.Namespace;
@@ -230,10 +230,12 @@ namespace Pulsar.Compiler.Generation
             string systemConfigJson = "{}";
             if (buildConfig.SystemConfig != null)
             {
-                try 
+                try
                 {
                     // Escape double quotes to make it a valid C# string literal
-                    systemConfigJson = System.Text.Json.JsonSerializer.Serialize(buildConfig.SystemConfig);
+                    systemConfigJson = System.Text.Json.JsonSerializer.Serialize(
+                        buildConfig.SystemConfig
+                    );
                     systemConfigJson = systemConfigJson.Replace("\"", "\\\"");
                 }
                 catch (Exception ex)
@@ -245,32 +247,36 @@ namespace Pulsar.Compiler.Generation
             string content = "// Embedded config for Pulsar Compiler" + Environment.NewLine;
             content += "using System;" + Environment.NewLine;
             content += Environment.NewLine;
-            
+
             content += $"namespace {buildConfig.Namespace}.Generated" + Environment.NewLine;
             content += "{" + Environment.NewLine;
             content += "    public static class EmbeddedConfig" + Environment.NewLine;
             content += "    {" + Environment.NewLine;
-            content += $"        public const string ConfigJson = \"{systemConfigJson}\";" + Environment.NewLine;
+            content +=
+                $"        public const string ConfigJson = \"{systemConfigJson}\";"
+                + Environment.NewLine;
             content += "    }" + Environment.NewLine;
             content += "}" + Environment.NewLine;
-            
+
             return new Pulsar.Compiler.Models.GeneratedFileInfo
             {
                 FileName = "EmbeddedConfig.cs",
                 Content = content,
             };
         }
-        
+
         public GeneratedFileInfo GenerateProgramFile(BuildConfig buildConfig)
         {
             var sb = new StringBuilder();
-            
-            // Add file header 
+
+            // Add file header
             sb.AppendLine("// Auto-generated Program.cs");
             sb.AppendLine("// Generated: " + DateTime.UtcNow.ToString("O"));
-            sb.AppendLine("// This file contains the main entry point and AOT compatibility attributes");
+            sb.AppendLine(
+                "// This file contains the main entry point and AOT compatibility attributes"
+            );
             sb.AppendLine();
-            
+
             // Add standard using statements
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
@@ -286,25 +292,33 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine($"using {buildConfig.Namespace}.Interfaces;");
             sb.AppendLine($"using {buildConfig.Namespace}.Models;");
             sb.AppendLine();
-            
+
             // Add namespace and class declaration
             sb.AppendLine($"namespace {buildConfig.Namespace}");
             sb.AppendLine("{");
-            
+
             // Add serialization context class
             sb.AppendLine("    [JsonSerializable(typeof(Dictionary<string, object>))]");
             sb.AppendLine("    [JsonSerializable(typeof(Models.RuntimeConfig))]");
             sb.AppendLine("    [JsonSerializable(typeof(Models.RedisConfiguration))]");
-            sb.AppendLine("    public partial class SerializationContext : JsonSerializerContext { }");
+            sb.AppendLine(
+                "    public partial class SerializationContext : JsonSerializerContext { }"
+            );
             sb.AppendLine();
-            
+
             sb.AppendLine("    public class Program");
             sb.AppendLine("    {");
-            
+
             // Add main method with AOT attributes
-            sb.AppendLine("        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuntimeOrchestrator))]");
-            sb.AppendLine("        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RedisService))]");
-            sb.AppendLine("        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuleCoordinator))]");
+            sb.AppendLine(
+                "        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuntimeOrchestrator))]"
+            );
+            sb.AppendLine(
+                "        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RedisService))]"
+            );
+            sb.AppendLine(
+                "        [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RuleCoordinator))]"
+            );
             sb.AppendLine("        public static async Task Main(string[] args)");
             sb.AppendLine("        {");
             sb.AppendLine("            // Configure logging");
@@ -319,32 +333,48 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("            {");
             sb.AppendLine("                // Load configuration");
             sb.AppendLine("                var config = RuntimeConfig.LoadFromEnvironment();");
-            sb.AppendLine("                logger.LogInformation(\"Loaded configuration with {SensorCount} sensors\", config.ValidSensors.Count);");
+            sb.AppendLine(
+                "                logger.LogInformation(\"Loaded configuration with {SensorCount} sensors\", config.ValidSensors.Count);"
+            );
             sb.AppendLine();
             sb.AppendLine("                // Initialize Redis service");
             sb.AppendLine("                var redisConfig = config.Redis;");
             sb.AppendLine();
             sb.AppendLine("                // Create buffer manager for temporal rules");
-            sb.AppendLine("                var bufferManager = new RingBufferManager(config.BufferCapacity);");
+            sb.AppendLine(
+                "                var bufferManager = new RingBufferManager(config.BufferCapacity);"
+            );
             sb.AppendLine();
             sb.AppendLine("                // Initialize runtime orchestrator");
-            sb.AppendLine("                using var redisService = new RedisService(redisConfig, loggerFactory);");
-            sb.AppendLine("                var orchestratorLogger = loggerFactory.CreateLogger<RuntimeOrchestrator>();");
-            sb.AppendLine("                var ruleCoordinatorLogger = loggerFactory.CreateLogger<RuleCoordinator>();");
+            sb.AppendLine(
+                "                using var redisService = new RedisService(redisConfig, loggerFactory);"
+            );
+            sb.AppendLine(
+                "                var orchestratorLogger = loggerFactory.CreateLogger<RuntimeOrchestrator>();"
+            );
+            sb.AppendLine(
+                "                var ruleCoordinatorLogger = loggerFactory.CreateLogger<RuleCoordinator>();"
+            );
             sb.AppendLine("                var orchestrator = new RuntimeOrchestrator(");
             sb.AppendLine("                    redisService, ");
             sb.AppendLine("                    orchestratorLogger, ");
-            sb.AppendLine("                    new RuleCoordinator(redisService, ruleCoordinatorLogger, bufferManager)");
+            sb.AppendLine(
+                "                    new RuleCoordinator(redisService, ruleCoordinatorLogger, bufferManager)"
+            );
             sb.AppendLine("                );");
             sb.AppendLine();
             sb.AppendLine("                // Start the orchestrator");
             sb.AppendLine("                await orchestrator.StartAsync();");
             sb.AppendLine("");
             sb.AppendLine("                // Wait for Ctrl+C");
-            sb.AppendLine("                var cancellationSource = new CancellationTokenSource();");
+            sb.AppendLine(
+                "                var cancellationSource = new CancellationTokenSource();"
+            );
             sb.AppendLine("                Console.CancelKeyPress += (sender, e) =>");
             sb.AppendLine("                {");
-            sb.AppendLine("                    logger.LogInformation(\"Application shutdown requested\");");
+            sb.AppendLine(
+                "                    logger.LogInformation(\"Application shutdown requested\");"
+            );
             sb.AppendLine("                    cancellationSource.Cancel();");
             sb.AppendLine("                    e.Cancel = true;");
             sb.AppendLine("                };");
@@ -352,7 +382,9 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("                // Wait until cancellation is requested");
             sb.AppendLine("                try");
             sb.AppendLine("                {");
-            sb.AppendLine("                    await Task.Delay(Timeout.Infinite, cancellationSource.Token);");
+            sb.AppendLine(
+                "                    await Task.Delay(Timeout.Infinite, cancellationSource.Token);"
+            );
             sb.AppendLine("                }");
             sb.AppendLine("                catch (OperationCanceledException)");
             sb.AppendLine("                {");
@@ -364,22 +396,26 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");
-            sb.AppendLine("                logger.LogError(ex, \"Fatal error in Beacon Runtime Engine\");");
+            sb.AppendLine(
+                "                logger.LogError(ex, \"Fatal error in Beacon Runtime Engine\");"
+            );
             sb.AppendLine("                Environment.ExitCode = 1;");
             sb.AppendLine("            }");
             sb.AppendLine("            finally");
             sb.AppendLine("            {");
-            sb.AppendLine("                logger.LogInformation(\"Beacon Runtime Engine stopped\");");
+            sb.AppendLine(
+                "                logger.LogInformation(\"Beacon Runtime Engine stopped\");"
+            );
             sb.AppendLine("            }");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
             sb.AppendLine("}");
-            
+
             return new Pulsar.Compiler.Models.GeneratedFileInfo
             {
                 FileName = "Program.cs",
                 Content = sb.ToString(),
-                Namespace = buildConfig.Namespace
+                Namespace = buildConfig.Namespace,
             };
         }
 

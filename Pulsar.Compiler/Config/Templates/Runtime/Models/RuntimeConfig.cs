@@ -13,13 +13,13 @@ namespace Beacon.Runtime.Models
     {
         [JsonInclude]
         public List<string> ValidSensors { get; set; } = new List<string>();
-        
+
         [JsonInclude]
         public int CycleTime { get; set; } = 100;
-        
+
         [JsonInclude]
         public int BufferCapacity { get; set; } = 100;
-        
+
         [JsonInclude]
         public RedisConfiguration Redis { get; set; } = new RedisConfiguration();
 
@@ -68,32 +68,62 @@ namespace Beacon.Runtime.Models
                 config.Redis.Password = redisPassword;
             }
 
-            if (int.TryParse(Environment.GetEnvironmentVariable("REDIS_POOL_SIZE"), out var poolSize))
+            if (
+                int.TryParse(
+                    Environment.GetEnvironmentVariable("REDIS_POOL_SIZE"),
+                    out var poolSize
+                )
+            )
             {
                 config.Redis.PoolSize = poolSize;
             }
 
-            if (int.TryParse(Environment.GetEnvironmentVariable("REDIS_RETRY_COUNT"), out var retryCount))
+            if (
+                int.TryParse(
+                    Environment.GetEnvironmentVariable("REDIS_RETRY_COUNT"),
+                    out var retryCount
+                )
+            )
             {
                 config.Redis.RetryCount = retryCount;
             }
 
-            if (int.TryParse(Environment.GetEnvironmentVariable("REDIS_RETRY_DELAY_MS"), out var retryDelay))
+            if (
+                int.TryParse(
+                    Environment.GetEnvironmentVariable("REDIS_RETRY_DELAY_MS"),
+                    out var retryDelay
+                )
+            )
             {
                 config.Redis.RetryBaseDelayMs = retryDelay;
             }
 
-            if (int.TryParse(Environment.GetEnvironmentVariable("REDIS_CONNECT_TIMEOUT"), out var connectTimeout))
+            if (
+                int.TryParse(
+                    Environment.GetEnvironmentVariable("REDIS_CONNECT_TIMEOUT"),
+                    out var connectTimeout
+                )
+            )
             {
                 config.Redis.ConnectTimeout = connectTimeout;
             }
 
-            if (int.TryParse(Environment.GetEnvironmentVariable("REDIS_SYNC_TIMEOUT"), out var syncTimeout))
+            if (
+                int.TryParse(
+                    Environment.GetEnvironmentVariable("REDIS_SYNC_TIMEOUT"),
+                    out var syncTimeout
+                )
+            )
             {
                 config.Redis.SyncTimeout = syncTimeout;
             }
 
-            if (int.TryParse(Environment.GetEnvironmentVariable("REDIS_KEEPALIVE"), out var keepAlive))
+            if (
+                int.TryParse(
+                    Environment.GetEnvironmentVariable("REDIS_KEEPALIVE"),
+                    out var keepAlive
+                )
+            )
             {
                 config.Redis.KeepAlive = keepAlive;
             }
@@ -103,19 +133,31 @@ namespace Beacon.Runtime.Models
                 config.Redis.Ssl = ssl;
             }
 
-            if (bool.TryParse(Environment.GetEnvironmentVariable("REDIS_ALLOW_ADMIN"), out var allowAdmin))
+            if (
+                bool.TryParse(
+                    Environment.GetEnvironmentVariable("REDIS_ALLOW_ADMIN"),
+                    out var allowAdmin
+                )
+            )
             {
                 config.Redis.AllowAdmin = allowAdmin;
             }
 
             // Load cycle time from environment variables
-            if (int.TryParse(Environment.GetEnvironmentVariable("CYCLE_TIME_MS"), out var cycleTime))
+            if (
+                int.TryParse(Environment.GetEnvironmentVariable("CYCLE_TIME_MS"), out var cycleTime)
+            )
             {
                 config.CycleTime = cycleTime;
             }
 
             // Load buffer capacity from environment variables
-            if (int.TryParse(Environment.GetEnvironmentVariable("BUFFER_CAPACITY"), out var bufferCapacity))
+            if (
+                int.TryParse(
+                    Environment.GetEnvironmentVariable("BUFFER_CAPACITY"),
+                    out var bufferCapacity
+                )
+            )
             {
                 config.BufferCapacity = bufferCapacity;
             }

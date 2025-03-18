@@ -23,17 +23,17 @@ namespace Pulsar.Compiler.Commands
         /// <summary>
         /// Run tests for the provided rules and configuration files
         /// </summary>
-        public async Task<bool> RunAsync(Dictionary<string, string> options)
+        public async Task<bool> RunAsync(Dictionary<string, string?> options)
         {
             _logger.Information("Starting Pulsar test command...");
 
-            string rulesPath = options.GetValueOrDefault("rules", null);
-            string configPath = options.GetValueOrDefault("config", null);
-            string outputDir = options.GetValueOrDefault(
-                "output",
-                Path.Combine(Path.GetTempPath(), "PulsarTest")
-            );
-            bool cleanOutput = options.GetValueOrDefault("clean", "true").ToLower() == "true";
+            string? rulesPath = options.GetValueOrDefault("rules", null);
+            string? configPath = options.GetValueOrDefault("config", null);
+            string outputDir =
+                options.GetValueOrDefault("output", Path.Combine(Path.GetTempPath(), "PulsarTest"))
+                ?? Path.Combine(Path.GetTempPath(), "PulsarTest");
+            bool cleanOutput =
+                (options.GetValueOrDefault("clean", "true") ?? "true").ToLower() == "true";
 
             // Validate options
             if (string.IsNullOrEmpty(rulesPath))

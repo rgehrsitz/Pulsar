@@ -32,7 +32,7 @@ namespace Pulsar.Compiler.Models
                     FilePath = path,
                     Content = content,
                     LastModified = fileInfo.LastWriteTimeUtc,
-                    Hash = hash
+                    Hash = hash,
                 };
             }
             catch (Exception ex)

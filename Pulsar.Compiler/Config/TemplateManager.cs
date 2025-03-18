@@ -9,12 +9,12 @@ namespace Pulsar.Compiler.Config
     public class TemplateManager
     {
         private readonly ILogger _logger;
-        
+
         public TemplateManager()
         {
             _logger = LoggingConfig.GetLogger().ForContext<TemplateManager>();
         }
-        
+
         public void GenerateSolutionFile(string path)
         {
             var content =
@@ -23,7 +23,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""Generated"", ""Generated.csproj"", ""{" + Guid.NewGuid().ToString().ToUpper() + @"}""
+Project(""{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}"") = ""Generated"", ""Generated.csproj"", ""{"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}""
 EndProject
 Global
     GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,10 +33,18 @@ Global
         Release|Any CPU = Release|Any CPU
     EndGlobalSection
     GlobalSection(ProjectConfigurationPlatforms) = postSolution
-        {" + Guid.NewGuid().ToString().ToUpper() + @"}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-        {" + Guid.NewGuid().ToString().ToUpper() + @"}.Debug|Any CPU.Build.0 = Debug|Any CPU
-        {" + Guid.NewGuid().ToString().ToUpper() + @"}.Release|Any CPU.ActiveCfg = Release|Any CPU
-        {" + Guid.NewGuid().ToString().ToUpper() + @"}.Release|Any CPU.Build.0 = Release|Any CPU
+        {"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {"
+                + Guid.NewGuid().ToString().ToUpper()
+                + @"}.Release|Any CPU.Build.0 = Release|Any CPU
     EndGlobalSection
 EndGlobal";
 
@@ -50,19 +60,19 @@ EndGlobal";
             sb.AppendLine("    <ImplicitUsings>enable</ImplicitUsings>");
             sb.AppendLine("    <Nullable>enable</Nullable>");
             sb.AppendLine("    <OutputType>Exe</OutputType>");
-            
+
             // Always add AOT compatibility properties
             sb.AppendLine("    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>");
             sb.AppendLine("    <IsTrimmable>true</IsTrimmable>");
             sb.AppendLine("    <TrimmerSingleWarn>false</TrimmerSingleWarn>");
-            
+
             if (buildConfig.StandaloneExecutable)
             {
                 sb.AppendLine("    <PublishSingleFile>true</PublishSingleFile>");
                 sb.AppendLine("    <SelfContained>true</SelfContained>");
                 sb.AppendLine($"    <RuntimeIdentifier>{buildConfig.Target}</RuntimeIdentifier>");
             }
-            
+
             if (buildConfig.OptimizeOutput)
             {
                 sb.AppendLine("    <PublishReadyToRun>true</PublishReadyToRun>");
@@ -70,21 +80,25 @@ EndGlobal";
                 sb.AppendLine("    <TrimMode>link</TrimMode>");
                 sb.AppendLine("    <TrimmerRemoveSymbols>true</TrimmerRemoveSymbols>");
                 sb.AppendLine("    <DebuggerSupport>false</DebuggerSupport>");
-                sb.AppendLine("    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>");
+                sb.AppendLine(
+                    "    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>"
+                );
                 sb.AppendLine("    <EnableUnsafeUTF7Encoding>false</EnableUnsafeUTF7Encoding>");
                 sb.AppendLine("    <InvariantGlobalization>true</InvariantGlobalization>");
-                sb.AppendLine("    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>");
+                sb.AppendLine(
+                    "    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>"
+                );
             }
-            
+
             sb.AppendLine("  </PropertyGroup>");
             sb.AppendLine();
-            
+
             // Add trimming configuration
             sb.AppendLine("  <ItemGroup>");
             sb.AppendLine("    <TrimmerRootDescriptor Include=\"trimming.xml\" />");
             sb.AppendLine("  </ItemGroup>");
             sb.AppendLine();
-            
+
             // Add package references
             sb.AppendLine("  <ItemGroup>");
             sb.AppendLine(
@@ -94,10 +108,18 @@ EndGlobal";
             sb.AppendLine("    <PackageReference Include=\"Polly\" Version=\"8.3.0\" />");
             sb.AppendLine("    <PackageReference Include=\"prometheus-net\" Version=\"8.2.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"4.2.0\" />");
-            sb.AppendLine("    <PackageReference Include=\"Serilog.Enrichers.Thread\" Version=\"3.1.0\" />");
-            sb.AppendLine("    <PackageReference Include=\"Serilog.Formatting.Compact\" Version=\"2.0.0\" />");
-            sb.AppendLine("    <PackageReference Include=\"Serilog.Sinks.Console\" Version=\"5.0.1\" />");
-            sb.AppendLine("    <PackageReference Include=\"Serilog.Sinks.File\" Version=\"5.0.0\" />");
+            sb.AppendLine(
+                "    <PackageReference Include=\"Serilog.Enrichers.Thread\" Version=\"3.1.0\" />"
+            );
+            sb.AppendLine(
+                "    <PackageReference Include=\"Serilog.Formatting.Compact\" Version=\"2.0.0\" />"
+            );
+            sb.AppendLine(
+                "    <PackageReference Include=\"Serilog.Sinks.Console\" Version=\"5.0.1\" />"
+            );
+            sb.AppendLine(
+                "    <PackageReference Include=\"Serilog.Sinks.File\" Version=\"5.0.0\" />"
+            );
             sb.AppendLine(
                 "    <PackageReference Include=\"StackExchange.Redis\" Version=\"2.8.16\" />"
             );
@@ -140,11 +162,7 @@ EndGlobal";
                 outputPath,
                 "Interfaces/IRuleCoordinator.cs"
             );
-            CopyTemplateFile(
-                "Interfaces/IRuleGroup.cs",
-                outputPath,
-                "Interfaces/IRuleGroup.cs"
-            );
+            CopyTemplateFile("Interfaces/IRuleGroup.cs", outputPath, "Interfaces/IRuleGroup.cs");
             CopyTemplateFile(
                 "Interfaces/ICompiledRules.cs",
                 outputPath,
@@ -168,11 +186,11 @@ EndGlobal";
                 "Services/RedisMonitoring.cs"
             );
             CopyTemplateFile(
-                "Runtime/Services/RedisLoggingConfiguration.cs", 
+                "Runtime/Services/RedisLoggingConfiguration.cs",
                 outputPath,
                 "Services/RedisLoggingConfiguration.cs"
             );
-            
+
             // Copy buffer templates
             CopyTemplateFile(
                 "Runtime/Buffers/CircularBuffer.cs",
@@ -191,11 +209,7 @@ EndGlobal";
             );
 
             // Copy trimming.xml file for AOT compatibility
-            CopyTemplateFile(
-                "trimming.xml",
-                outputPath,
-                "trimming.xml"
-            );
+            CopyTemplateFile("trimming.xml", outputPath, "trimming.xml");
         }
 
         /// <summary>
@@ -204,31 +218,32 @@ EndGlobal";
         public void CopyTemplates(string outputDirectory)
         {
             _logger.Information("Copying templates to {Destination}", outputDirectory);
-            
+
             // Create output directory if it doesn't exist
             if (!Directory.Exists(outputDirectory))
             {
                 Directory.CreateDirectory(outputDirectory);
             }
-            
+
             try
             {
                 // Generate project files at the output directory
-                var config = new BuildConfig { 
+                var config = new BuildConfig
+                {
                     OutputPath = outputDirectory,
                     ProjectName = "RuntimeTest",
                     RulesPath = outputDirectory,
                     TargetFramework = "net9.0",
                     StandaloneExecutable = false,
                     OptimizeOutput = false,
-                    Target = "linux-x64"
+                    Target = "linux-x64",
                 };
-                
+
                 GenerateProjectFiles(outputDirectory, config);
-                
+
                 // Generate specifically named project file
                 GenerateProjectFile(Path.Combine(outputDirectory, "RuntimeTest.csproj"), config);
-                
+
                 _logger.Information("Templates copied successfully");
             }
             catch (Exception ex)
@@ -258,13 +273,21 @@ EndGlobal";
                 // Copy the template file
                 var templateContent = File.ReadAllText(templatePath);
                 File.WriteAllText(destinationPath, templateContent);
-                
-                _logger.Debug("Copied template file: {Source} to {Destination}", templateRelativePath, destinationPath);
+
+                _logger.Debug(
+                    "Copied template file: {Source} to {Destination}",
+                    templateRelativePath,
+                    destinationPath
+                );
             }
             catch (FileNotFoundException ex)
             {
                 // Log the error but continue - some templates might be optional
-                _logger.Warning("Could not find template file: {TemplatePath}. {Message}", templateRelativePath, ex.Message);
+                _logger.Warning(
+                    "Could not find template file: {TemplatePath}. {Message}",
+                    templateRelativePath,
+                    ex.Message
+                );
             }
         }
 
@@ -285,8 +308,8 @@ EndGlobal";
                 // Path from assembly base directory
                 Path.Combine(
                     AppDomain.CurrentDomain.BaseDirectory,
-                    "Config", 
-                    "Templates", 
+                    "Config",
+                    "Templates",
                     templateFileName
                 ),
                 // Path relative to project root (go up from bin directory)
@@ -324,9 +347,12 @@ EndGlobal";
                 }
             }
 
-            _logger.Error("Template file not found: {TemplateFile}. Searched in: {Paths}", 
-                templateFileName, string.Join(", ", possiblePaths));
-                
+            _logger.Error(
+                "Template file not found: {TemplateFile}. Searched in: {Paths}",
+                templateFileName,
+                string.Join(", ", possiblePaths)
+            );
+
             throw new FileNotFoundException(
                 $"Template file not found: {templateFileName}. Searched in: {string.Join(", ", possiblePaths)}"
             );

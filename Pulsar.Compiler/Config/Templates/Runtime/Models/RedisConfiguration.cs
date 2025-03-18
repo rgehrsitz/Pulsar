@@ -60,7 +60,7 @@ namespace Beacon.Runtime.Models
         [JsonPropertyName("allowAdmin")]
         [YamlMember(Alias = "allowAdmin")]
         public bool AllowAdmin { get; set; } = false;
-        
+
         /// <summary>
         /// Converts the configuration to Redis connection options
         /// </summary>
@@ -75,7 +75,7 @@ namespace Beacon.Runtime.Models
                 KeepAlive = KeepAlive,
                 AbortOnConnectFail = false,
                 AllowAdmin = AllowAdmin,
-                Ssl = Ssl
+                Ssl = Ssl,
             };
 
             foreach (var endpoint in Endpoints)

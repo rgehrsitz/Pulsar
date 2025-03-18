@@ -46,12 +46,14 @@ namespace Beacon.Runtime.Services
             _db = _redis.GetDatabase();
         }
 
-        public async Task<Dictionary<string, double>> GetSensorValuesAsync(IEnumerable<string> sensorNames)
+        public async Task<Dictionary<string, double>> GetSensorValuesAsync(
+            IEnumerable<string> sensorNames
+        )
         {
             return await _retryPolicy.ExecuteAsync(async () =>
             {
                 var result = new Dictionary<string, double>();
-                
+
                 foreach (var sensor in sensorNames)
                 {
                     var value = await _db.StringGetAsync($"input:{sensor}");
@@ -60,7 +62,7 @@ namespace Beacon.Runtime.Services
                         result[sensor] = doubleValue;
                     }
                 }
-                
+
                 return result;
             });
         }

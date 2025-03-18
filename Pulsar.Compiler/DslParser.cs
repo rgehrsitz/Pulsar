@@ -28,7 +28,7 @@ namespace Pulsar.Compiler.Parsers
                 .WithNodeDeserializer(new YamlNodeDeserializer())
                 .IgnoreUnmatchedProperties()
                 .WithDuplicateKeyChecking() // Add this to catch duplicate keys
-                .WithAttemptingUnquotedStringTypeDeserialization()  // Add this line
+                .WithAttemptingUnquotedStringTypeDeserialization() // Add this line
                 .Build();
             _logger.Debug("DslParser initialized");
         }
@@ -74,7 +74,9 @@ namespace Pulsar.Compiler.Parsers
                         if (start.HasValue)
                         {
                             rule.LineNumber = (int)start.Value.Line; // Cast long to int
-                            rule.OriginalText = parser.Current?.ToString();
+
+                            // ACTUAL CODE CHANGE: Fix the null reference assignment by using null coalescing operator
+                            rule.OriginalText = parser.Current?.ToString() ?? string.Empty;
                         }
                         return true;
                     }
@@ -158,7 +160,7 @@ namespace Pulsar.Compiler.Parsers
                         Conditions = ConvertConditions(rule.Conditions),
                         Actions = ConvertActions(rule.Actions ?? new List<ActionListItem>()),
                         SourceFile = _currentFile,
-                        LineNumber = rule.LineNumber
+                        LineNumber = rule.LineNumber,
                     };
 
                     ruleDefinitions.Add(ruleDefinition);
@@ -168,24 +170,41 @@ namespace Pulsar.Compiler.Parsers
             }
             catch (YamlException ex)
             {
-                _logger.Error(ex, "YAML parsing error in {FileName}: {Message}", fileName, ex.Message);
+                _logger.Error(
+                    ex,
+                    "YAML parsing error in {FileName}: {Message}",
+                    fileName,
+                    ex.Message
+                );
                 throw new ValidationException($"Error parsing YAML: {ex.Message}", ex);
             }
             catch (Exception ex) when (ex is not ValidationException)
             {
-                _logger.Error(ex, "Unexpected error parsing YAML in {FileName}: {Message}", fileName, ex.Message);
+                _logger.Error(
+                    ex,
+                    "Unexpected error parsing YAML in {FileName}: {Message}",
+                    fileName,
+                    ex.Message
+                );
                 throw new ValidationException($"Error parsing YAML: {ex.Message}", ex);
             }
         }
 
-        private void ValidateRule(Rule rule, IEnumerable<string> validSensors, bool allowInvalidSensors = false)
+        private void ValidateRule(
+            Rule rule,
+            IEnumerable<string> validSensors,
+            bool allowInvalidSensors = false
+        )
         {
             if (string.IsNullOrEmpty(rule.Name))
             {
                 throw new ValidationException("Rule name is required");
             }
 
-            if (rule.Conditions == null || (rule.Conditions.All == null && rule.Conditions.Any == null))
+            if (
+                rule.Conditions == null
+                || (rule.Conditions.All == null && rule.Conditions.Any == null)
+            )
             {
                 throw new ValidationException(
                     $"Rule '{rule.Name}' must have at least one condition"
@@ -194,9 +213,7 @@ namespace Pulsar.Compiler.Parsers
 
             if (rule.Actions == null || !rule.Actions.Any())
             {
-                throw new ValidationException(
-                    $"Rule '{rule.Name}' must have at least one action"
-                );
+                throw new ValidationException($"Rule '{rule.Name}' must have at least one action");
             }
 
             if (!allowInvalidSensors)
@@ -205,7 +222,10 @@ namespace Pulsar.Compiler.Parsers
             }
             else
             {
-                _logger.Information("Skipping sensor validation for rule {RuleName} (AllowInvalidSensors=true)", rule.Name);
+                _logger.Information(
+                    "Skipping sensor validation for rule {RuleName} (AllowInvalidSensors=true)",
+                    rule.Name
+                );
             }
         }
 
@@ -215,30 +235,46 @@ namespace Pulsar.Compiler.Parsers
             if (validSensors == null)
             {
                 validSensors = new List<string>();
-                _logger.Warning("ValidSensors was null in ValidateSensors, creating new empty list");
+                _logger.Warning(
+                    "ValidSensors was null in ValidateSensors, creating new empty list"
+                );
             }
 
             // Add required sensors if the list is empty or doesn't contain them
             if (validSensors.Count == 0)
             {
                 _logger.Warning("ValidSensors list is empty, adding default required sensors");
-                validSensors.AddRange(new[] { "temperature_f", "temperature_c", "humidity", "pressure" });
+                validSensors.AddRange(
+                    new[] { "temperature_f", "temperature_c", "humidity", "pressure" }
+                );
             }
             else
             {
                 // Check if required sensors are in the list
-                var requiredSensors = new[] { "temperature_f", "temperature_c", "humidity", "pressure" };
+                var requiredSensors = new[]
+                {
+                    "temperature_f",
+                    "temperature_c",
+                    "humidity",
+                    "pressure",
+                };
                 foreach (var sensor in requiredSensors)
                 {
                     if (!validSensors.Contains(sensor))
                     {
                         validSensors.Add(sensor);
-                        _logger.Warning("Added missing required sensor in ValidateSensors: {Sensor}", sensor);
+                        _logger.Warning(
+                            "Added missing required sensor in ValidateSensors: {Sensor}",
+                            sensor
+                        );
                     }
                 }
             }
 
-            _logger.Information("Valid sensors for validation: {ValidSensors}", String.Join(", ", validSensors));
+            _logger.Information(
+                "Valid sensors for validation: {ValidSensors}",
+                String.Join(", ", validSensors)
+            );
             _logger.Debug(
                 "Validating sensors for rule: {RuleName}. Valid sensors provided: {ValidSensors}",
                 rule.Name,
@@ -252,16 +288,23 @@ namespace Pulsar.Compiler.Parsers
             {
                 foreach (var condition in rule.Conditions.All)
                 {
-                    if (condition.ConditionDetails.Type == "threshold_over_time"
-                        || condition.ConditionDetails.Type == "comparison")
+                    if (
+                        condition.ConditionDetails.Type == "threshold_over_time"
+                        || condition.ConditionDetails.Type == "comparison"
+                    )
                     {
-                        _logger.Information("Found sensor from condition: {Sensor}", condition.ConditionDetails.Sensor);
+                        _logger.Information(
+                            "Found sensor from condition: {Sensor}",
+                            condition.ConditionDetails.Sensor
+                        );
                         allSensors.Add(condition.ConditionDetails.Sensor);
                     }
                     else if (condition.ConditionDetails.Type == "expression")
                     {
                         // For expressions, we'll validate the expression syntax separately
-                        _logger.Debug($"Expression condition: {condition.ConditionDetails.Expression}");
+                        _logger.Debug(
+                            $"Expression condition: {condition.ConditionDetails.Expression}"
+                        );
                     }
                 }
             }
@@ -270,15 +313,22 @@ namespace Pulsar.Compiler.Parsers
             {
                 foreach (var condition in rule.Conditions.Any)
                 {
-                    if (condition.ConditionDetails.Type == "threshold_over_time"
-                        || condition.ConditionDetails.Type == "comparison")
+                    if (
+                        condition.ConditionDetails.Type == "threshold_over_time"
+                        || condition.ConditionDetails.Type == "comparison"
+                    )
                     {
-                        _logger.Information("Found sensor from condition: {Sensor}", condition.ConditionDetails.Sensor);
+                        _logger.Information(
+                            "Found sensor from condition: {Sensor}",
+                            condition.ConditionDetails.Sensor
+                        );
                         allSensors.Add(condition.ConditionDetails.Sensor);
                     }
                     else if (condition.ConditionDetails.Type == "expression")
                     {
-                        _logger.Debug($"Expression condition: {condition.ConditionDetails.Expression}");
+                        _logger.Debug(
+                            $"Expression condition: {condition.ConditionDetails.Expression}"
+                        );
                     }
                 }
             }
@@ -291,8 +341,13 @@ namespace Pulsar.Compiler.Parsers
 
             if (invalidSensors.Any())
             {
-                _logger.Error("Invalid sensors found: {InvalidSensors}", String.Join(", ", invalidSensors));
-                throw new ValidationException($"Invalid sensors found: {String.Join(", ", invalidSensors)}");
+                _logger.Error(
+                    "Invalid sensors found: {InvalidSensors}",
+                    String.Join(", ", invalidSensors)
+                );
+                throw new ValidationException(
+                    $"Invalid sensors found: {String.Join(", ", invalidSensors)}"
+                );
             }
 
             // Note: We don't validate action keys as they are outputs, not inputs
@@ -349,7 +404,9 @@ namespace Pulsar.Compiler.Parsers
                 case "expression":
                     if (string.IsNullOrEmpty(condition.ConditionDetails.Expression))
                     {
-                        throw new ValidationException("Expression condition must specify an expression");
+                        throw new ValidationException(
+                            "Expression condition must specify an expression"
+                        );
                     }
                     return new ExpressionCondition
                     {
@@ -360,15 +417,21 @@ namespace Pulsar.Compiler.Parsers
                 case "threshold_over_time":
                     if (string.IsNullOrEmpty(condition.ConditionDetails.Sensor))
                     {
-                        throw new ValidationException("Threshold over time condition must specify a sensor");
+                        throw new ValidationException(
+                            "Threshold over time condition must specify a sensor"
+                        );
                     }
                     if (condition.ConditionDetails.Duration <= 0)
                     {
-                        throw new ValidationException("Threshold over time condition must specify a positive duration");
+                        throw new ValidationException(
+                            "Threshold over time condition must specify a positive duration"
+                        );
                     }
-                    if (condition.ConditionDetails.Threshold <= 0)  // Check Threshold instead of Value
+                    if (condition.ConditionDetails.Threshold <= 0) // Check Threshold instead of Value
                     {
-                        throw new ValidationException("Threshold over time condition must specify a positive threshold");
+                        throw new ValidationException(
+                            "Threshold over time condition must specify a positive threshold"
+                        );
                     }
 
                     var mode = ThresholdOverTimeMode.Strict; // Default to strict mode
@@ -378,7 +441,9 @@ namespace Pulsar.Compiler.Parsers
                         {
                             "strict" => ThresholdOverTimeMode.Strict,
                             "extended" => ThresholdOverTimeMode.Extended,
-                            _ => throw new ValidationException($"Invalid temporal mode: {condition.ConditionDetails.Mode}. Must be 'strict' or 'extended'.")
+                            _ => throw new ValidationException(
+                                $"Invalid temporal mode: {condition.ConditionDetails.Mode}. Must be 'strict' or 'extended'."
+                            ),
                         };
                     }
 
@@ -386,14 +451,14 @@ namespace Pulsar.Compiler.Parsers
                     {
                         Type = ConditionType.ThresholdOverTime,
                         Sensor = condition.ConditionDetails.Sensor,
-                        Threshold = condition.ConditionDetails.Threshold,  // Use Threshold instead of Value
+                        Threshold = condition.ConditionDetails.Threshold, // Use Threshold instead of Value
                         Duration = condition.ConditionDetails.Duration,
-                        Mode = mode
+                        Mode = mode,
                     };
 
                 case "group":
                     var group = new ConditionGroup { Type = ConditionType.Group };
-                    
+
                     if (condition.ConditionDetails.All != null)
                     {
                         foreach (var subCondition in condition.ConditionDetails.All)
@@ -410,15 +475,22 @@ namespace Pulsar.Compiler.Parsers
                         }
                     }
 
-                    if ((group.All == null || !group.All.Any()) && (group.Any == null || !group.Any.Any()))
+                    if (
+                        (group.All == null || !group.All.Any())
+                        && (group.Any == null || !group.Any.Any())
+                    )
                     {
-                        throw new ValidationException("Group condition must have at least one condition in All or Any");
+                        throw new ValidationException(
+                            "Group condition must have at least one condition in All or Any"
+                        );
                     }
 
                     return group;
 
                 default:
-                    throw new ValidationException($"Unsupported condition type: {condition.ConditionDetails.Type}");
+                    throw new ValidationException(
+                        $"Unsupported condition type: {condition.ConditionDetails.Type}"
+                    );
             }
         }
 
@@ -432,7 +504,9 @@ namespace Pulsar.Compiler.Parsers
                 "less_than_or_equal" or "lte" or "<=" => ComparisonOperator.LessThanOrEqual,
                 "equal_to" or "eq" or "==" => ComparisonOperator.EqualTo,
                 "not_equal_to" or "ne" or "!=" => ComparisonOperator.NotEqualTo,
-                _ => throw new ValidationException($"Invalid operator: {op}. Must be one of: greater_than, less_than, greater_than_or_equal, less_than_or_equal, equal_to, not_equal_to")
+                _ => throw new ValidationException(
+                    $"Invalid operator: {op}. Must be one of: greater_than, less_than, greater_than_or_equal, less_than_or_equal, equal_to, not_equal_to"
+                ),
             };
         }
 
@@ -553,7 +627,7 @@ namespace Pulsar.Compiler.Parsers
         public string Sensor { get; set; } = string.Empty;
         public string Operator { get; set; } = string.Empty;
         public double Value { get; set; }
-        public double Threshold { get; set; }  // Add this field
+        public double Threshold { get; set; } // Add this field
         public string Expression { get; set; } = string.Empty;
         public int Duration { get; set; }
         public string Mode { get; set; } = string.Empty;
