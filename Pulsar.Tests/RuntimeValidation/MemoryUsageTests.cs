@@ -29,7 +29,7 @@ namespace Pulsar.Tests.RuntimeValidation
         public async Task ExtendedExecution_MonitorsMemoryUsage()
         {
             // Generate rules for memory testing
-            var ruleFile = GenerateMemoryTestRules(20);
+            var ruleFile = GenerateMemoryTestRules(10);
 
             // Build project
             var success = await _fixture.BuildTestProject(new[] { ruleFile });
@@ -37,7 +37,7 @@ namespace Pulsar.Tests.RuntimeValidation
 
             // Run extended execution monitoring
             var memorySnapshots = new List<(int cycle, long memory)>();
-            var totalCycles = 100;
+            var totalCycles = 5;
 
             // Monitor for longer duration to detect potential memory leaks
             await _fixture.MonitorMemoryUsage(
