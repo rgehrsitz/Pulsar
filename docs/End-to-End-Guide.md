@@ -134,6 +134,23 @@ This will create a directory structure in `MyBeacon/` containing:
   - `Beacon.Runtime/` - The runtime project
   - `Beacon.Tests/` - Test project
 
+### Version Control Considerations
+
+When working with Pulsar and Beacon in a version-controlled environment, follow these best practices:
+
+1. **Include in Version Control**:
+   - Rule definition files (YAML)
+   - System configuration files (YAML)
+   - Custom scripts for running the compiler
+   - Documentation
+
+2. **Exclude from Version Control**:
+   - Generated output directories (e.g., `MyBeacon/`)
+   - Build artifacts (bin, obj folders)
+   - Log files
+   
+The standard `.gitignore` for Pulsar already excludes these generated directories. If you need to share generated code with others, consider documenting the exact command used to generate it rather than committing the generated files themselves.
+
 ## 4. Building the Solution
 
 Build the generated Beacon solution:
@@ -381,9 +398,15 @@ mkdir -p PulsarDist
 cp -r Pulsar.Compiler/bin/Release/net9.0/<runtime>/publish/* PulsarDist/
 cp -r Pulsar.Compiler/Config/Templates PulsarDist/Pulsar.Compiler/Config/
 
+# Create examples directory
+mkdir -p PulsarDist/examples/
+
 # 4. Include example files for reference
-cp TestData/sample-rules.yaml PulsarDist/
-cp system_config.yaml PulsarDist/
+cp Examples/BasicRules/temperature_rules.yaml PulsarDist/examples/
+cp Examples/BasicRules/system_config.yaml PulsarDist/examples/
+cp Examples/BasicRules/reference_config.yaml PulsarDist/examples/
+cp Examples/BasicRules/test_run.sh PulsarDist/examples/
+cp Examples/README.md PulsarDist/examples/
 ```
 
 You can now zip this folder and deploy it to any compatible system. The templates will be accessible from the expected relative paths.

@@ -61,14 +61,16 @@ Performance benchmarks for rule evaluation.
 Example implementations and use cases.
 
 **Contains:**
-- Sample rule definitions
-- Configuration examples
-- Demo implementations
+- Sample rule definitions (YAML files)
+- Configuration examples (YAML files)
+- Shell scripts to demonstrate running the compiler
 
 **Guidelines:**
-- The `output` directories are temporary and regenerated during test runs
+- Only include source files (YAML, scripts) in version control
+- All output directories are excluded from version control and regenerated during test runs
 - Keep examples simple and focused on demonstrating specific features
 - Include clear documentation on how to run each example
+- Use the README.md files to explain the purpose and usage of examples
 
 ### TestData
 Test data used for validation and testing.

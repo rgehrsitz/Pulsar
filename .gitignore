@@ -84,8 +84,6 @@ log*.txt
 /Generated/
 /Examples/BasicRules/logs/
 /Examples/BasicRules/output/
-# Exception: Allow our fixed implementation example
-!/Examples/BasicRules/output/fixed3/
 /TestBeacon/
 
 # Pulsar-specific output directories

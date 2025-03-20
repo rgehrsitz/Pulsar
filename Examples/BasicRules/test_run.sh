@@ -4,9 +4,12 @@ set -e
 echo "=== Testing Pulsar Commands ==="
 echo ""
 
-# Clean output directory
+# Clean output directory - output is excluded from version control
 rm -rf output
 mkdir -p output
+
+echo "Note: Generated output will be placed in the ./output directory, which is excluded from version control."
+echo ""
 
 echo "=== Testing Test Command ==="
 echo "Running test command with system config..."
