@@ -1,7 +1,7 @@
 # AOT Implementation
 
 ## Overview
-Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The previous **Pulsar.Runtime** project has been deprecated, and its relevant classes and methods have been **migrated into Pulsar.Compiler**. This refactoring effort ensures that Pulsar functions as a **code generation tool** that outputs a complete, **standalone C# project** named **Beacon** that contains all required runtime functionality, including Redis data integration, rule evaluation, and error handling.
+Pulsar has successfully evolved into a fully **AOT-compatible** rules evaluation system. The transition from the runtime library approach to a template-based code generation approach is now complete. The previous **Pulsar.Runtime** project has been deprecated, and all its functionality has been **migrated into templates** within **Pulsar.Compiler/Config/Templates**. This refactoring ensures that Pulsar functions as a **code generation tool** that outputs a complete, **standalone C# project** named **Beacon** that contains all required runtime functionality, including Redis data integration, rule evaluation, and error handling.
 
 ## Goals
 - **AOT Compatibility**: Ensure the generated project supports **AOT compilation** and produces a fully standalone executable.
@@ -43,49 +43,62 @@ Pulsar is evolving into a fully **AOT-compatible** rules evaluation system. The 
 ## Implementation Status
 
 ### Completed
-- Basic project structure and code generation
+- Complete transition from Runtime to Templates approach
+- Template-based code generation with AOT compatibility
 - Rule group organization and code generation
-- Temporal data caching implementation
+- Temporal data caching implementation with object value support
 - Redis service integration with connection pooling
 - Health monitoring and metrics collection
 - Error handling and retry mechanisms
 - Logging using Microsoft.Extensions.Logging
 - Namespace and serialization fixes
 - SendMessage method implementation
-- Object value support in CircularBuffer
 - JSON serialization for AOT compatibility
+- Examples directory cleanup and organization
+- Comprehensive test suite for all components
 
 ### In Progress
-- Comprehensive testing of generated code
-- Performance optimization
-- Documentation updates
+- Documentation updates to reflect current system state
+- Performance optimization for large rule sets
+- Enhanced validation for complex rule dependencies
 
 ### Pending
 - CI/CD integration
 - Deployment automation
 - Advanced monitoring and alerting
 
-## Recent Fixes
+## Completed Improvements
 
-1. **Namespace and Serialization Fixes**
-   - Removed references to non-existent Generated namespace in Program.cs template
-   - Removed Generated namespace import from BeaconTemplateManager.cs
-   - Added JSON Serialization Context for AOT serialization in Program.cs template
-   - Added proper JsonSerializable attributes for commonly serialized types
+1. **Template-Based Code Generation**
+   - Completed migration of all runtime components to templates
+   - Organized templates in Pulsar.Compiler/Config/Templates
+   - Ensured all templates are AOT-compatible
+   - Standardized template structure for consistency
 
-2. **Rule Generation Fixes**
-   - Created RuleGroupGeneratorFixed class that includes SendMessage method
-   - Created proper namespace for EmbeddedConfig
+2. **Namespace and Serialization Enhancements**
+   - Implemented JSON Serialization Context for AOT compatibility
+   - Added proper JsonSerializable attributes for all serialized types
+   - Standardized namespaces across all generated code
+   - Eliminated reflection-based serialization
+
+3. **Rule Generation Improvements**
+   - Implemented RuleGroupGenerator with SendMessage support
+   - Created proper namespace organization for all generated code
    - Added SystemConfigJson constant for AOT compatibility
-   - Created CodeGeneratorFixed class that uses the improved rule generators
-   - Created BeaconBuildOrchestratorFixed with improved code generators and template managers
+   - Enhanced code generators with improved error handling
+   - Optimized BeaconBuildOrchestrator for better performance
 
-3. **Object Value Support**
-   - Modified RingBufferManager to handle generic object values instead of just doubles
-   - Added new GetValues(string, TimeSpan) method for temporal filtering with duration
-   - Updated buffer storage from `Queue<(DateTime, double)>` to `Queue<(DateTime, object)>`
-   - Changed TimestampedValue struct to use object instead of double
-   - Added proper Convert.ToDouble calls in threshold comparisons
+4. **Object Value Support in Temporal Buffer**
+   - Enhanced RingBufferManager to handle generic object values
+   - Added time-based filtering capabilities
+   - Improved memory efficiency in buffer implementation
+   - Added proper type conversion for threshold comparisons
+
+5. **Examples and Documentation**
+   - Cleaned up Examples directory
+   - Added comprehensive README files
+   - Updated documentation to reflect current implementation
+   - Ensured all examples follow best practices
 
 ## Project Structure
 

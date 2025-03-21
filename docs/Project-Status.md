@@ -2,7 +2,7 @@
 
 ## Current Status as of March 2025
 
-The Pulsar/Beacon project has successfully implemented an AOT-compatible rules evaluation system. This document provides a summary of the current status, recent fixes, and next steps.
+The Pulsar/Beacon project has successfully implemented an AOT-compatible rules evaluation system with a complete transition from the runtime library approach to a template-based code generation approach. This document provides a summary of the current status, recent fixes, and next steps.
 
 ## Completed Work
 
@@ -47,6 +47,13 @@ The Pulsar/Beacon project has successfully implemented an AOT-compatible rules e
    - Created performance benchmarks for large rule sets
    - Implemented AOT compatibility tests across platforms
 
+8. **Repository Cleanup**
+   - Completed transition from Runtime library to Templates approach
+   - Removed all generated output directories from version control
+   - Updated .gitignore to exclude all output directories
+   - Created comprehensive README files for Examples directory
+   - Ensured only source files (YAML, scripts) are kept in version control
+
 ## Recent Fixes
 
 ### BuildConfig Compatibility
@@ -82,20 +89,21 @@ The Pulsar/Beacon project has successfully implemented an AOT-compatible rules e
 
 ## In Progress
 
-1. **Testing**
+1. **Documentation Updates**
+   - Updating all markdown files to reflect the current state of the system
+   - Ensuring consistent terminology and references across all documents
+   - Creating detailed deployment guides for different environments
+   - Adding examples of common rule patterns and best practices
+
+2. **Testing**
    - Implementing additional tests for edge cases
    - Testing with various rule sets and configurations
    - Validating AOT compatibility across different platforms
 
-2. **Performance Optimization**
+3. **Performance Optimization**
    - Optimizing rule evaluation for large rule sets
    - Fine-tuning Redis connection pooling settings
    - Reducing memory usage and garbage collection pressure
-
-3. **Documentation**
-   - Updating documentation to reflect the current state
-   - Creating detailed user guides for system deployment
-   - Adding examples of common rule patterns
 
 ## Pending Work
 
@@ -118,15 +126,16 @@ The Pulsar/Beacon project has successfully implemented an AOT-compatible rules e
 
 ### Short-Term (1-2 Weeks)
 
-1. **Complete Testing Suite**
+1. **Complete Documentation Updates**
+   - Update all markdown files to reflect current system state
+   - Ensure consistent terminology across all documents
+   - Verify all code examples match current implementation
+   - Update cross-references between documents
+
+2. **Complete Testing Suite**
    - Finalize the test suite for all components
    - Implement integration tests for the complete system
    - Add performance benchmarks
-
-2. **Finalize Documentation**
-   - Complete all user guides and documentation
-   - Create deployment guides for different environments
-   - Document all configuration options and best practices
 
 3. **Perform Final Validation**
    - Validate AOT compatibility on all target platforms
@@ -169,24 +178,26 @@ The Pulsar/Beacon project has successfully implemented an AOT-compatible rules e
 
 ## Implementation Approach
 
-For a long-term solution, we need to:
+With the transition from Runtime to Templates now complete, our focus is on refinement and optimization:
 
-1. Update the BuildConfig class to include the missing properties:
-   ```csharp
-   public bool GenerateTestProject { get; set; } = true;
-   public bool CreateSeparateDirectory { get; set; } = true;
-   public string SolutionName { get; set; } = "Beacon";
-   ```
+1. **Maintain Template-Based Approach**
+   - Continue using the template-based code generation approach
+   - Keep templates in Pulsar.Compiler/Config/Templates as the source of truth
+   - Ensure all templates are AOT-compatible
 
-2. Continue using System.Text.Json instead of Newtonsoft.Json.
+2. **Standardize Serialization**
+   - Continue using System.Text.Json instead of Newtonsoft.Json for AOT compatibility
+   - Ensure all serialization contexts are properly defined
 
-3. Update the CompilationResult class to include a Manifest property, or adjust our code to use the available properties.
+3. **Enhance Code Generation**
+   - Support all action types with proper validation
+   - Ensure proper expression handling across all rule types
+   - Generate optimized code for different deployment scenarios
 
-4. Merge the fixed implementations back into the main codebase once they're stable.
-
-5. Enhance the code generation to support all action types and ensure proper expression handling.
-
-6. Improve the sensor validation process to be more robust and provide better error messages.
+4. **Improve Validation**
+   - Make the sensor validation process more robust
+   - Provide clear and actionable error messages
+   - Add validation for complex rule dependencies
 
 ## Benefits of the AOT-Compatible Beacon Solution
 

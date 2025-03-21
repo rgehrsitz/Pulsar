@@ -1,6 +1,6 @@
 # End-to-End Guide: From YAML Rules to Running Beacon
 
-This guide provides comprehensive step-by-step instructions for creating custom rules, compiling them with Pulsar, building the resulting code, and running the executable with proper configuration.
+This guide provides comprehensive step-by-step instructions for creating custom rules, compiling them with Pulsar using the template-based code generation approach, building the resulting code, and running the AOT-compatible executable with proper configuration. The Pulsar system now uses templates in Pulsar.Compiler/Config/Templates as the source of truth for code generation.
 
 ## 1. Creating Custom YAML Rules
 

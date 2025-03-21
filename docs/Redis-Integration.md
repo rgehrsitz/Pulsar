@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Beacon solution uses Redis as its primary data source for both input and output values. This document outlines the Redis integration components, their responsibilities, and how they work together to provide a robust and efficient data access layer.
+The Beacon solution uses Redis as its primary data source for both input and output values. The Redis integration is implemented through templates in the Pulsar.Compiler/Config/Templates/Runtime/Services directory, which are included in the generated Beacon application. This document outlines the Redis integration components, their responsibilities, and how they work together to provide a robust and efficient data access layer that is fully AOT-compatible.
 
 ## Configuration Types
 
@@ -58,7 +58,7 @@ The Beacon solution uses Redis as its primary data source for both input and out
 
 ### RedisConfiguration
 
-The `RedisConfiguration` class is responsible for managing Redis connection settings and providing configuration options for the Redis service.
+The `RedisConfiguration` class (located in Templates/Runtime/Models) is responsible for managing Redis connection settings and providing configuration options for the Redis service. This class is included in the generated Beacon application.
 
 **Key Features:**
 - Support for different deployment types (single node, cluster, high availability)
@@ -82,7 +82,7 @@ The `RedisConfiguration` class is responsible for managing Redis connection sett
 
 ### RedisService
 
-The `RedisService` class is the primary interface for interacting with Redis. It implements the `IRedisService` interface and provides methods for retrieving sensor values and storing output values.
+The `RedisService` class (located in Templates/Runtime/Services) is the primary interface for interacting with Redis. It implements the `IRedisService` interface (located in Templates/Interfaces) and provides methods for retrieving sensor values and storing output values. This implementation is fully AOT-compatible and included in the generated Beacon application.
 
 **Key Features:**
 - Connection management and pooling

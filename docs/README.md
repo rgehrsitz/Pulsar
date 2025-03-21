@@ -1,10 +1,10 @@
-# Pulsar/Beacon Documentation <img src="pulsar.png" height="75px">
+# Pulsar/Beacon Documentation <img src="pulsar.svg" height="75px">
 
 [![License](https://img.shields.io/badge/License-MIT-blue)](#license)
 
 ## Overview
 
-This directory contains the documentation for the Pulsar/Beacon project, a high-performance, AOT-compatible rules evaluation system. The documentation has been consolidated into focused, comprehensive documents that cover all aspects of the system.
+This directory contains the documentation for the Pulsar/Beacon project, a high-performance, AOT-compatible rules evaluation system that uses a template-based code generation approach. The Pulsar compiler processes rule definitions and generates standalone Beacon applications using templates from the `Pulsar.Compiler/Config/Templates` directory. The documentation has been consolidated into focused, comprehensive documents that cover all aspects of the system.
 
 ## Documentation Index
 
@@ -39,7 +39,8 @@ If you're new to the Pulsar/Beacon project, we recommend starting with the follo
 
 ## Key Features
 
-- **AOT Compatibility**: Full AOT support with proper attributes and trimming configuration
+- **Template-Based Code Generation**: Flexible, maintainable code generation using templates as the source of truth
+- **AOT Compatibility**: Full AOT support with proper attributes and trimming configuration for deployment in environments without JIT
 - **Redis Integration**: Comprehensive Redis service with connection pooling, health monitoring, and error handling
 - **Temporal Rule Support**: Circular buffer implementation for temporal rules with object value support
 - **Rule Dependency Management**: Automatic dependency analysis and layer assignment
@@ -48,7 +49,7 @@ If you're new to the Pulsar/Beacon project, we recommend starting with the follo
 
 ## Usage
 
-To generate a Beacon solution:
+To generate a Beacon solution using the template-based approach:
 
 ```bash
 dotnet run --project Pulsar.Compiler -- beacon --rules=rules.yaml --config=system_config.yaml --output=TestOutput/aot-beacon
@@ -61,12 +62,14 @@ cd <output-dir>/Beacon
 dotnet build
 ```
 
-To create a standalone executable:
+To create a standalone AOT-compatible executable:
 
 ```bash
 cd <output-dir>/Beacon
-dotnet publish -c Release -r <runtime> --self-contained true
+dotnet publish Beacon.Runtime -c Release -r <runtime> --self-contained true -p:PublishAot=true
 ```
+
+Where `<runtime>` can be `linux-x64`, `win-x64`, or `osx-x64` depending on your target platform.
 
 ## Contributing
 

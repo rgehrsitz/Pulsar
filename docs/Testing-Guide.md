@@ -2,13 +2,13 @@
 
 ## Overview
 
-This guide covers how to test the Pulsar rule compilation system and the Beacon runtime environment. The testing framework validates the following components:
+This guide covers how to test the Pulsar rule compilation system and the Beacon runtime environment. With the transition to a template-based code generation approach now complete, the testing framework has been updated to validate the template-generated code. The testing framework validates the following components:
 1. Rule parsing and validation
-2. Rule compilation into C# code
+2. Rule compilation into C# code using templates from Pulsar.Compiler/Config/Templates
 3. AOT compilation of the generated code
 4. Runtime execution in the Beacon environment
 5. Performance and memory usage 
-6. Temporal rule behavior with buffer caching
+6. Temporal rule behavior with object-value buffer caching
 
 ## Test Categories
 
@@ -18,12 +18,14 @@ These tests validate that YAML rules can be correctly parsed into `RuleDefinitio
 
 ### AOT Compilation Tests
 
-These tests verify that the generated C# code can be compiled with AOT (Ahead-of-Time) compilation, which is essential for running in environments where Just-In-Time (JIT) compilation is not available.
+These tests verify that the generated C# code can be compiled with AOT (Ahead-of-Time) compilation, which is essential for running in environments where Just-In-Time (JIT) compilation is not available. The templates in Pulsar.Compiler/Config/Templates are designed to be fully AOT-compatible.
 
 Key aspects tested:
-- No use of reflection in the generated code
-- Compatibility with trimming
+- No use of reflection in the generated code or templates
+- Full compatibility with trimming
 - Support for PublishTrimmed and PublishReadyToRun
+- Proper use of JSON serialization contexts
+- Elimination of dynamic code generation
 
 ### Runtime Execution Tests
 
@@ -48,7 +50,14 @@ These tests monitor memory usage during extended rule execution to detect potent
 
 ### Temporal Rule Tests
 
-These tests verify the circular buffer implementation that allows rules to reference historical values.
+These tests verify the circular buffer implementation that allows rules to reference historical values. The buffer now supports generic object values instead of just numeric values, enabling more complex temporal rule scenarios.
+
+Key aspects tested:
+- Storage and retrieval of various data types (numeric, string, complex objects)
+- Time-based filtering with different durations
+- Thread-safety under concurrent access
+- Memory efficiency with large datasets
+- Proper handling of time windows and thresholds
 
 ## Running Tests
 

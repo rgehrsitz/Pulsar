@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Temporal Buffer is a critical component of the Pulsar/Beacon system that enables temporal rule evaluation by storing historical sensor values. This document explains the implementation, configuration, and usage of the circular buffer system.
+The Temporal Buffer is a critical component of the Pulsar/Beacon system that enables temporal rule evaluation by storing historical sensor values. The implementation is located in the Pulsar.Compiler/Config/Templates/Runtime/Buffers directory and is included in the generated Beacon application. This document explains the implementation, configuration, and usage of the circular buffer system, which now supports generic object values rather than just numeric values.
 
 ## Temporal Modes
 

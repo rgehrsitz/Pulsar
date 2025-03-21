@@ -2,7 +2,7 @@
 
 ## Overview
 
-Pulsar is a high-performance, polling-based rules evaluation engine designed to process hundreds to thousands of key/value inputs using Redis as its primary data store. It fetches inputs, applies rules, and writes outputs back on a configurable schedule (default 100ms). The system's primary goal is to provide deterministic, real-time evaluations with minimal runtime overhead.
+Pulsar is a high-performance, AOT-compatible rules evaluation engine designed to process hundreds to thousands of key/value inputs using Redis as its primary data store. It uses a template-based code generation approach to create standalone Beacon applications that fetch inputs, apply rules, and write outputs back on a configurable schedule (default 100ms). The system's primary goal is to provide deterministic, real-time evaluations with minimal runtime overhead while maintaining full compatibility with AOT compilation environments.
 
 ## Key Concepts
 
@@ -31,14 +31,14 @@ condition:
   type: comparison
   sensor: "sensor_name"
   operator: "<|>|<=|>=|==|!="
-  value: <number>
+  value: <number|string|boolean|object>  # Supports various data types
 ```
 
 2. **Expression Condition**
 ```yaml
 condition:
   type: expression
-  expression: "sensor_a + (sensor_b * 2) > 100"
+  expression: "sensor_a + (sensor_b * 2) > 100"  # Complex expressions supported
 ```
 
 3. **Threshold Over Time**
@@ -48,6 +48,17 @@ condition:
   sensor: "sensor_name"
   threshold: <number>
   duration: <milliseconds>
+  # Now supports object values in the temporal buffer
+```
+
+4. **Object Property Comparison**
+```yaml
+condition:
+  type: comparison
+  sensor: "complex_sensor"
+  property: "status.active"  # Access nested properties
+  operator: "=="
+  value: true
 ```
 
 ### Supported Actions
@@ -56,14 +67,23 @@ condition:
 ```yaml
 set_value:
   key: "output_sensor"
-  value_expression: "sensor_a * 2"
+  value_expression: "sensor_a * 2"  # Supports complex expressions
+  # Can set numeric, string, boolean, or complex object values
 ```
 
 2. **Send Message**
 ```yaml
 send_message:
+  channel: "alert_channel"  # Redis pub/sub channel
+  message: "Alert text"  # Static message text
+```
+
+3. **Send Dynamic Message**
+```yaml
+send_message:
   channel: "alert_channel"
-  message: "Alert text"
+  message_expression: "'Temperature: ' + temperature + ' exceeds threshold'"  # Dynamic message
+  include_data: true  # Optionally include sensor data in the message
 ```
 
 ## Rule Dependencies and Execution Order
@@ -80,14 +100,17 @@ send_message:
 - **Extended Last-Known Mode**: If enabled in the DSL, missing data points will be interpolated using the last known value until a new data point contradicts it.
 - **Temporal rules utilize an in-memory ring buffer** to retain historical values needed for evaluation.
 
-## Build-Time Compilation
+## Template-Based Code Generation
 
-The compiler **validates rule syntax**, **performs dependency analysis**, and **generates optimized C# code**. The compiled output is a **complete, standalone C# solution** named **Beacon**, containing:
-- `Beacon.sln` - The main solution file
+The compiler **validates rule syntax**, **performs dependency analysis**, and **generates optimized C# code** using templates from the `Pulsar.Compiler/Config/Templates` directory. The compiled output is a **complete, standalone C# solution** named **Beacon**, containing:
+- `Beacon.sln` - The main solution file (from Templates/Project)
 - `Beacon.Runtime/` - The main runtime project
-  - `Beacon.Runtime.csproj` - Runtime project file
+  - `Beacon.Runtime.csproj` - Runtime project file (from Templates/Project)
+  - `Program.cs` - Entry point with AOT attributes
   - `Generated/` - Contains all generated rule files
-  - `Services/` - Core runtime services
+  - `Services/` - Core runtime services (from Templates/Runtime/Services)
+  - `Buffers/` - Temporal buffer implementation (from Templates/Runtime/Buffers)
+  - `Interfaces/` - Core interfaces (from Templates/Interfaces)
 - `Beacon.Tests/` - Test project for generated rules
   - `Beacon.Tests.csproj` - Test project file
   - `Generated/` - Generated test files
@@ -128,7 +151,7 @@ sequenceDiagram
     Note over Timer,Rules: Next 100ms Cycle
 ```
 
-## Compilation Process
+## Template-Based Compilation Process
 
 1. **Validation Phase**
    - Validate YAML structure, sensor references, and expressions.
@@ -136,18 +159,29 @@ sequenceDiagram
 
 2. **Dependency Analysis**
    - Compute evaluation order and assign rule layers.
+   - Create dependency graph for topological sorting.
 
-3. **Code Generation**
-   - Generate optimized C# code for execution.
+3. **Template Selection**
+   - Select appropriate templates from `Pulsar.Compiler/Config/Templates`.
+   - Prepare template data models based on rule definitions.
+
+4. **Code Generation**
+   - Generate optimized C# code using the selected templates.
    - Include temporal buffer logic if needed.
+   - Apply AOT compatibility attributes and configurations.
 
 ## Performance and Stability
 
+- **AOT Compatibility**: Fully compatible with AOT compilation for deployment in environments without JIT.
 - **Deterministic timing**: Ensures all evaluations complete within the configured cycle time.
 - **Minimal overhead**: Uses **precompiled code** and **index-based lookups** instead of dictionaries.
 - **Scalability**: Capable of handling thousands of rules efficiently.
+- **Reduced memory footprint**: Optimized for minimal memory usage with proper trimming support.
+- **Fast startup time**: AOT-compiled applications start instantly without JIT compilation delay.
 
-## Example Rule
+## Example Rules
+
+### Basic Temperature Alert Rule
 
 ```yaml
 rules:
@@ -170,6 +204,35 @@ rules:
           value: "active"
 ```
 
+### Complex Object Value Rule
+
+```yaml
+rules:
+  - name: "DeviceStatusAlert"
+    description: "Monitors device status objects and sends alerts when critical devices are offline"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: "device_status"
+            property: "status.online"  # Access nested property in object
+            operator: "=="
+            value: false
+        - condition:
+            type: comparison
+            sensor: "device_status"
+            property: "metadata.priority"
+            operator: "=="
+            value: "critical"
+    actions:
+      - send_message:
+          channel: "device_alerts"
+          message_expression: "'Critical device ' + device_status.name + ' is offline!'"
+      - set_value:
+          key: "maintenance_required"
+          value_expression: "{deviceId: device_status.id, priority: 'high', timestamp: Date.now()}"  # Set complex object
+```
+
 ## Best Practices
 
 1. **Rule Organization**
@@ -187,7 +250,14 @@ rules:
    - Use simple expressions where possible
    - Only use temporal conditions when necessary
 
-4. **Testing**
+4. **AOT Compatibility**
+   - Avoid dynamic code generation in custom extensions
+   - Use JSON serialization contexts for complex objects
+   - Follow trimming guidelines when extending the system
+   - Test with PublishAot=true to verify compatibility
+
+5. **Testing**
    - Create test cases for each rule
    - Verify rule behavior with different inputs
    - Test edge cases and boundary conditions
+   - Validate AOT compatibility of generated code
