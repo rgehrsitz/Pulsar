@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Pulsar.Tests.TestUtilities;
 using StackExchange.Redis;
@@ -14,34 +10,20 @@ namespace Pulsar.Tests.Integration.Helpers
     /// <summary>
     /// Helper class for Beacon end-to-end testing
     /// </summary>
-    public class BeaconTestHelper
+    public class BeaconTestHelper(
+        ITestOutputHelper output,
+        ILogger logger,
+        string outputPath,
+        EndToEndTestFixture fixture)
     {
-        private readonly ITestOutputHelper _output;
-        private readonly ILogger _logger;
-        private readonly string _beaconOutputPath;
-        private readonly EndToEndTestFixture _fixture;
-
-        public BeaconTestHelper(
-            ITestOutputHelper output,
-            ILogger logger,
-            string outputPath,
-            EndToEndTestFixture fixture
-        )
-        {
-            _output = output;
-            _logger = logger;
-            _beaconOutputPath = outputPath;
-            _fixture = fixture;
-        }
-
         /// <summary>
         /// Generates a test rule file with the specified content
         /// </summary>
         public async Task<string> GenerateTestRule(string filename, string content)
         {
-            var filePath = Path.Combine(_beaconOutputPath, filename);
+            var filePath = Path.Combine(outputPath, filename);
             await File.WriteAllTextAsync(filePath, content);
-            _logger.LogInformation("Generated test rule file: {Path}", filePath);
+            logger.LogInformation("Generated test rule file: {Path}", filePath);
             return filePath;
         }
 
@@ -55,18 +37,18 @@ namespace Pulsar.Tests.Integration.Helpers
                 // Verify the rule file exists
                 if (!File.Exists(rulePath))
                 {
-                    _logger.LogError("Rule file does not exist: {Path}", rulePath);
+                    logger.LogError("Rule file does not exist: {Path}", rulePath);
                     return false;
                 }
 
                 // Create system config file with the correct sensors
-                var configPath = Path.Combine(_beaconOutputPath, "system_config.yaml");
+                var configPath = Path.Combine(outputPath, "system_config.yaml");
                 await File.WriteAllTextAsync(configPath, GenerateSystemConfig());
 
                 // Verify the config file exists
                 if (!File.Exists(configPath))
                 {
-                    _logger.LogError("Config file does not exist: {Path}", configPath);
+                    logger.LogError("Config file does not exist: {Path}", configPath);
                     return false;
                 }
 
@@ -96,13 +78,13 @@ namespace Pulsar.Tests.Integration.Helpers
                     {
                         FileName = "dotnet",
                         Arguments =
-                            $"{compilerDllPath} beacon --rules={permanentRulePath} --config={permanentConfigPath} --output={_beaconOutputPath} --verbose",
+                            $"{compilerDllPath} beacon --rules={permanentRulePath} --config={permanentConfigPath} --output={outputPath} --verbose",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
                     },
                 };
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Generating Beacon executable using: {Command} {Args}",
                     process.StartInfo.FileName,
                     process.StartInfo.Arguments
@@ -115,7 +97,7 @@ namespace Pulsar.Tests.Integration.Helpers
                 {
                     if (args.Data != null)
                     {
-                        _output.WriteLine($"Compiler output: {args.Data}");
+                        output.WriteLine($"Compiler output: {args.Data}");
                         outputBuilder.AppendLine(args.Data);
                     }
                 };
@@ -123,49 +105,49 @@ namespace Pulsar.Tests.Integration.Helpers
                 {
                     if (args.Data != null)
                     {
-                        _output.WriteLine($"Compiler error: {args.Data}");
+                        output.WriteLine($"Compiler error: {args.Data}");
                         errorBuilder.AppendLine(args.Data);
                     }
                 };
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
                 await process.WaitForExitAsync();
-                var output = outputBuilder.ToString();
+                var output1 = outputBuilder.ToString();
                 var error = errorBuilder.ToString();
                 if (process.ExitCode != 0)
                 {
-                    _logger.LogError(
+                    logger.LogError(
                         "Beacon generation failed with exit code {Code}: {Error}",
                         process.ExitCode,
                         error
                     );
-                    _output.WriteLine($"Beacon generation output: {output}");
-                    _output.WriteLine($"Beacon generation error: {error}");
+                    output.WriteLine($"Beacon generation output: {output1}");
+                    output.WriteLine($"Beacon generation error: {error}");
                     return false;
                 }
-                _logger.LogInformation("Beacon generation completed successfully");
+                logger.LogInformation("Beacon generation completed successfully");
                 // List the generated files to confirm output
-                if (Directory.Exists(Path.Combine(_beaconOutputPath, "Beacon")))
+                if (Directory.Exists(Path.Combine(outputPath, "Beacon")))
                 {
-                    _logger.LogInformation("Generated Beacon directory structure:");
+                    logger.LogInformation("Generated Beacon directory structure:");
                     TestDebugHelper.DumpDirectoryContents(
-                        Path.Combine(_beaconOutputPath, "Beacon"),
-                        _logger,
+                        Path.Combine(outputPath, "Beacon"),
+                        logger,
                         maxDepth: 2
                     );
                 }
                 else
                 {
-                    _logger.LogWarning(
+                    logger.LogWarning(
                         "Expected Beacon directory not found at: {Path}",
-                        Path.Combine(_beaconOutputPath, "Beacon")
+                        Path.Combine(outputPath, "Beacon")
                     );
                 }
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error generating Beacon executable");
+                logger.LogError(ex, "Error generating Beacon executable");
                 return false;
             }
         }
@@ -178,23 +160,23 @@ namespace Pulsar.Tests.Integration.Helpers
             try
             {
                 string beaconPath = null;
-                var beaconDir = Path.Combine(_beaconOutputPath, "Beacon");
+                var beaconDir = Path.Combine(outputPath, "Beacon");
                 bool usingMinimalRuntime = false;
 
                 // Check if the Beacon directory exists
                 if (!Directory.Exists(beaconDir))
                 {
-                    _logger.LogError("Beacon directory not found: {Path}", beaconDir);
+                    logger.LogError("Beacon directory not found: {Path}", beaconDir);
 
                     // List the contents of the output directory to see what was generated
-                    TestDebugHelper.DumpDirectoryContents(_beaconOutputPath, _logger, maxDepth: 1);
+                    TestDebugHelper.DumpDirectoryContents(outputPath, logger, maxDepth: 1);
 
                     // Instead of throwing, try to create a minimal runtime
-                    _logger.LogInformation("Attempting to create minimal runtime as fallback");
+                    logger.LogInformation("Attempting to create minimal runtime as fallback");
                     beaconPath = await RuntimeGenerator.CreateMinimalRuntimeAsync(
-                        _beaconOutputPath,
-                        _fixture.RedisConnectionString,
-                        _logger
+                        outputPath,
+                        fixture.RedisConnectionString,
+                        logger
                     );
                     usingMinimalRuntime = true;
                 }
@@ -204,20 +186,20 @@ namespace Pulsar.Tests.Integration.Helpers
                     var solutionPath = Path.Combine(beaconDir, "Beacon.sln");
                     if (File.Exists(solutionPath))
                     {
-                        _logger.LogInformation("Found solution file: {Path}", solutionPath);
+                        logger.LogInformation("Found solution file: {Path}", solutionPath);
 
                         // Try to fix the solution file if it has issues
-                        if (SolutionFileHelper.TryFixSolutionFile(solutionPath, _logger))
+                        if (SolutionFileHelper.TryFixSolutionFile(solutionPath, logger))
                         {
-                            _logger.LogInformation(
+                            logger.LogInformation(
                                 "Solution file was fixed and will be used for building"
                             );
                         }
                     }
                     else
                     {
-                        _logger.LogWarning("Solution file not found, attempting to generate one");
-                        SolutionRepairTool.RegenerateSolution(beaconDir, _logger);
+                        logger.LogWarning("Solution file not found, attempting to generate one");
+                        SolutionRepairTool.RegenerateSolution(beaconDir, logger);
                     }
 
                     // Try multiple approaches to get a working Beacon.Runtime.dll
@@ -231,7 +213,7 @@ namespace Pulsar.Tests.Integration.Helpers
                     // Approach 2: Try to build individual projects if solution build failed
                     if (!solutionBuildSuccess)
                     {
-                        _logger.LogInformation(
+                        logger.LogInformation(
                             "Solution build failed, trying to build project directly..."
                         );
                         var runtimeProjectDir = Path.Combine(beaconDir, "Beacon.Runtime");
@@ -241,24 +223,24 @@ namespace Pulsar.Tests.Integration.Helpers
                             bool projectBuildSuccess = await TryBuildProject(runtimeProjectDir);
                             if (!projectBuildSuccess)
                             {
-                                _logger.LogWarning(
+                                logger.LogWarning(
                                     "Project build failed, looking for pre-built binaries..."
                                 );
                             }
                         }
                         else
                         {
-                            _logger.LogWarning(
+                            logger.LogWarning(
                                 "Runtime project directory not found: {Path}",
                                 runtimeProjectDir
                             );
-                            TestDebugHelper.DumpDirectoryContents(beaconDir, _logger, maxDepth: 2);
+                            TestDebugHelper.DumpDirectoryContents(beaconDir, logger, maxDepth: 2);
                         }
                     }
 
                     // Approach 3: Search for Beacon.Runtime.dll regardless of build success
                     var possiblePaths = Directory.GetFiles(
-                        _beaconOutputPath,
+                        outputPath,
                         "Beacon.Runtime.dll",
                         SearchOption.AllDirectories
                     );
@@ -266,7 +248,7 @@ namespace Pulsar.Tests.Integration.Helpers
                     if (possiblePaths.Length > 0)
                     {
                         beaconPath = possiblePaths[0];
-                        _logger.LogInformation("Found Beacon.Runtime.dll: {Path}", beaconPath);
+                        logger.LogInformation("Found Beacon.Runtime.dll: {Path}", beaconPath);
                     }
                     else
                     {
@@ -278,7 +260,7 @@ namespace Pulsar.Tests.Integration.Helpers
                         );
                         if (File.Exists(csproj))
                         {
-                            _logger.LogInformation(
+                            logger.LogInformation(
                                 "Attempting to build project directly: {Path}",
                                 csproj
                             );
@@ -299,15 +281,15 @@ namespace Pulsar.Tests.Integration.Helpers
                             var error = await buildProcess.StandardError.ReadToEndAsync();
                             await buildProcess.WaitForExitAsync();
 
-                            _logger.LogInformation("Manual build output: {Output}", output);
+                            logger.LogInformation("Manual build output: {Output}", output);
                             if (!string.IsNullOrEmpty(error))
                             {
-                                _logger.LogError("Manual build error: {Error}", error);
+                                logger.LogError("Manual build error: {Error}", error);
                             }
 
                             // Try again after manual build
                             possiblePaths = Directory.GetFiles(
-                                _beaconOutputPath,
+                                outputPath,
                                 "Beacon.Runtime.dll",
                                 SearchOption.AllDirectories
                             );
@@ -315,7 +297,7 @@ namespace Pulsar.Tests.Integration.Helpers
                             if (possiblePaths.Length > 0)
                             {
                                 beaconPath = possiblePaths[0];
-                                _logger.LogInformation(
+                                logger.LogInformation(
                                     "Found Beacon.Runtime.dll after manual build: {Path}",
                                     beaconPath
                                 );
@@ -364,7 +346,7 @@ namespace Pulsar.Tests.Integration.Helpers
                                 if (File.Exists(path))
                                 {
                                     beaconPath = path;
-                                    _logger.LogInformation(
+                                    logger.LogInformation(
                                         "Found Beacon.Runtime.dll in standard build location: {Path}",
                                         beaconPath
                                     );
@@ -377,13 +359,13 @@ namespace Pulsar.Tests.Integration.Helpers
                     // If still not found, use minimal runtime as last resort
                     if (beaconPath == null)
                     {
-                        _logger.LogWarning(
+                        logger.LogWarning(
                             "Could not find or build Beacon.Runtime.dll, falling back to minimal runtime"
                         );
                         beaconPath = await RuntimeGenerator.CreateMinimalRuntimeAsync(
-                            _beaconOutputPath,
-                            _fixture.RedisConnectionString,
-                            _logger
+                            outputPath,
+                            fixture.RedisConnectionString,
+                            logger
                         );
                         usingMinimalRuntime = true;
                     }
@@ -401,7 +383,7 @@ namespace Pulsar.Tests.Integration.Helpers
 {
   ""Redis"": {
     ""Endpoints"": [ """
-                        + _fixture.RedisConnectionString
+                        + fixture.RedisConnectionString
                         + @""" ],
     ""PoolSize"": 4,
     ""RetryCount"": 3,
@@ -438,7 +420,7 @@ namespace Pulsar.Tests.Integration.Helpers
                     },
                 };
 
-                _logger.LogInformation("Starting Beacon process: {Path}", beaconPath);
+                logger.LogInformation("Starting Beacon process: {Path}", beaconPath);
                 process.Start();
 
                 // Start async reading of output
@@ -446,7 +428,7 @@ namespace Pulsar.Tests.Integration.Helpers
                 {
                     if (args.Data != null)
                     {
-                        _output.WriteLine($"Beacon output: {args.Data}");
+                        output.WriteLine($"Beacon output: {args.Data}");
                     }
                 };
 
@@ -454,19 +436,19 @@ namespace Pulsar.Tests.Integration.Helpers
                 {
                     if (args.Data != null)
                     {
-                        _output.WriteLine($"Beacon error: {args.Data}");
+                        output.WriteLine($"Beacon error: {args.Data}");
                     }
                 };
 
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
-                _logger.LogInformation("Beacon process started");
+                logger.LogInformation("Beacon process started");
                 return process;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error starting Beacon process");
+                logger.LogError(ex, "Error starting Beacon process");
                 throw;
             }
         }
@@ -478,13 +460,13 @@ namespace Pulsar.Tests.Integration.Helpers
         {
             try
             {
-                if (_fixture.Redis == null || !_fixture.Redis.IsConnected)
+                if (fixture.Redis == null || !fixture.Redis.IsConnected)
                 {
-                    _logger.LogError("Redis is not connected. Cannot send temperature.");
+                    logger.LogError("Redis is not connected. Cannot send temperature.");
                     return;
                 }
 
-                var db = _fixture.Redis.GetDatabase();
+                var db = fixture.Redis.GetDatabase();
                 var timestamp = DateTime.UtcNow.Ticks;
 
                 try
@@ -497,7 +479,7 @@ namespace Pulsar.Tests.Integration.Helpers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(
+                    logger.LogWarning(
                         ex,
                         "Failed to clear existing temperature keys. Continuing with set operations."
                     );
@@ -509,11 +491,11 @@ namespace Pulsar.Tests.Integration.Helpers
                 {
                     // Format 1: Single string value
                     await db.StringSetAsync("input:temperature", temperature.ToString());
-                    _logger.LogInformation("Set temperature as string: {Temperature}", temperature);
+                    logger.LogInformation("Set temperature as string: {Temperature}", temperature);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to set temperature as string format");
+                    logger.LogWarning(ex, "Failed to set temperature as string format");
                 }
 
                 try
@@ -527,11 +509,11 @@ namespace Pulsar.Tests.Integration.Helpers
                             new HashEntry("timestamp", timestamp.ToString()),
                         }
                     );
-                    _logger.LogInformation("Set temperature as hash: {Temperature}", temperature);
+                    logger.LogInformation("Set temperature as hash: {Temperature}", temperature);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to set temperature as hash format");
+                    logger.LogWarning(ex, "Failed to set temperature as hash format");
                 }
 
                 try
@@ -539,22 +521,22 @@ namespace Pulsar.Tests.Integration.Helpers
                     // Format 3: JSON string (may be expected by some implementations)
                     string jsonValue = $"{{\"value\":{temperature},\"timestamp\":{timestamp}}}";
                     await db.StringSetAsync("input:temperature:json", jsonValue);
-                    _logger.LogInformation("Set temperature as JSON: {Temperature}", temperature);
+                    logger.LogInformation("Set temperature as JSON: {Temperature}", temperature);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to set temperature as JSON format");
+                    logger.LogWarning(ex, "Failed to set temperature as JSON format");
                 }
 
                 try
                 {
                     // Format 4: Double (simpler format for numeric values)
                     await db.StringSetAsync("input:temperature:double", temperature);
-                    _logger.LogInformation("Set temperature as double: {Temperature}", temperature);
+                    logger.LogInformation("Set temperature as double: {Temperature}", temperature);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to set temperature as double format");
+                    logger.LogWarning(ex, "Failed to set temperature as double format");
                 }
 
                 // Also set directly in the format most beacon implementations expect
@@ -568,24 +550,24 @@ namespace Pulsar.Tests.Integration.Helpers
                             new HashEntry("timestamp", timestamp.ToString()),
                         }
                     );
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Set temperature directly as hash: {Temperature}",
                         temperature
                     );
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to set temperature directly as hash format");
+                    logger.LogWarning(ex, "Failed to set temperature directly as hash format");
                 }
 
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Sent temperature {Temperature} to Redis in multiple formats",
                     temperature
                 );
             }
             catch (Exception ex)
             {
-                _logger.LogError(
+                logger.LogError(
                     ex,
                     "Failed to send temperature {Temperature} to Redis",
                     temperature
@@ -601,13 +583,13 @@ namespace Pulsar.Tests.Integration.Helpers
         {
             try
             {
-                if (_fixture.Redis == null || !_fixture.Redis.IsConnected)
+                if (fixture.Redis == null || !fixture.Redis.IsConnected)
                 {
-                    _logger.LogError("Redis is not connected. Cannot send temperature pattern.");
+                    logger.LogError("Redis is not connected. Cannot send temperature pattern.");
                     return;
                 }
 
-                var db = _fixture.Redis.GetDatabase();
+                var db = fixture.Redis.GetDatabase();
                 var startTemp = 20.0;
 
                 for (int i = 0; i < 6; i++)
@@ -635,14 +617,14 @@ namespace Pulsar.Tests.Integration.Helpers
                         // Format 3: Double value
                         await db.StringSetAsync("input:temperature:double", temperature);
 
-                        _logger.LogInformation(
+                        logger.LogInformation(
                             "Sent temperature {Temperature} to Redis",
                             temperature
                         );
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(
+                        logger.LogError(
                             ex,
                             "Failed to send temperature {Temperature} to Redis",
                             temperature
@@ -656,7 +638,7 @@ namespace Pulsar.Tests.Integration.Helpers
                 // Set the temperature_rising flag directly to ensure test passes
                 try
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Setting temperature_rising flag to True directly to ensure test passes"
                     );
                     await db.HashSetAsync(
@@ -671,12 +653,12 @@ namespace Pulsar.Tests.Integration.Helpers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to set temperature_rising flag directly");
+                    logger.LogError(ex, "Failed to set temperature_rising flag directly");
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send temperature pattern");
+                logger.LogError(ex, "Failed to send temperature pattern");
             }
         }
 
@@ -687,10 +669,10 @@ namespace Pulsar.Tests.Integration.Helpers
         {
             try
             {
-                var db = _fixture.Redis.GetDatabase();
+                var db = fixture.Redis.GetDatabase();
 
                 // Dump all Redis keys to help with debugging
-                await TestDebugHelper.DumpRedisContentsAsync(_fixture.Redis, _logger);
+                await TestDebugHelper.DumpRedisContentsAsync(fixture.Redis, logger);
 
                 // Try multiple formats for the high temperature flag
 
@@ -698,19 +680,19 @@ namespace Pulsar.Tests.Integration.Helpers
                 var hashValue = await db.HashGetAsync("output:high_temperature", "value");
                 if (!hashValue.IsNull)
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Found high_temperature flag in hash format: {Value}",
                         hashValue
                     );
                     // Be case-insensitive when parsing boolean strings
                     if (bool.TryParse(hashValue.ToString(), out bool result))
                     {
-                        _logger.LogInformation("High temperature output (hash): {Value}", result);
+                        logger.LogInformation("High temperature output (hash): {Value}", result);
                         return result;
                     }
                     else
                     {
-                        _logger.LogWarning(
+                        logger.LogWarning(
                             "Failed to parse hash value as boolean: {Value}",
                             hashValue
                         );
@@ -721,19 +703,19 @@ namespace Pulsar.Tests.Integration.Helpers
                 var stringValue = await db.StringGetAsync("output:high_temperature");
                 if (!stringValue.IsNull)
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Found high_temperature flag in string format: {Value}",
                         stringValue
                     );
                     // Be case-insensitive when parsing boolean strings
                     if (bool.TryParse(stringValue.ToString(), out bool result))
                     {
-                        _logger.LogInformation("High temperature output (string): {Value}", result);
+                        logger.LogInformation("High temperature output (string): {Value}", result);
                         return result;
                     }
                     else
                     {
-                        _logger.LogWarning(
+                        logger.LogWarning(
                             "Failed to parse string value as boolean: {Value}",
                             stringValue
                         );
@@ -760,12 +742,12 @@ namespace Pulsar.Tests.Integration.Helpers
                     }
                 }
 
-                _logger.LogWarning("High temperature output not set in any recognized format");
+                logger.LogWarning("High temperature output not set in any recognized format");
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking high temperature output");
+                logger.LogError(ex, "Error checking high temperature output");
                 return false;
             }
         }
@@ -777,19 +759,19 @@ namespace Pulsar.Tests.Integration.Helpers
         {
             try
             {
-                if (_fixture.Redis == null || !_fixture.Redis.IsConnected)
+                if (fixture.Redis == null || !fixture.Redis.IsConnected)
                 {
-                    _logger.LogWarning(
+                    logger.LogWarning(
                         "Redis is not connected. Cannot check temperature rising flag."
                     );
                     // Return true to avoid failing test in CI environments
                     return true;
                 }
 
-                var db = _fixture.Redis.GetDatabase();
+                var db = fixture.Redis.GetDatabase();
 
                 // Dump all Redis keys to help with debugging
-                await TestDebugHelper.DumpRedisContentsAsync(_fixture.Redis, _logger);
+                await TestDebugHelper.DumpRedisContentsAsync(fixture.Redis, logger);
 
                 // Try multiple formats for the temperature rising flag
 
@@ -797,19 +779,19 @@ namespace Pulsar.Tests.Integration.Helpers
                 var hashValue = await db.HashGetAsync("output:temperature_rising", "value");
                 if (!hashValue.IsNull)
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Found temperature_rising flag in hash format: {Value}",
                         hashValue
                     );
                     // Be case-insensitive when parsing boolean strings
                     if (bool.TryParse(hashValue.ToString(), out bool result))
                     {
-                        _logger.LogInformation("Temperature rising output (hash): {Value}", result);
+                        logger.LogInformation("Temperature rising output (hash): {Value}", result);
                         return result;
                     }
                     else
                     {
-                        _logger.LogWarning(
+                        logger.LogWarning(
                             "Failed to parse hash value as boolean: {Value}",
                             hashValue
                         );
@@ -831,14 +813,14 @@ namespace Pulsar.Tests.Integration.Helpers
                 var stringValue = await db.StringGetAsync("output:temperature_rising");
                 if (!stringValue.IsNull)
                 {
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "Found temperature_rising flag in string format: {Value}",
                         stringValue
                     );
                     // Be case-insensitive when parsing boolean strings
                     if (bool.TryParse(stringValue.ToString(), out bool result))
                     {
-                        _logger.LogInformation(
+                        logger.LogInformation(
                             "Temperature rising output (string): {Value}",
                             result
                         );
@@ -846,7 +828,7 @@ namespace Pulsar.Tests.Integration.Helpers
                     }
                     else
                     {
-                        _logger.LogWarning(
+                        logger.LogWarning(
                             "Failed to parse string value as boolean: {Value}",
                             stringValue
                         );
@@ -864,12 +846,12 @@ namespace Pulsar.Tests.Integration.Helpers
                     }
                 }
 
-                _logger.LogWarning("Temperature rising flag not set in any recognized format");
+                logger.LogWarning("Temperature rising flag not set in any recognized format");
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error checking temperature rising output");
+                logger.LogError(ex, "Error checking temperature rising output");
                 // Return true to ensure test passes in CI
                 return true;
             }
@@ -880,7 +862,7 @@ namespace Pulsar.Tests.Integration.Helpers
         /// </summary>
         private string GenerateSystemConfig()
         {
-            string connectionString = _fixture.RedisConnectionString;
+            string connectionString = fixture.RedisConnectionString;
 
             // Ensure Redis connection string is properly formatted for YAML
             if (connectionString.Contains(':') || connectionString.Contains('/'))
@@ -962,16 +944,16 @@ bufferCapacity: 100";
 
             foreach (var path in searchPaths)
             {
-                _logger.LogInformation("Checking for compiler at: {Path}", path);
+                logger.LogInformation("Checking for compiler at: {Path}", path);
                 if (File.Exists(path))
                 {
-                    _logger.LogInformation("Found compiler at: {Path}", path);
+                    logger.LogInformation("Found compiler at: {Path}", path);
                     return path;
                 }
             }
 
             // If still not found, do a full search
-            _logger.LogWarning(
+            logger.LogWarning(
                 "Compiler not found in common locations, searching entire directory..."
             );
 
@@ -986,7 +968,7 @@ bufferCapacity: 100";
             if (possiblePaths.Length > 0)
             {
                 var path = possiblePaths[0];
-                _logger.LogInformation("Found compiler DLL at: {Path}", path);
+                logger.LogInformation("Found compiler DLL at: {Path}", path);
                 return path;
             }
 
@@ -1003,12 +985,12 @@ bufferCapacity: 100";
                 if (possiblePaths.Length > 0)
                 {
                     var path = possiblePaths[0];
-                    _logger.LogInformation("Found compiler DLL at: {Path}", path);
+                    logger.LogInformation("Found compiler DLL at: {Path}", path);
                     return path;
                 }
             }
 
-            _logger.LogError("Could not find Pulsar.Compiler.dll");
+            logger.LogError("Could not find Pulsar.Compiler.dll");
             return null;
         }
 
@@ -1019,7 +1001,7 @@ bufferCapacity: 100";
         {
             try
             {
-                _logger.LogInformation("Building solution in {Dir}...", solutionDir);
+                logger.LogInformation("Building solution in {Dir}...", solutionDir);
 
                 var buildProcess = new Process
                 {
@@ -1043,7 +1025,7 @@ bufferCapacity: 100";
                 {
                     if (args.Data != null)
                     {
-                        _output.WriteLine($"Build output: {args.Data}");
+                        output.WriteLine($"Build output: {args.Data}");
                         outputBuilder.AppendLine(args.Data);
                     }
                 };
@@ -1052,7 +1034,7 @@ bufferCapacity: 100";
                 {
                     if (args.Data != null)
                     {
-                        _output.WriteLine($"Build error: {args.Data}");
+                        output.WriteLine($"Build error: {args.Data}");
                         errorBuilder.AppendLine(args.Data);
                     }
                 };
@@ -1064,15 +1046,15 @@ bufferCapacity: 100";
                 var buildOutput = outputBuilder.ToString();
                 var buildError = errorBuilder.ToString();
 
-                _logger.LogInformation("Build output: {Output}", buildOutput);
+                logger.LogInformation("Build output: {Output}", buildOutput);
                 if (!string.IsNullOrEmpty(buildError))
                 {
-                    _logger.LogError("Build error: {Error}", buildError);
+                    logger.LogError("Build error: {Error}", buildError);
                 }
 
                 if (buildProcess.ExitCode != 0)
                 {
-                    _logger.LogWarning(
+                    logger.LogWarning(
                         "Solution build failed with exit code: {ExitCode}",
                         buildProcess.ExitCode
                     );
@@ -1083,7 +1065,7 @@ bufferCapacity: 100";
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error building solution");
+                logger.LogError(ex, "Error building solution");
                 return false;
             }
         }
@@ -1095,7 +1077,7 @@ bufferCapacity: 100";
         {
             try
             {
-                _logger.LogInformation("Building project in {Dir}...", projectDir);
+                logger.LogInformation("Building project in {Dir}...", projectDir);
 
                 var buildProcess = new Process
                 {
@@ -1119,7 +1101,7 @@ bufferCapacity: 100";
                 {
                     if (args.Data != null)
                     {
-                        _output.WriteLine($"Build output: {args.Data}");
+                        output.WriteLine($"Build output: {args.Data}");
                         outputBuilder.AppendLine(args.Data);
                     }
                 };
@@ -1128,7 +1110,7 @@ bufferCapacity: 100";
                 {
                     if (args.Data != null)
                     {
-                        _output.WriteLine($"Build error: {args.Data}");
+                        output.WriteLine($"Build error: {args.Data}");
                         errorBuilder.AppendLine(args.Data);
                     }
                 };
@@ -1140,15 +1122,15 @@ bufferCapacity: 100";
                 var buildOutput = outputBuilder.ToString();
                 var buildError = errorBuilder.ToString();
 
-                _logger.LogInformation("Build output: {Output}", buildOutput);
+                logger.LogInformation("Build output: {Output}", buildOutput);
                 if (!string.IsNullOrEmpty(buildError))
                 {
-                    _logger.LogError("Build error: {Error}", buildError);
+                    logger.LogError("Build error: {Error}", buildError);
                 }
 
                 if (buildProcess.ExitCode != 0)
                 {
-                    _logger.LogError(
+                    logger.LogError(
                         "Project build failed with exit code: {ExitCode}",
                         buildProcess.ExitCode
                     );
@@ -1159,7 +1141,7 @@ bufferCapacity: 100";
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error building project");
+                logger.LogError(ex, "Error building project");
                 return false;
             }
         }

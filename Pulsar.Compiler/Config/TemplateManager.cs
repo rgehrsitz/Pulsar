@@ -1,6 +1,5 @@
 // File: Pulsar.Compiler/Config/TemplateManager.cs
-using System;
-using System.IO;
+
 using System.Text;
 using Serilog;
 
@@ -8,12 +7,7 @@ namespace Pulsar.Compiler.Config
 {
     public class TemplateManager
     {
-        private readonly ILogger _logger;
-
-        public TemplateManager()
-        {
-            _logger = LoggingConfig.GetLogger().ForContext<TemplateManager>();
-        }
+        private readonly ILogger _logger = LoggingConfig.GetLogger().ForContext<TemplateManager>();
 
         public void GenerateSolutionFile(string path)
         {

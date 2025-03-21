@@ -1,14 +1,8 @@
-using System;
 using System.Diagnostics;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Pulsar.Tests.Integration.Helpers;
 using Pulsar.Tests.TestUtilities;
 using Serilog.Extensions.Logging;
-using StackExchange.Redis;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.Integration

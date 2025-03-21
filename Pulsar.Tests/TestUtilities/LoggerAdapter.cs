@@ -1,19 +1,11 @@
-using System;
 using Microsoft.Extensions.Logging;
-using Serilog;
 using Serilog.Core;
-using Serilog.Events;
 
 namespace Pulsar.Tests.TestUtilities
 {
-    public class LoggerAdapter : Serilog.ILogger
+    public class LoggerAdapter(Microsoft.Extensions.Logging.ILogger msLogger) : Serilog.ILogger
     {
-        private readonly Microsoft.Extensions.Logging.ILogger _msLogger;
-
-        public LoggerAdapter(Microsoft.Extensions.Logging.ILogger msLogger)
-        {
-            _msLogger = msLogger ?? throw new ArgumentNullException(nameof(msLogger));
-        }
+        private readonly Microsoft.Extensions.Logging.ILogger _msLogger = msLogger ?? throw new ArgumentNullException(nameof(msLogger));
 
         public Serilog.ILogger ForContext(ILogEventEnricher enricher)
         {

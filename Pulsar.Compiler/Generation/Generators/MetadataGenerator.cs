@@ -1,8 +1,5 @@
 // File: Pulsar.Compiler/Generation/Generators/MetadataGenerator.cs
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,15 +9,11 @@ using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Generation.Generators
 {
-    public class MetadataGenerator
+    public class MetadataGenerator(ILogger? logger = null)
     {
-        private readonly ILogger _logger;
+        private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
         // Fix the CS8625 warning by making the logger parameter nullable
-        public MetadataGenerator(ILogger? logger = null)
-        {
-            _logger = logger ?? NullLogger.Instance;
-        }
 
         public GeneratedFileInfo GenerateMetadataFile(
             List<RuleDefinition> rules,

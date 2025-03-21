@@ -1,8 +1,5 @@
 // File: Pulsar.Compiler/Generation/Generators/RuleCoordinatorGenerator.cs
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,15 +8,11 @@ using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Generation.Generators
 {
-    public class RuleCoordinatorGenerator
+    public class RuleCoordinatorGenerator(ILogger? logger = null)
     {
-        private readonly ILogger _logger;
+        private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
         // Fix CS8625 by marking the logger parameter as nullable
-        public RuleCoordinatorGenerator(ILogger? logger = null)
-        {
-            _logger = logger ?? NullLogger.Instance;
-        }
 
         public GeneratedFileInfo GenerateRuleCoordinator(
             List<List<RuleDefinition>> ruleGroups,

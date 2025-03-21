@@ -1,23 +1,15 @@
 // File: Pulsar.Tests/RuleValidation/DependencyAnalysisTests.cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Models;
-using Xunit;
 
 namespace Pulsar.Tests.RuleValidation
 {
     public class DependencyAnalysisTests
     {
-        private readonly ILogger<DependencyAnalyzer> _logger;
-
-        public DependencyAnalysisTests()
-        {
-            _logger = NullLogger<DependencyAnalyzer>.Instance;
-        }
+        private readonly ILogger<DependencyAnalyzer> _logger = NullLogger<DependencyAnalyzer>.Instance;
 
         [Fact]
         public void DetectCircularDependency_DirectCycle_ReturnsError()

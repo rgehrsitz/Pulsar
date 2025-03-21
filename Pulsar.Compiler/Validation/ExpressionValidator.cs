@@ -1,14 +1,8 @@
 // File: Pulsar.Compiler/Validation/ExpressionValidator.cs
 
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Pulsar.Compiler;
 using Serilog;
 
 namespace Pulsar.Compiler.Validation

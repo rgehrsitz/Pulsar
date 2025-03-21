@@ -1,29 +1,14 @@
 // File: Pulsar.Tests/RuntimeValidation/TemporalRuleTests.cs
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.RuntimeValidation
 {
     [Trait("Category", "TemporalRules")]
-    public class TemporalRuleTests : IClassFixture<RuntimeValidationFixture>
+    public class TemporalRuleTests(RuntimeValidationFixture fixture, ITestOutputHelper output)
+        : IClassFixture<RuntimeValidationFixture>
     {
-        private readonly RuntimeValidationFixture _fixture;
-        private readonly ITestOutputHelper _output;
-
-        public TemporalRuleTests(RuntimeValidationFixture fixture, ITestOutputHelper output)
-        {
-            _fixture = fixture;
-            _output = output;
-        }
-
         [Fact]
         public async Task RateOfChange_CalculatesCorrectly()
         {
@@ -31,7 +16,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var ruleFile = GenerateRateOfChangeRule();
 
             // Build project
-            var success = await _fixture.BuildTestProject(new[] { ruleFile });
+            var success = await fixture.BuildTestProject(new[] { ruleFile });
             Assert.True(success, "Project should build successfully");
 
             // Execute with initial value
@@ -42,7 +27,7 @@ namespace Pulsar.Tests.RuntimeValidation
             };
 
             // Skip actual execution since it's just testing frameworks
-            _output.WriteLine("Skipping actual rule execution for test");
+            output.WriteLine("Skipping actual rule execution for test");
 
             // Test passes if we can generate the code successfully
             Assert.True(true, "Test passed if code generation succeeds");
@@ -58,7 +43,7 @@ namespace Pulsar.Tests.RuntimeValidation
             };
 
             // Skip actual execution for test purposes
-            _output.WriteLine("Skipping second execution for test purposes");
+            output.WriteLine("Skipping second execution for test purposes");
 
             // Simulate success
             var outputs2 = new Dictionary<string, object> { { "output:rate_of_change", "10.0" } };
@@ -74,7 +59,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var rateValue = Convert.ToDouble(outputs2["output:rate_of_change"]);
             Assert.True(rateValue > 0, "Rate of change should be positive for an increasing value");
 
-            _output.WriteLine($"Rate of change: {rateValue} units per second");
+            output.WriteLine($"Rate of change: {rateValue} units per second");
         }
 
         [Fact]
@@ -84,7 +69,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var ruleFile = GeneratePreviousValuesRule();
 
             // Build project
-            var success = await _fixture.BuildTestProject(new[] { ruleFile });
+            var success = await fixture.BuildTestProject(new[] { ruleFile });
             Assert.True(success, "Project should build successfully");
 
             // Execute with series of values
@@ -97,7 +82,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 { "input:timestamp", timestamp },
             };
 
-            await _fixture.ExecuteRules(inputs1);
+            await fixture.ExecuteRules(inputs1);
             await Task.Delay(100);
 
             // Second value
@@ -108,7 +93,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 { "input:timestamp", timestamp },
             };
 
-            await _fixture.ExecuteRules(inputs2);
+            await fixture.ExecuteRules(inputs2);
             await Task.Delay(100);
 
             // Third value
@@ -120,7 +105,7 @@ namespace Pulsar.Tests.RuntimeValidation
             };
 
             // Skip execution for testing
-            _output.WriteLine("Skipping execution for testing");
+            output.WriteLine("Skipping execution for testing");
 
             // Simulate outputs
             var outputs3 = new Dictionary<string, object> { { "output:average", "20.0" } };
@@ -136,7 +121,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var average = Convert.ToDouble(outputs3["output:average"]);
             Assert.Equal(20, average, 0.01);
 
-            _output.WriteLine($"Average of last 3 values: {average}");
+            output.WriteLine($"Average of last 3 values: {average}");
         }
 
         [Fact(Skip = "Buffer usage tests are currently disabled for this PR")]
@@ -146,7 +131,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var ruleFile = GenerateMaxBufferRule();
 
             // Build project
-            var success = await _fixture.BuildTestProject(new[] { ruleFile });
+            var success = await fixture.BuildTestProject(new[] { ruleFile });
             Assert.True(success, "Project should build successfully");
 
             // Execute with more values than the buffer can hold
@@ -162,7 +147,7 @@ namespace Pulsar.Tests.RuntimeValidation
                     { "input:timestamp", timestamp + (i * 100) },
                 };
 
-                await _fixture.ExecuteRules(inputs);
+                await fixture.ExecuteRules(inputs);
 
                 // Small delay to avoid overloading
                 if (i % 10 == 0)
@@ -177,7 +162,7 @@ namespace Pulsar.Tests.RuntimeValidation
             };
 
             // Skip execution for testing
-            _output.WriteLine("Skipping final execution for testing");
+            output.WriteLine("Skipping final execution for testing");
 
             // Simulate final outputs
             var finalOutputs = new Dictionary<string, object>
@@ -195,7 +180,7 @@ namespace Pulsar.Tests.RuntimeValidation
 
             // If buffer size is 100, then oldest value should be from index 21 (not 0)
             var oldestValue = Convert.ToDouble(finalOutputs["output:oldest_value"]);
-            _output.WriteLine($"Oldest value in buffer: {oldestValue}");
+            output.WriteLine($"Oldest value in buffer: {oldestValue}");
 
             // Due to circular buffer, we should have lost the earliest values
             Assert.True(
@@ -228,7 +213,7 @@ namespace Pulsar.Tests.RuntimeValidation
           value_expression: '(input:sensor - buffer:sensor_value[-1]) / ((input:timestamp - buffer:timestamp[-1]) / 1000.0)'"
             );
 
-            var filePath = Path.Combine(_fixture.OutputPath, "rate-of-change-rule.yaml");
+            var filePath = Path.Combine(fixture.OutputPath, "rate-of-change-rule.yaml");
             File.WriteAllText(filePath, sb.ToString());
             return filePath;
         }
@@ -254,7 +239,7 @@ namespace Pulsar.Tests.RuntimeValidation
           value_expression: '(input:value + buffer:value[-1] + buffer:value[-2]) / 3.0'"
             );
 
-            var filePath = Path.Combine(_fixture.OutputPath, "previous-values-rule.yaml");
+            var filePath = Path.Combine(fixture.OutputPath, "previous-values-rule.yaml");
             File.WriteAllText(filePath, sb.ToString());
             return filePath;
         }
@@ -283,7 +268,7 @@ namespace Pulsar.Tests.RuntimeValidation
           value_expression: 'buffer:value.Count'"
             );
 
-            var filePath = Path.Combine(_fixture.OutputPath, "buffer-limit-rule.yaml");
+            var filePath = Path.Combine(fixture.OutputPath, "buffer-limit-rule.yaml");
             File.WriteAllText(filePath, sb.ToString());
             return filePath;
         }

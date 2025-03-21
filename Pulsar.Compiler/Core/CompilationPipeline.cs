@@ -1,31 +1,15 @@
 // File: Pulsar.Compiler/Core/CompilationPipeline.cs
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Pulsar.Compiler.Config;
-using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Exceptions;
-using Pulsar.Compiler.Generation;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
 using Serilog;
 
 namespace Pulsar.Compiler.Core
 {
-    public class CompilationPipeline
+    public class CompilationPipeline(IRuleCompiler compiler, DslParser parser)
     {
-        private readonly IRuleCompiler _compiler;
-        private readonly DslParser _parser;
-        private readonly ILogger _logger;
-
-        public CompilationPipeline(IRuleCompiler compiler, DslParser parser)
-        {
-            _compiler = compiler;
-            _parser = parser;
-            _logger = LoggingConfig.GetLogger();
-        }
+        private readonly ILogger _logger = LoggingConfig.GetLogger();
 
         public CompilationResult ProcessRules(string rulesPath, CompilerOptions options)
         {
@@ -40,7 +24,7 @@ namespace Pulsar.Compiler.Core
                 );
                 _logger.Information("Loaded {Count} rules from {Path}", rules.Count, rulesPath);
 
-                var result = _compiler.Compile(rules.ToArray(), options);
+                var result = compiler.Compile(rules.ToArray(), options);
                 if (result.Success)
                 {
                     _logger.Information("Successfully compiled {Count} rules", rules.Count);
@@ -76,7 +60,7 @@ namespace Pulsar.Compiler.Core
                     rules.Count
                 );
 
-                var result = _compiler.Compile(rules.ToArray(), options);
+                var result = compiler.Compile(rules.ToArray(), options);
                 if (result.Success)
                 {
                     _logger.Information("Successfully compiled {Count} rules", rules.Count);
@@ -166,7 +150,7 @@ namespace Pulsar.Compiler.Core
                         try
                         {
                             var content = System.IO.File.ReadAllText(file);
-                            var parsedRules = _parser.ParseRules(
+                            var parsedRules = parser.ParseRules(
                                 content,
                                 validSensors,
                                 System.IO.Path.GetFileName(file),
@@ -184,7 +168,7 @@ namespace Pulsar.Compiler.Core
                 {
                     _logger.Debug("Loading rules from file: {Path}", rulesPath);
                     var content = System.IO.File.ReadAllText(rulesPath);
-                    var parsedRules = _parser.ParseRules(
+                    var parsedRules = parser.ParseRules(
                         content,
                         validSensors,
                         System.IO.Path.GetFileName(rulesPath),

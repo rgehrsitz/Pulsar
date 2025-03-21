@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using Microsoft.Extensions.Logging;
 
 namespace Pulsar.Tests.Integration.Helpers

@@ -1,18 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Pulsar.Compiler;
 using Pulsar.Compiler.Config;
-using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
-using Pulsar.Tests.TestUtilities;
 // Fix namespace - remove incorrect import
 // using Pulsar.Compiler.Generators;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.AOTCompat

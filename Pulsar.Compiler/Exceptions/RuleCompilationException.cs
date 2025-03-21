@@ -1,7 +1,5 @@
 // File: Pulsar.Compiler/Exceptions/RuleCompilationException.cs
 
-using System;
-using System.Collections.Generic;
 using Serilog;
 
 namespace Pulsar.Compiler.Exceptions

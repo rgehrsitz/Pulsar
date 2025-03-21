@@ -1,10 +1,7 @@
 // File: Pulsar.Tests/TestUtilities/LoggingConfig.cs
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+
 using Serilog;
-using Serilog.Events;
 using Serilog.Extensions.Logging;
-using Serilog.Sinks.XUnit;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.TestUtilities

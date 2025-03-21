@@ -1,5 +1,4 @@
 // File: Pulsar.Compiler/Models/DependencyValidationResult.cs
-using System.Collections.Generic;
 
 namespace Pulsar.Compiler.Models
 {

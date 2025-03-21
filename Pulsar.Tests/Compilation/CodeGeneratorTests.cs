@@ -1,12 +1,8 @@
 // File: Pulsar.Tests/Compilation/CodeGeneratorTests.cs
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Generation;
 using Pulsar.Compiler.Models;
-using Xunit;
 
 namespace Pulsar.Tests.Compilation
 {

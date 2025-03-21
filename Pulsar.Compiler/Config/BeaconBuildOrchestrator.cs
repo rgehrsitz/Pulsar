@@ -1,13 +1,6 @@
 // File: Pulsar.Compiler/Config/BeaconBuildOrchestrator.cs
 // NOTE: This implementation includes AOT compatibility fixes.
 
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
-using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation; // Using CodeGenerator now
 using Pulsar.Compiler.Models;
 using Serilog;
@@ -19,14 +12,8 @@ namespace Pulsar.Compiler.Config
     /// </summary>
     public class BeaconBuildOrchestrator
     {
-        private readonly ILogger _logger;
-        private readonly BeaconTemplateManager _templateManager;
-
-        public BeaconBuildOrchestrator()
-        {
-            _logger = LoggingConfig.GetLogger().ForContext<BeaconBuildOrchestrator>();
-            _templateManager = new BeaconTemplateManager();
-        }
+        private readonly ILogger _logger = LoggingConfig.GetLogger().ForContext<BeaconBuildOrchestrator>();
+        private readonly BeaconTemplateManager _templateManager = new();
 
         /// <summary>
         /// Builds a complete Beacon solution from the given configuration and rules
@@ -151,7 +138,7 @@ namespace Pulsar.Compiler.Config
                     {
                         ruleManifest.Rules[rule.Name] = new RuleMetadata
                         {
-                            SourceFile = rule.SourceFile ?? "unknown",
+                            SourceFile = rule.SourceFile,
                             SourceLineNumber = rule.LineNumber,
                             Description = rule.Description,
                         };

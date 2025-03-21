@@ -1,7 +1,5 @@
 // File: Pulsar.Compiler/DependencyAnalyzer.cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,9 +7,12 @@ using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Core
 {
-    public class DependencyAnalyzer : IDisposable
+    public class DependencyAnalyzer(
+        int maxDependencyDepth = 10,
+        ILogger<DependencyAnalyzer>? logger = null)
+        : IDisposable
     {
-        private readonly ILogger<DependencyAnalyzer> _logger;
+        private readonly ILogger<DependencyAnalyzer> _logger = logger ?? NullLogger<DependencyAnalyzer>.Instance;
         private bool _disposed;
 
         public void Dispose()
@@ -23,7 +24,6 @@ namespace Pulsar.Compiler.Core
             }
         }
 
-        private readonly int _maxDependencyDepth;
         private readonly Dictionary<string, HashSet<string>> _temporalDependencies = new();
         private static readonly HashSet<string> _mathFunctions = new()
         {
@@ -37,15 +37,6 @@ namespace Pulsar.Compiler.Core
             "Max",
             "Min",
         };
-
-        public DependencyAnalyzer(
-            int maxDependencyDepth = 10,
-            ILogger<DependencyAnalyzer>? logger = null
-        )
-        {
-            _logger = logger ?? NullLogger<DependencyAnalyzer>.Instance;
-            _maxDependencyDepth = maxDependencyDepth;
-        }
 
         public DependencyValidationResult ValidateDependencies(List<RuleDefinition> rules)
         {
@@ -365,7 +356,7 @@ namespace Pulsar.Compiler.Core
             path.Add(current);
 
             // Check if the current path exceeds the maximum depth
-            if (path.Count > _maxDependencyDepth)
+            if (path.Count > maxDependencyDepth)
             {
                 _logger.LogWarning(
                     "Deep dependency chain detected: {Path}",

@@ -1,7 +1,5 @@
 // File: Pulsar.Compiler/Models/CompilerOptions.cs
 
-using System;
-using System.Collections.Generic;
 using Pulsar.Compiler.Config;
 using Serilog;
 

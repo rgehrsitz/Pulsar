@@ -1,12 +1,10 @@
 // File: Pulsar.Compiler/Core/RuleValidator.cs
 
-using System;
-using System.Collections.Generic;
 using Microsoft.Extensions.Logging; // For MS logging
-using Pulsar.Compiler;
 using Pulsar.Compiler.Models;
 using Serilog; // For Serilog logging
-using Serilog.Extensions.Logging; // Added to enable AddSerilog extension
+
+// Added to enable AddSerilog extension
 
 namespace Pulsar.Compiler.Core
 {

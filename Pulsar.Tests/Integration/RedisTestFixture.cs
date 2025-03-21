@@ -1,12 +1,9 @@
-using System;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Tests.Mocks;
 using Pulsar.Tests.TestUtilities;
 using StackExchange.Redis;
 using Testcontainers.Redis;
-using Xunit;
 // Use fully qualified names to avoid ambiguity
 using RedisConfig = Pulsar.Tests.Mocks.RedisConfiguration;
 
@@ -16,17 +13,12 @@ namespace Pulsar.Tests.Integration
     {
         private RedisContainer? _redisContainer;
         private ConnectionMultiplexer? _redisConnection;
-        private readonly ILogger _logger;
+        private readonly ILogger _logger = LoggingConfig.GetLogger();
 
         public RedisService RedisService { get; private set; } = null!;
         public ConnectionMultiplexer Redis =>
             _redisConnection
             ?? throw new InvalidOperationException("Redis connection not initialized");
-
-        public RedisTestFixture()
-        {
-            _logger = LoggingConfig.GetLogger();
-        }
 
         public async Task InitializeAsync()
         {

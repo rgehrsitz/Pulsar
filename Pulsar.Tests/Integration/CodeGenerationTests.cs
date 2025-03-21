@@ -1,10 +1,6 @@
 // File: Pulsar.Tests/Integration/CodeGenerationTests.cs
 using System.Diagnostics;
-using System.IO;
-using System.Threading.Tasks;
 using Pulsar.Compiler;
-using StackExchange.Redis;
-using Xunit;
 
 namespace Pulsar.Tests.Integration
 {

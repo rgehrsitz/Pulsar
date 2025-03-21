@@ -1,11 +1,8 @@
-using System;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Pulsar.Tests.TestUtilities;
 using Serilog.Extensions.Logging;
 using StackExchange.Redis;
 using Testcontainers.Redis;
-using Xunit;
 
 namespace Pulsar.Tests.Integration
 {
@@ -14,19 +11,15 @@ namespace Pulsar.Tests.Integration
     /// </summary>
     public class EndToEndTestFixture : IAsyncLifetime
     {
-        private readonly ILogger<EndToEndTestFixture> _logger;
+        private readonly ILogger<EndToEndTestFixture> _logger = new SerilogLoggerFactory(
+            LoggingConfig.GetSerilogLogger()
+        ).CreateLogger<EndToEndTestFixture>();
         private RedisContainer _redisContainer;
 
         public ConnectionMultiplexer Redis { get; private set; }
         public string RedisConnectionString { get; private set; }
 
-        public EndToEndTestFixture()
-        {
-            // Create a logger using the existing LoggingConfig utility
-            _logger = new SerilogLoggerFactory(
-                LoggingConfig.GetSerilogLogger()
-            ).CreateLogger<EndToEndTestFixture>();
-        }
+        // Create a logger using the existing LoggingConfig utility
 
         public async Task InitializeAsync()
         {

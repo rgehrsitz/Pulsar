@@ -1,15 +1,8 @@
 // File: Pulsar.Compiler/Core/AOTRuleCompiler.cs
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Compiler.Config;
-using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation;
 using Pulsar.Compiler.Generation.Generators; // Using RuleGroupGeneratorFixed now
 using Pulsar.Compiler.Models;

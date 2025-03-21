@@ -1,24 +1,16 @@
 // File: Pulsar.Tests/RuleValidation/RuleValidationTests.cs
-using System;
-using System.Collections.Generic;
-using Pulsar.Compiler;
+
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Models;
 using Serilog;
-using Xunit;
 
 namespace Pulsar.Tests.RuleValidation
 {
     public class RuleValidationTests
     {
-        private readonly ILogger _logger;
-
-        public RuleValidationTests()
-        {
-            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
-                Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
-            );
-        }
+        private readonly ILogger _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
+            Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
+        );
 
         [Fact]
         public void DetailedErrorProduced_ForMissingMandatoryFields()

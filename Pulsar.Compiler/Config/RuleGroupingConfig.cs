@@ -1,7 +1,5 @@
 // File: Pulsar.Compiler/Config/RuleGroupingConfig.cs
 
-using System;
-
 namespace Pulsar.Compiler.Config
 {
     public class RuleGroupingConfig

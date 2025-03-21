@@ -1,7 +1,5 @@
 // File: Pulsar.Tests/TestUtilities/RedisConfigHelper.cs
 
-using System;
-using System.Collections.Generic;
 using DotNet.Testcontainers.Containers;
 
 namespace Pulsar.Tests.TestUtilities

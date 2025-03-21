@@ -1,26 +1,15 @@
-using System;
-using System.Collections.Generic;
 // Add missing namespaces if any
-using System.Linq; // For numeric operations that might need this
-using System.Threading.Tasks;
+// For numeric operations that might need this
 using Microsoft.Extensions.Logging;
 using Pulsar.Tests.TestUtilities;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.AOTCompat
 {
     [Trait("Category", "AOTCompatibility")]
-    public class CircularBufferTests
+    public class CircularBufferTests(ITestOutputHelper output)
     {
-        private readonly ITestOutputHelper _output;
-        private readonly ILogger _logger;
-
-        public CircularBufferTests(ITestOutputHelper output)
-        {
-            _output = output;
-            _logger = LoggingConfig.GetLoggerForTests(output);
-        }
+        private readonly ILogger _logger = LoggingConfig.GetLoggerForTests(output);
 
         [Fact]
         public void CircularBuffer_WithObjectValues_WorksCorrectly()
@@ -56,7 +45,7 @@ namespace Pulsar.Tests.AOTCompat
             Assert.Equal("value5", buffer.GetAtIndex(3));
             Assert.Equal("value6", buffer.GetAtIndex(4));
 
-            _output.WriteLine("Circular buffer with object values works correctly");
+            output.WriteLine("Circular buffer with object values works correctly");
         }
 
         [Fact]
@@ -95,7 +84,7 @@ namespace Pulsar.Tests.AOTCompat
             // Check if not increased by more than the actual increase
             Assert.False(buffer.IncreasedBy(20));
 
-            _output.WriteLine("Circular buffer with numeric calculations works correctly");
+            output.WriteLine("Circular buffer with numeric calculations works correctly");
         }
 
         [Fact]
@@ -120,40 +109,31 @@ namespace Pulsar.Tests.AOTCompat
             // Check if increasing in timespan
             Assert.True(buffer.IsIncreasingInTimespan(TimeSpan.FromMinutes(6)));
 
-            _output.WriteLine("Circular buffer with timestamped values works correctly");
+            output.WriteLine("Circular buffer with timestamped values works correctly");
         }
 
         // Simple circular buffer implementation for testing AOT compatibility
-        private class SimpleCircularBuffer<T>
+        private class SimpleCircularBuffer<T>(int capacity)
         {
-            private readonly T[] _buffer;
-            private int _start;
-            private int _count;
-            private readonly int _capacity;
-
-            public SimpleCircularBuffer(int capacity)
-            {
-                _buffer = new T[capacity];
-                _capacity = capacity;
-                _start = 0;
-                _count = 0;
-            }
+            private readonly T[] _buffer = new T[capacity];
+            private int _start = 0;
+            private int _count = 0;
 
             public int Count => _count;
 
             public void Add(T value)
             {
-                if (_count < _capacity)
+                if (_count < capacity)
                 {
                     // Buffer not full yet
-                    _buffer[(_start + _count) % _capacity] = value;
+                    _buffer[(_start + _count) % capacity] = value;
                     _count++;
                 }
                 else
                 {
                     // Buffer full, overwrite oldest value
                     _buffer[_start] = value;
-                    _start = (_start + 1) % _capacity;
+                    _start = (_start + 1) % capacity;
                 }
             }
 
@@ -162,7 +142,7 @@ namespace Pulsar.Tests.AOTCompat
                 if (index < 0 || index >= _count)
                     throw new ArgumentOutOfRangeException(nameof(index));
 
-                return _buffer[(_start + index) % _capacity];
+                return _buffer[(_start + index) % capacity];
             }
 
             public double Average()
@@ -281,34 +261,25 @@ namespace Pulsar.Tests.AOTCompat
             }
         }
 
-        private class TimestampedCircularBuffer<T>
+        private class TimestampedCircularBuffer<T>(int capacity)
         {
-            private readonly (T Value, DateTime Timestamp)[] _buffer;
-            private int _start;
-            private int _count;
-            private readonly int _capacity;
-
-            public TimestampedCircularBuffer(int capacity)
-            {
-                _buffer = new (T, DateTime)[capacity];
-                _capacity = capacity;
-                _start = 0;
-                _count = 0;
-            }
+            private readonly (T Value, DateTime Timestamp)[] _buffer = new (T, DateTime)[capacity];
+            private int _start = 0;
+            private int _count = 0;
 
             public void Add(T value, DateTime timestamp)
             {
-                if (_count < _capacity)
+                if (_count < capacity)
                 {
                     // Buffer not full yet
-                    _buffer[(_start + _count) % _capacity] = (value, timestamp);
+                    _buffer[(_start + _count) % capacity] = (value, timestamp);
                     _count++;
                 }
                 else
                 {
                     // Buffer full, overwrite oldest value
                     _buffer[_start] = (value, timestamp);
-                    _start = (_start + 1) % _capacity;
+                    _start = (_start + 1) % capacity;
                 }
             }
 
@@ -318,7 +289,7 @@ namespace Pulsar.Tests.AOTCompat
 
                 for (int i = 0; i < _count; i++)
                 {
-                    var item = _buffer[(_start + i) % _capacity];
+                    var item = _buffer[(_start + i) % capacity];
                     if (item.Timestamp > timestamp)
                     {
                         result.Add(item.Value);
@@ -337,7 +308,7 @@ namespace Pulsar.Tests.AOTCompat
 
                 for (int i = 0; i < _count; i++)
                 {
-                    var item = _buffer[(_start + i) % _capacity];
+                    var item = _buffer[(_start + i) % capacity];
                     if (item.Timestamp > cutoff)
                     {
                         recentValues.Add(item);

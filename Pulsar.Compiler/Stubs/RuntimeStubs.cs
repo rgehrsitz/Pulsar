@@ -1,5 +1,4 @@
 // File: Pulsar.Compiler/Stubs/RuntimeStubs.cs
-using System;
 
 namespace Pulsar.Runtime
 {

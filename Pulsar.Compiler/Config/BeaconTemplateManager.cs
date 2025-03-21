@@ -1,9 +1,6 @@
 // File: Pulsar.Compiler/Config/BeaconTemplateManager.cs
 // NOTE: This implementation includes AOT compatibility fixes.
 
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using Serilog;
 
@@ -14,14 +11,8 @@ namespace Pulsar.Compiler.Config
     /// </summary>
     public class BeaconTemplateManager
     {
-        private readonly ILogger _logger;
-        private readonly TemplateManager _originalTemplateManager;
-
-        public BeaconTemplateManager()
-        {
-            _logger = LoggingConfig.GetLogger().ForContext<BeaconTemplateManager>();
-            _originalTemplateManager = new TemplateManager();
-        }
+        private readonly ILogger _logger = LoggingConfig.GetLogger().ForContext<BeaconTemplateManager>();
+        private readonly TemplateManager _originalTemplateManager = new();
 
         /// <summary>
         /// Creates the complete Beacon solution structure

@@ -1,27 +1,16 @@
 // File: Pulsar.Tests/RuntimeExecution/RuntimeExecutionTests.cs
 
 
-
-using System;
-using System.Collections.Generic;
-using Pulsar.Compiler.Models;
 using Pulsar.Tests.TestUtilities;
 using Serilog;
-using Serilog.Core;
-using Xunit;
 
 namespace Pulsar.Tests.RuntimeExecution
 {
     public class RuntimeExecutionTests
     {
-        private readonly ILogger _logger;
-
-        public RuntimeExecutionTests()
-        {
-            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
-                Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
-            );
-        }
+        private readonly ILogger _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
+            Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
+        );
 
         [Fact]
         public void RuntimeExecution_ExecutesValidRuleSuccessfully()

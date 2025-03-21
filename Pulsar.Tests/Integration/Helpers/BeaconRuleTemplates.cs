@@ -1,5 +1,3 @@
-using System;
-
 namespace Pulsar.Tests.Integration.Helpers
 {
     /// <summary>

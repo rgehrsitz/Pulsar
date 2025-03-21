@@ -1,17 +1,12 @@
 // File: Pulsar.Compiler/DslParser.cs
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using Pulsar.Compiler.Exceptions;
 using Pulsar.Compiler.Models;
 using Serilog;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
-using YamlDotNet.Serialization.NodeDeserializers;
 
 namespace Pulsar.Compiler.Parsers
 {

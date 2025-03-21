@@ -1,28 +1,18 @@
 // File: Pulsar.Compiler/Generation/Generators/RuleGroupGenerator.cs
 // NOTE: This implementation includes AOT compatibility fixes.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Generation.Helpers;
 using Pulsar.Compiler.Models;
-using Serilog;
 using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace Pulsar.Compiler.Generation.Generators
 {
-    public class RuleGroupGenerator
+    public class RuleGroupGenerator(ILogger? logger = null)
     {
-        private readonly ILogger _logger;
-
-        public RuleGroupGenerator(ILogger? logger = null)
-        {
-            _logger = logger ?? NullLogger.Instance;
-        }
+        private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
         public GeneratedFileInfo GenerateGroupImplementation(
             int groupId,

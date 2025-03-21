@@ -1,43 +1,30 @@
 // File: Pulsar.Tests/Parsing/ComplexRuleParsingTests.cs
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
 using Pulsar.Compiler.Exceptions;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
-using Pulsar.Tests.TestUtilities;
 using Serilog;
-using Xunit;
 
 namespace Pulsar.Tests.Parsing
 {
     public class ComplexRuleParsingTests
     {
-        private readonly ILogger _logger;
+        private readonly ILogger _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
+            Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
+        );
 
-        private readonly DslParser _parser;
+        private readonly DslParser _parser = new();
 
-        private readonly List<string> _validSensors;
-
-        public ComplexRuleParsingTests()
+        private readonly List<string> _validSensors = new()
         {
-            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
-                Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
-            );
-
-            _parser = new DslParser();
-
-            _validSensors = new List<string>
-            {
-                "temp1",
-                "temp2",
-                "pressure",
-                "humidity",
-                "ambient_pressure",
-                "flow_rate",
-                "valve_position",
-            };
-        }
+            "temp1",
+            "temp2",
+            "pressure",
+            "humidity",
+            "ambient_pressure",
+            "flow_rate",
+            "valve_position",
+        };
 
         [Fact]
         public void Parse_ComplexConditions_Succeeds()

@@ -1,14 +1,10 @@
 // File: Pulsar.Tests/Integration/TestEnvironmentFixture.cs
-using System;
+
 using System.Diagnostics;
-using System.IO;
-using System.Threading.Tasks;
-using DotNet.Testcontainers.Containers;
 using Pulsar.Compiler;
 using Serilog;
 using StackExchange.Redis;
 using Testcontainers.Redis;
-using Xunit;
 
 namespace Pulsar.Tests.Integration
 {

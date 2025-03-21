@@ -1,19 +1,12 @@
 // File: Pulsar.Compiler/Generation/CodeGenerator.cs
 // NOTE: This implementation includes AOT compatibility fixes.
 
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Generation.Generators;
-using Pulsar.Compiler.Generation.Helpers;
 using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Generation

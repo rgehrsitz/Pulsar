@@ -1,14 +1,7 @@
 // File: Pulsar.Compiler/Program.cs
 
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Core;
-using Pulsar.Compiler.Generation;
-using Pulsar.Compiler.Generation.Generators;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
 using Serilog;

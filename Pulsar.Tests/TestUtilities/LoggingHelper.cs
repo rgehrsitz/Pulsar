@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Logging;
-using Serilog;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.TestUtilities

@@ -1,7 +1,5 @@
 // File: Pulsar.Compiler/Models/SourceInfo.cs
 
-using System;
-using System.IO;
 using Serilog;
 
 namespace Pulsar.Compiler.Models

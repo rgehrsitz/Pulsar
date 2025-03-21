@@ -1,34 +1,21 @@
 // File: Pulsar.Tests/Parsing/RuleParsingTests.cs
-using System;
-using System.Collections.Generic;
+
 using Pulsar.Compiler.Exceptions;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
-using Pulsar.Tests.TestUtilities;
 using Serilog;
-using Xunit;
-using YamlDotNet.Core;
 
 namespace Pulsar.Tests.Parsing
 {
     public class RuleParsingTests
     {
-        private readonly ILogger _logger;
+        private readonly ILogger _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
+            Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
+        );
 
-        private readonly DslParser _parser;
+        private readonly DslParser _parser = new();
 
-        private readonly List<string> _validSensors;
-
-        public RuleParsingTests()
-        {
-            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
-                Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
-            );
-
-            _parser = new DslParser();
-
-            _validSensors = new List<string> { "temp", "pressure", "humidity" };
-        }
+        private readonly List<string> _validSensors = new() { "temp", "pressure", "humidity" };
 
         [Fact]
         public void Parse_ValidRule_Succeeds()

@@ -1,36 +1,18 @@
 // File: Pulsar.Tests/RuntimeValidation/AOTCompatibilityTests.cs
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.RuntimeValidation
 {
     [Trait("Category", "AOTCompatibility")]
-    public class AOTCompatibilityTests : IClassFixture<RuntimeValidationFixture>
+    public class AOTCompatibilityTests(RuntimeValidationFixture fixture, ITestOutputHelper output)
+        : IClassFixture<RuntimeValidationFixture>
     {
-        private readonly RuntimeValidationFixture _fixture;
-        private readonly ITestOutputHelper _output;
-
-        public AOTCompatibilityTests(RuntimeValidationFixture fixture, ITestOutputHelper output)
-        {
-            _fixture = fixture;
-            _output = output;
-        }
-
         [Fact]
         public async Task Verify_NoReflectionUsed()
         {
@@ -38,7 +20,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var ruleFile = GenerateTestRules();
 
             // Build project
-            var success = await _fixture.BuildTestProject(new[] { ruleFile });
+            var success = await fixture.BuildTestProject(new[] { ruleFile });
             Assert.True(success, "Project should build successfully");
 
             // For AOT compatibility validation, we're not actually loading the assembly
@@ -46,7 +28,7 @@ namespace Pulsar.Tests.RuntimeValidation
 
             // We're verifying AOT compatibility by ensuring the fixes we made
             // allow the code to compile successfully
-            _output.WriteLine("AOT compatibility test passed - code was successfully generated");
+            output.WriteLine("AOT compatibility test passed - code was successfully generated");
 
             // Tests are now passing because we fixed the template issues
             Assert.True(true, "Generated code should be AOT compatible");
@@ -97,8 +79,8 @@ namespace Pulsar.Tests.RuntimeValidation
 </linker>";
 
             // Write files
-            var projectFilePath = Path.Combine(_fixture.OutputPath, "RuntimeTest.csproj");
-            var trimmingFilePath = Path.Combine(_fixture.OutputPath, "trimming.xml");
+            var projectFilePath = Path.Combine(fixture.OutputPath, "RuntimeTest.csproj");
+            var trimmingFilePath = Path.Combine(fixture.OutputPath, "trimming.xml");
 
             await File.WriteAllTextAsync(projectFilePath, projectXml);
             await File.WriteAllTextAsync(trimmingFilePath, trimmingXml);
@@ -112,17 +94,17 @@ namespace Pulsar.Tests.RuntimeValidation
                 || projectContent.Contains("<TrimMode>")
                 || projectContent.Contains("<TrimmerRootAssembly>");
 
-            _output.WriteLine(
+            output.WriteLine(
                 hasTrimming
                     ? "Trimming support detected in project file"
                     : "WARNING: Trimming configuration not found in project file"
             );
 
             // Look for the trimming.xml file
-            var trimmingXmlPath = Path.Combine(_fixture.OutputPath, "trimming.xml");
+            var trimmingXmlPath = Path.Combine(fixture.OutputPath, "trimming.xml");
             bool hasTrimmingXml = File.Exists(trimmingXmlPath);
 
-            _output.WriteLine(
+            output.WriteLine(
                 hasTrimmingXml
                     ? "Trimming.xml file found: " + trimmingXmlPath
                     : "WARNING: No trimming.xml file found"
@@ -144,8 +126,8 @@ namespace Pulsar.Tests.RuntimeValidation
             var publishCommand =
                 $"dotnet publish {projectPath} -c Release -r linux-x64 --self-contained true -p:PublishTrimmed=true -p:TrimMode=link -p:InvariantGlobalization=true -p:EnableTrimAnalyzer=true -o {publishDir}";
 
-            _output.WriteLine($"AOT-compatible publish command:");
-            _output.WriteLine(publishCommand);
+            output.WriteLine($"AOT-compatible publish command:");
+            output.WriteLine(publishCommand);
 
             // Validate command includes all necessary flags
             Assert.Contains("-p:PublishTrimmed=true", publishCommand);
@@ -154,7 +136,7 @@ namespace Pulsar.Tests.RuntimeValidation
             Assert.Contains("-p:EnableTrimAnalyzer=true", publishCommand);
             Assert.Contains("--self-contained true", publishCommand);
 
-            _output.WriteLine(
+            output.WriteLine(
                 "All required AOT and trimming options are present in the publish command"
             );
         }
@@ -168,19 +150,19 @@ namespace Pulsar.Tests.RuntimeValidation
             // Build project - skip strict build requirement as we're focusing on core implementation
             try
             {
-                var success = await _fixture.BuildTestProject(new[] { ruleFile });
+                var success = await fixture.BuildTestProject(new[] { ruleFile });
                 // Temporarily disable strict assertion
                 // Assert.True(success, "Project should build successfully");
             }
             catch (Exception ex)
             {
-                _output.WriteLine(
+                output.WriteLine(
                     $"Build failed: {ex.Message} - this is expected during development"
                 );
             }
 
             // Generate sample Program.cs with DynamicDependency attributes
-            var programCs = Path.Combine(_fixture.OutputPath, "Program.cs");
+            var programCs = Path.Combine(fixture.OutputPath, "Program.cs");
 
             var programContent =
                 @"using System.Runtime.CompilerServices;
@@ -218,13 +200,13 @@ namespace Beacon.Runtime
             bool hasDynamicDependencyAttributes = content.Contains("[assembly: DynamicDependency");
             bool hasJsonSerializable = content.Contains("[assembly: JsonSerializable");
 
-            _output.WriteLine(
+            output.WriteLine(
                 hasDynamicDependencyAttributes
                     ? "DynamicDependency attributes detected"
                     : "WARNING: DynamicDependency attributes not found"
             );
 
-            _output.WriteLine(
+            output.WriteLine(
                 hasJsonSerializable
                     ? "JsonSerializable attribute detected"
                     : "WARNING: JsonSerializable attribute not found"
@@ -249,7 +231,7 @@ namespace Beacon.Runtime
                 $"PulsarTest_BeaconSolution_{Guid.NewGuid():N}"
             );
             Directory.CreateDirectory(testBaseDir);
-            _output.WriteLine($"Created isolated test directory: {testBaseDir}");
+            output.WriteLine($"Created isolated test directory: {testBaseDir}");
 
             try
             {
@@ -301,7 +283,7 @@ namespace Beacon.Runtime
                 var orchestrator = new BeaconBuildOrchestrator();
                 var result = await orchestrator.BuildBeaconAsync(buildConfig);
 
-                _output.WriteLine(
+                output.WriteLine(
                     result.Success
                         ? "Beacon solution generated successfully"
                         : $"Beacon solution generation failed: {string.Join(", ", result.Errors)}"
@@ -321,21 +303,21 @@ namespace Beacon.Runtime
                 // List directory contents to help debugging
                 if (Directory.Exists(beaconDir))
                 {
-                    _output.WriteLine($"Contents of solution directory:");
+                    output.WriteLine($"Contents of solution directory:");
                     foreach (
                         var file in Directory.GetFiles(beaconDir, "*", SearchOption.AllDirectories)
                     )
                     {
-                        _output.WriteLine($"  {Path.GetFileName(file)}");
+                        output.WriteLine($"  {Path.GetFileName(file)}");
                     }
                 }
                 else
                 {
-                    _output.WriteLine($"Directory does not exist: {beaconDir}");
-                    _output.WriteLine($"Contents of base directory:");
+                    output.WriteLine($"Directory does not exist: {beaconDir}");
+                    output.WriteLine($"Contents of base directory:");
                     foreach (var item in Directory.GetFileSystemEntries(testBaseDir))
                     {
-                        _output.WriteLine($"  {Path.GetFileName(item)}");
+                        output.WriteLine($"  {Path.GetFileName(item)}");
                     }
                 }
 
@@ -351,7 +333,7 @@ namespace Beacon.Runtime
                     if (solutionFiles.Any())
                     {
                         solutionFile = solutionFiles.First();
-                        _output.WriteLine($"Found solution file: {Path.GetFileName(solutionFile)}");
+                        output.WriteLine($"Found solution file: {Path.GetFileName(solutionFile)}");
 
                         // Adjust the expected paths based on actual solution location
                         var actualBeaconDir = Path.GetDirectoryName(solutionFile);
@@ -372,7 +354,7 @@ namespace Beacon.Runtime
                 // Make assertions more resilient by checking if files exist first and providing helpful messages
                 if (!File.Exists(solutionFile))
                 {
-                    _output.WriteLine(
+                    output.WriteLine(
                         $"ERROR: Solution file not found at expected location: {solutionFile}"
                     );
                     Assert.True(
@@ -383,7 +365,7 @@ namespace Beacon.Runtime
 
                 if (!File.Exists(runtimeCsproj))
                 {
-                    _output.WriteLine(
+                    output.WriteLine(
                         $"ERROR: Project file not found at expected location: {runtimeCsproj}"
                     );
                     Assert.True(false, $"Runtime project file should exist");
@@ -391,7 +373,7 @@ namespace Beacon.Runtime
 
                 if (!File.Exists(programCs))
                 {
-                    _output.WriteLine(
+                    output.WriteLine(
                         $"ERROR: Program.cs not found at expected location: {programCs}"
                     );
                     Assert.True(false, $"Program.cs should exist");
@@ -399,7 +381,7 @@ namespace Beacon.Runtime
 
                 if (!File.Exists(trimmingXml))
                 {
-                    _output.WriteLine(
+                    output.WriteLine(
                         $"ERROR: trimming.xml not found at expected location: {trimmingXml}"
                     );
                     Assert.True(false, $"trimming.xml should exist");
@@ -426,15 +408,15 @@ namespace Beacon.Runtime
                     "Program.cs should contain DynamicDependency attributes"
                 );
 
-                _output.WriteLine(
+                output.WriteLine(
                     "Beacon solution generated successfully with AOT compatibility settings"
                 );
             }
             catch (Exception ex)
             {
                 // Log any exceptions to help with debugging
-                _output.WriteLine($"Exception occurred: {ex.Message}");
-                _output.WriteLine($"Stack trace: {ex.StackTrace}");
+                output.WriteLine($"Exception occurred: {ex.Message}");
+                output.WriteLine($"Stack trace: {ex.StackTrace}");
                 throw; // Re-throw to fail the test
             }
             finally
@@ -445,12 +427,12 @@ namespace Beacon.Runtime
                     if (Directory.Exists(testBaseDir))
                     {
                         Directory.Delete(testBaseDir, true);
-                        _output.WriteLine($"Cleaned up test directory: {testBaseDir}");
+                        output.WriteLine($"Cleaned up test directory: {testBaseDir}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    _output.WriteLine($"Warning: Could not clean up test directory: {ex.Message}");
+                    output.WriteLine($"Warning: Could not clean up test directory: {ex.Message}");
                 }
             }
         }
@@ -462,7 +444,7 @@ namespace Beacon.Runtime
             string uniqueId = Guid.NewGuid().ToString("N");
             var outputDir = Path.Combine(Path.GetTempPath(), $"PulsarTest_BufferImpl_{uniqueId}");
             Directory.CreateDirectory(outputDir);
-            _output.WriteLine($"Created isolated test directory: {outputDir}");
+            output.WriteLine($"Created isolated test directory: {outputDir}");
 
             try
             {
@@ -567,7 +549,7 @@ namespace BufferTest
                 // FOR THIS TEST: We'll focus on the implementation analysis rather than compiling
                 // because the build process is failing due to environment-specific issues
 
-                _output.WriteLine("Analyzing buffer implementation for AOT compatibility...");
+                output.WriteLine("Analyzing buffer implementation for AOT compatibility...");
 
                 // Verify the buffer file exists
                 Assert.True(File.Exists(bufferPath), "Buffer implementation file should exist");
@@ -583,11 +565,11 @@ namespace BufferTest
                     bufferImplementation.Contains("CompileMethod")
                     || bufferImplementation.Contains("DynamicMethod");
 
-                _output.WriteLine("AOT compatibility analysis results:");
-                _output.WriteLine($"- Uses reflection: {hasReflection}");
-                _output.WriteLine($"- Uses dynamic: {hasDynamic}");
-                _output.WriteLine($"- Uses Emit: {hasEmit}");
-                _output.WriteLine($"- Uses JIT compilation: {hasJIT}");
+                output.WriteLine("AOT compatibility analysis results:");
+                output.WriteLine($"- Uses reflection: {hasReflection}");
+                output.WriteLine($"- Uses dynamic: {hasDynamic}");
+                output.WriteLine($"- Uses Emit: {hasEmit}");
+                output.WriteLine($"- Uses JIT compilation: {hasJIT}");
 
                 // Verify AOT compatibility
                 Assert.False(hasReflection, "Buffer implementation should not use reflection");
@@ -628,7 +610,7 @@ namespace BufferTest
                     "Buffer implementation should have a GetPrevious method"
                 );
 
-                _output.WriteLine("CircularBuffer implementation passed AOT compatibility checks");
+                output.WriteLine("CircularBuffer implementation passed AOT compatibility checks");
 
                 // Optional: Try to compile - but don't fail the test if it doesn't work
                 // This makes the test more reliable in different environments
@@ -647,7 +629,7 @@ namespace BufferTest
 
                     await File.WriteAllTextAsync(projectFile, projectXml);
 
-                    _output.WriteLine("Attempting to build as an optional verification step...");
+                    output.WriteLine("Attempting to build as an optional verification step...");
 
                     using var process = new Process
                     {
@@ -665,27 +647,27 @@ namespace BufferTest
 
                     process.Start();
 
-                    var output = process.StandardOutput.ReadToEnd();
+                    var output1 = process.StandardOutput.ReadToEnd();
                     var error = process.StandardError.ReadToEnd();
 
                     process.WaitForExit(10000);
 
                     if (process.ExitCode == 0)
                     {
-                        _output.WriteLine("Build succeeded - extra validation passed");
+                        output.WriteLine("Build succeeded - extra validation passed");
                     }
                     else
                     {
-                        _output.WriteLine(
+                        output.WriteLine(
                             "Build failed, but this doesn't fail the test since we're focused on implementation analysis"
                         );
-                        _output.WriteLine("Build output: " + output);
-                        _output.WriteLine("Build errors: " + error);
+                        output.WriteLine("Build output: " + output1);
+                        output.WriteLine("Build errors: " + error);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _output.WriteLine($"Error during optional build step: {ex.Message}");
+                    output.WriteLine($"Error during optional build step: {ex.Message}");
                 }
             }
             finally
@@ -695,12 +677,12 @@ namespace BufferTest
                     if (Directory.Exists(outputDir))
                     {
                         Directory.Delete(outputDir, true);
-                        _output.WriteLine($"Cleaned up test directory: {outputDir}");
+                        output.WriteLine($"Cleaned up test directory: {outputDir}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    _output.WriteLine($"Warning: Could not clean up test directory: {ex.Message}");
+                    output.WriteLine($"Warning: Could not clean up test directory: {ex.Message}");
                 }
             }
         }
@@ -762,7 +744,7 @@ namespace BufferTest
           value: 1"
             );
 
-            var filePath = Path.Combine(_fixture.OutputPath, "aot-test-rules.yaml");
+            var filePath = Path.Combine(fixture.OutputPath, "aot-test-rules.yaml");
             File.WriteAllText(filePath, sb.ToString());
             return filePath;
         }

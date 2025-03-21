@@ -1,28 +1,17 @@
 // File: Pulsar.Tests/Compilation/CompilationTests.cs
 
 
-
-using System;
-using System.Collections.Generic;
-using Pulsar.Compiler;
 using Pulsar.Compiler.Core;
 using Pulsar.Compiler.Models;
-using Pulsar.Tests.TestUtilities;
 using Serilog;
-using Xunit;
 
 namespace Pulsar.Tests.Compilation
 {
     public class CompilationTests
     {
-        private readonly ILogger _logger;
-
-        public CompilationTests()
-        {
-            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
-                Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
-            );
-        }
+        private readonly ILogger _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
+            Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
+        );
 
         [Fact]
         public void Compilation_ValidRules_GeneratesValidOutput()

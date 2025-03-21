@@ -1,30 +1,15 @@
 // File: Pulsar.Tests/RuntimeValidation/MemoryUsageTests.cs
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.RuntimeValidation
 {
     [Trait("Category", "MemoryUsage")]
-    public class MemoryUsageTests : IClassFixture<RuntimeValidationFixture>
+    public class MemoryUsageTests(RuntimeValidationFixture fixture, ITestOutputHelper output)
+        : IClassFixture<RuntimeValidationFixture>
     {
-        private readonly RuntimeValidationFixture _fixture;
-        private readonly ITestOutputHelper _output;
-
-        public MemoryUsageTests(RuntimeValidationFixture fixture, ITestOutputHelper output)
-        {
-            _fixture = fixture;
-            _output = output;
-        }
-
         [Fact]
         public async Task ExtendedExecution_MonitorsMemoryUsage()
         {
@@ -32,7 +17,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var ruleFile = GenerateMemoryTestRules(10);
 
             // Build project
-            var success = await _fixture.BuildTestProject(new[] { ruleFile });
+            var success = await fixture.BuildTestProject(new[] { ruleFile });
             Assert.True(success, "Project should build successfully");
 
             // Run extended execution monitoring
@@ -40,14 +25,14 @@ namespace Pulsar.Tests.RuntimeValidation
             var totalCycles = 5;
 
             // Monitor for longer duration to detect potential memory leaks
-            await _fixture.MonitorMemoryUsage(
+            await fixture.MonitorMemoryUsage(
                 duration: TimeSpan.FromMinutes(1),
                 cycleCount: totalCycles,
                 memoryCallback: memory =>
                 {
                     var cycle = memorySnapshots.Count;
                     memorySnapshots.Add((cycle, memory));
-                    _output.WriteLine($"Cycle {cycle}: {memory / (1024 * 1024):F2} MB");
+                    output.WriteLine($"Cycle {cycle}: {memory / (1024 * 1024):F2} MB");
                 }
             );
 
@@ -62,7 +47,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var ruleFile = GenerateMemoryTestRules(10);
 
             // Build project
-            var success = await _fixture.BuildTestProject(new[] { ruleFile });
+            var success = await fixture.BuildTestProject(new[] { ruleFile });
             Assert.True(success, "Project should build successfully");
 
             // Track memory usage
@@ -82,7 +67,7 @@ namespace Pulsar.Tests.RuntimeValidation
 
                 // Execute rules
                 // Skip actual execution for tests
-                _output.WriteLine($"Skipping rules execution for cycle {i}");
+                output.WriteLine($"Skipping rules execution for cycle {i}");
                 var executeSuccess = true;
 
                 // Capture memory usage
@@ -91,7 +76,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 var memory = process.WorkingSet64;
                 memorySnapshots.Add((i, memory));
 
-                _output.WriteLine($"Cycle {i}: {memory / (1024 * 1024):F2} MB");
+                output.WriteLine($"Cycle {i}: {memory / (1024 * 1024):F2} MB");
             }
 
             // Analyze memory usage pattern
@@ -105,7 +90,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var ruleFile = GenerateTemporalRules(5);
 
             // Build project
-            var success = await _fixture.BuildTestProject(new[] { ruleFile });
+            var success = await fixture.BuildTestProject(new[] { ruleFile });
             Assert.True(success, "Project should build successfully");
 
             // Track memory usage
@@ -126,7 +111,7 @@ namespace Pulsar.Tests.RuntimeValidation
 
                 // Execute rules
                 // Skip actual execution for tests
-                _output.WriteLine($"Skipping rules execution for cycle {i}");
+                output.WriteLine($"Skipping rules execution for cycle {i}");
                 var executeSuccess = true;
 
                 if (i % 10 == 0)
@@ -137,7 +122,7 @@ namespace Pulsar.Tests.RuntimeValidation
                     var memory = process.WorkingSet64;
                     memorySnapshots.Add((i, memory));
 
-                    _output.WriteLine($"Cycle {i}: {memory / (1024 * 1024):F2} MB");
+                    output.WriteLine($"Cycle {i}: {memory / (1024 * 1024):F2} MB");
                 }
 
                 // Ensure buffer has time to process
@@ -152,7 +137,7 @@ namespace Pulsar.Tests.RuntimeValidation
         {
             if (memorySnapshots.Count < 2)
             {
-                _output.WriteLine("Not enough memory snapshots for analysis");
+                output.WriteLine("Not enough memory snapshots for analysis");
                 return;
             }
 
@@ -162,10 +147,10 @@ namespace Pulsar.Tests.RuntimeValidation
             var totalGrowth = finalMemory - initialMemory;
             var growthPercentage = (double)totalGrowth / initialMemory * 100;
 
-            _output.WriteLine("\nMemory Usage Analysis:");
-            _output.WriteLine($"Initial: {initialMemory / (1024 * 1024):F2} MB");
-            _output.WriteLine($"Final: {finalMemory / (1024 * 1024):F2} MB");
-            _output.WriteLine(
+            output.WriteLine("\nMemory Usage Analysis:");
+            output.WriteLine($"Initial: {initialMemory / (1024 * 1024):F2} MB");
+            output.WriteLine($"Final: {finalMemory / (1024 * 1024):F2} MB");
+            output.WriteLine(
                 $"Total Growth: {totalGrowth / (1024 * 1024):F2} MB ({growthPercentage:F2}%)"
             );
 
@@ -175,7 +160,7 @@ namespace Pulsar.Tests.RuntimeValidation
 
             (double slope, double intercept) = CalculateLinearRegression(cycles, memories);
 
-            _output.WriteLine($"Growth Trend: {slope:F4} MB per cycle");
+            output.WriteLine($"Growth Trend: {slope:F4} MB per cycle");
 
             // Determine if there's a significant memory leak
             // A small positive slope is normal due to various caches and optimizations
@@ -183,15 +168,15 @@ namespace Pulsar.Tests.RuntimeValidation
 
             if (possibleLeak)
             {
-                _output.WriteLine("WARNING: Possible memory leak detected");
+                output.WriteLine("WARNING: Possible memory leak detected");
 
                 // Calculate projected memory usage after 1000 cycles
                 var projectedUsage = intercept + slope * 1000;
-                _output.WriteLine($"Projected memory after 1000 cycles: {projectedUsage:F2} MB");
+                output.WriteLine($"Projected memory after 1000 cycles: {projectedUsage:F2} MB");
             }
             else
             {
-                _output.WriteLine("No significant memory leak detected");
+                output.WriteLine("No significant memory leak detected");
             }
 
             // We don't assert here because memory behavior can vary by environment
@@ -237,7 +222,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 );
             }
 
-            var filePath = Path.Combine(_fixture.OutputPath, "memory-test-rules.yaml");
+            var filePath = Path.Combine(fixture.OutputPath, "memory-test-rules.yaml");
             File.WriteAllText(filePath, sb.ToString());
             return filePath;
         }
@@ -283,7 +268,7 @@ namespace Pulsar.Tests.RuntimeValidation
           value_expression: 'buffer:value1 + buffer:value2 + buffer:value3'"
             );
 
-            var filePath = Path.Combine(_fixture.OutputPath, "temporal-rules.yaml");
+            var filePath = Path.Combine(fixture.OutputPath, "temporal-rules.yaml");
             File.WriteAllText(filePath, sb.ToString());
             return filePath;
         }

@@ -1,29 +1,14 @@
 // File: Pulsar.Tests/RuntimeValidation/PerformanceBenchmarkTests.cs
 
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace Pulsar.Tests.RuntimeValidation
 {
-    public class PerformanceBenchmarkTests : IClassFixture<RuntimeValidationFixture>
+    public class PerformanceBenchmarkTests(RuntimeValidationFixture fixture, ITestOutputHelper output)
+        : IClassFixture<RuntimeValidationFixture>
     {
-        private readonly RuntimeValidationFixture _fixture;
-        private readonly ITestOutputHelper _output;
-
-        public PerformanceBenchmarkTests(RuntimeValidationFixture fixture, ITestOutputHelper output)
-        {
-            _fixture = fixture;
-            _output = output;
-        }
-
         [Fact(Skip = "Performance tests are currently disabled for this PR")]
         public async Task Benchmark_IncreasingRuleCount_MeasuresScalability()
         {
@@ -33,13 +18,13 @@ namespace Pulsar.Tests.RuntimeValidation
 
             foreach (var ruleCount in ruleCounts)
             {
-                _output.WriteLine($"Testing with {ruleCount} rules...");
+                output.WriteLine($"Testing with {ruleCount} rules...");
 
                 // Generate rules
                 var ruleFile = GenerateRules(ruleCount);
 
                 // Build project
-                var success = await _fixture.BuildTestProject(new[] { ruleFile });
+                var success = await fixture.BuildTestProject(new[] { ruleFile });
                 Assert.True(success, $"Project with {ruleCount} rules should build successfully");
 
                 // Run benchmark
@@ -48,11 +33,11 @@ namespace Pulsar.Tests.RuntimeValidation
             }
 
             // Output results
-            _output.WriteLine("\nPerformance scaling with rule count:");
-            _output.WriteLine("RuleCount\tAvg (ms)\tP95 (ms)");
+            output.WriteLine("\nPerformance scaling with rule count:");
+            output.WriteLine("RuleCount\tAvg (ms)\tP95 (ms)");
             foreach (var (count, (avg, p95)) in results.OrderBy(r => r.Key))
             {
-                _output.WriteLine($"{count}\t\t{avg:F2}\t\t{p95:F2}");
+                output.WriteLine($"{count}\t\t{avg:F2}\t\t{p95:F2}");
             }
 
             // Calculate scaling factor (how much slower per additional rule)
@@ -64,7 +49,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 var maxTime = results[maxCount].avgMs;
 
                 var scalingFactor = (maxTime - minTime) / (maxCount - minCount);
-                _output.WriteLine($"\nScaling factor: ~{scalingFactor:F2}ms per additional rule");
+                output.WriteLine($"\nScaling factor: ~{scalingFactor:F2}ms per additional rule");
 
                 // It should scale reasonably linearly (though not perfectly)
                 Assert.True(scalingFactor < 10, "Scaling factor should be less than 10ms per rule");
@@ -80,13 +65,13 @@ namespace Pulsar.Tests.RuntimeValidation
 
             foreach (var complexity in complexityLevels)
             {
-                _output.WriteLine($"Testing with complexity level {complexity}...");
+                output.WriteLine($"Testing with complexity level {complexity}...");
 
                 // Generate a rule with specified complexity
                 var ruleFile = GenerateComplexRule(complexity);
 
                 // Build project
-                var success = await _fixture.BuildTestProject(new[] { ruleFile });
+                var success = await fixture.BuildTestProject(new[] { ruleFile });
                 Assert.True(
                     success,
                     $"Project with complexity {complexity} should build successfully"
@@ -98,11 +83,11 @@ namespace Pulsar.Tests.RuntimeValidation
             }
 
             // Output results
-            _output.WriteLine("\nPerformance scaling with rule complexity:");
-            _output.WriteLine("Complexity\tAvg (ms)\tP95 (ms)");
+            output.WriteLine("\nPerformance scaling with rule complexity:");
+            output.WriteLine("Complexity\tAvg (ms)\tP95 (ms)");
             foreach (var (complexity, (avg, p95)) in results.OrderBy(r => r.Key))
             {
-                _output.WriteLine($"{complexity}\t\t{avg:F2}\t\t{p95:F2}");
+                output.WriteLine($"{complexity}\t\t{avg:F2}\t\t{p95:F2}");
             }
         }
 
@@ -113,7 +98,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var ruleFile = GenerateRules(20);
 
             // Build project
-            var success = await _fixture.BuildTestProject(new[] { ruleFile });
+            var success = await fixture.BuildTestProject(new[] { ruleFile });
             Assert.True(success, "Project should build successfully");
 
             // Prepare test inputs
@@ -130,7 +115,7 @@ namespace Pulsar.Tests.RuntimeValidation
 
             foreach (var concurrency in concurrencyLevels)
             {
-                _output.WriteLine($"Testing with concurrency level {concurrency}...");
+                output.WriteLine($"Testing with concurrency level {concurrency}...");
 
                 var stopwatch = new Stopwatch();
                 stopwatch.Start();
@@ -139,7 +124,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 var tasks = new List<Task<(bool success, Dictionary<string, object>? outputs)>>();
                 for (int i = 0; i < concurrency; i++)
                 {
-                    tasks.Add(_fixture.ExecuteRules(inputs));
+                    tasks.Add(fixture.ExecuteRules(inputs));
                 }
 
                 // Wait for all to complete
@@ -157,11 +142,11 @@ namespace Pulsar.Tests.RuntimeValidation
             }
 
             // Output results
-            _output.WriteLine("\nPerformance scaling with concurrency:");
-            _output.WriteLine("Concurrency\tThroughput (ops/sec)\tAvg Latency (ms)");
+            output.WriteLine("\nPerformance scaling with concurrency:");
+            output.WriteLine("Concurrency\tThroughput (ops/sec)\tAvg Latency (ms)");
             foreach (var (concurrency, (throughput, latency)) in results.OrderBy(r => r.Key))
             {
-                _output.WriteLine($"{concurrency}\t\t{throughput:F2}\t\t\t{latency:F2}");
+                output.WriteLine($"{concurrency}\t\t{throughput:F2}\t\t\t{latency:F2}");
             }
         }
 
@@ -189,7 +174,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 );
             }
 
-            var filePath = Path.Combine(_fixture.OutputPath, $"benchmark-{count}rules.yaml");
+            var filePath = Path.Combine(fixture.OutputPath, $"benchmark-{count}rules.yaml");
             File.WriteAllText(filePath, sb.ToString());
             return filePath;
         }
@@ -234,7 +219,7 @@ namespace Pulsar.Tests.RuntimeValidation
             }
             sb.AppendLine("'");
 
-            var filePath = Path.Combine(_fixture.OutputPath, $"complex-{complexity}.yaml");
+            var filePath = Path.Combine(fixture.OutputPath, $"complex-{complexity}.yaml");
             File.WriteAllText(filePath, sb.ToString());
             return filePath;
         }
@@ -253,7 +238,7 @@ namespace Pulsar.Tests.RuntimeValidation
             // Warmup
             for (int i = 0; i < 5; i++)
             {
-                await _fixture.ExecuteRules(inputs);
+                await fixture.ExecuteRules(inputs);
             }
 
             // Measurement
@@ -269,7 +254,7 @@ namespace Pulsar.Tests.RuntimeValidation
                 inputs["input:c"] = (int)inputs["input:c"] + random.Next(-5, 5);
 
                 stopwatch.Restart();
-                var (success, _) = await _fixture.ExecuteRules(inputs);
+                var (success, _) = await fixture.ExecuteRules(inputs);
                 stopwatch.Stop();
 
                 Assert.True(success, $"Execution should succeed on iteration {i}");
@@ -281,7 +266,7 @@ namespace Pulsar.Tests.RuntimeValidation
             var avg = times.Average();
             var p95 = times[(int)(iterations * 0.95)];
 
-            _output.WriteLine($"  ID: {identifier}, Avg: {avg:F2}ms, P95: {p95:F2}ms");
+            output.WriteLine($"  ID: {identifier}, Avg: {avg:F2}ms, P95: {p95:F2}ms");
             return (avg, p95);
         }
     }

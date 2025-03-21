@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using StackExchange.Redis;
 
 namespace Pulsar.Tests.TestUtilities

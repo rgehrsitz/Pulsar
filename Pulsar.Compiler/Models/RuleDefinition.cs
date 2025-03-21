@@ -1,10 +1,6 @@
 // File: Pulsar.Compiler/Models/RuleDefinition.cs
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json.Serialization;
-using Pulsar.Compiler;
 using Pulsar.Compiler.Exceptions;
 using Serilog;
 

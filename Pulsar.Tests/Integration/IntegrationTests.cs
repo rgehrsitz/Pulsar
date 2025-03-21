@@ -1,10 +1,6 @@
 // File: Pulsar.Tests/Integration/IntegrationTests.cs
 
 
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using Pulsar.Compiler.Config;
 using Pulsar.Compiler.Core;
@@ -13,38 +9,28 @@ using Pulsar.Compiler.Models;
 using Pulsar.Compiler.Parsers;
 using Pulsar.Tests.TestUtilities;
 using Serilog;
-using Xunit;
 
 namespace Pulsar.Tests.Integration
 {
     public class IntegrationTests
     {
-        private readonly ILogger _logger;
+        private readonly ILogger _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
+            Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
+        );
 
-        private readonly DslParser _parser;
+        private readonly DslParser _parser = new();
 
-        private readonly List<string> _validSensors;
-
-        public IntegrationTests()
+        private readonly List<string> _validSensors = new()
         {
-            _logger = Pulsar.Tests.TestUtilities.LoggingConfig.ToSerilogLogger(
-                Pulsar.Tests.TestUtilities.LoggingConfig.GetLogger()
-            );
-
-            _parser = new DslParser();
-
-            _validSensors = new List<string>
-            {
-                "SensorA",
-                "SensorB",
-                "SensorC",
-                "SensorD",
-                "temp1",
-                "temp2",
-                "pressure",
-                "humidity",
-            };
-        }
+            "SensorA",
+            "SensorB",
+            "SensorC",
+            "SensorD",
+            "temp1",
+            "temp2",
+            "pressure",
+            "humidity",
+        };
 
         [Fact]
         public void Integration_EndToEnd_Succeeds()

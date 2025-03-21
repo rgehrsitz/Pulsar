@@ -1,11 +1,6 @@
 // File: Pulsar.Tests/TestUtilities/TestRuleFactory.cs
 
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using Pulsar.Compiler;
 using Pulsar.Compiler.Models;
-using Pulsar.Tests.TestUtilities;
 using Serilog;
 
 namespace Pulsar.Tests.TestUtilities

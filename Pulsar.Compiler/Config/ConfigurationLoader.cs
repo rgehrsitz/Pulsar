@@ -1,9 +1,6 @@
 // File: Pulsar.Compiler/Config/ConfigurationLoader.cs
 
-using System;
-using System.IO;
 using Pulsar.Runtime;
-using Pulsar.Runtime.Rules;
 using Serilog;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;

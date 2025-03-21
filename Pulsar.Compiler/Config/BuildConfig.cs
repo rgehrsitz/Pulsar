@@ -1,7 +1,5 @@
 // File: Pulsar.Compiler/Config/BuildConfig.cs
 
-using System;
-using System.Collections.Generic;
 using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Config
@@ -12,7 +10,7 @@ namespace Pulsar.Compiler.Config
         public string OutputDirectory => OutputPath; // new alias for backward compatibility
         public required string Target { get; set; }
         public required string ProjectName { get; set; }
-        public string AssemblyName { get; set; } // Added for AOT compilation
+        public string AssemblyName { get; set; } = "Runtime"; // Added for AOT compilation
         public required string TargetFramework { get; set; }
         public required string RulesPath { get; set; } = string.Empty;
 
@@ -41,16 +39,12 @@ namespace Pulsar.Compiler.Config
         public string AdditionalUsings { get; set; } = "";
         public int MaxLinesPerFile { get; set; } = 1000;
 
-        public BuildConfig()
-        {
-            // Default constructor
-            AssemblyName = "Runtime";
-        }
+        // Default constructor
     }
 
-    public class BuildResult
+    public class BuildResult(bool success = true)
     {
-        public bool Success { get; set; }
+        public bool Success { get; set; } = success;
         public string[] Errors { get; set; } = Array.Empty<string>();
         public string[] Warnings { get; set; } = Array.Empty<string>();
         public string[] GeneratedFiles { get; set; } = Array.Empty<string>();
@@ -59,11 +53,6 @@ namespace Pulsar.Compiler.Config
         public RuleManifest Manifest { get; set; } = new RuleManifest();
         public string OutputPath { get; set; } = string.Empty;
         public RuleMetrics Metrics { get; set; } = new RuleMetrics();
-
-        public BuildResult(bool success = true)
-        {
-            Success = success;
-        }
 
         public static BuildResult Failed(params string[] errors)
         {
