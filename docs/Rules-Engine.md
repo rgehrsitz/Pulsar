@@ -119,6 +119,16 @@ The compiler **validates rule syntax**, **performs dependency analysis**, and **
 
 The **Beacon.Runtime** executable fetches **bulk sensor values from Redis every 100ms**. **Rules execute in dependency-resolved layers** to maintain deterministic evaluation. Computed results are **written back to Redis** after processing.
 
+### Action Type Behaviors
+
+The system handles different action types with distinct timing behaviors:
+
+- **`set_value` actions**: These are collected during rule evaluation and stored temporarily. At the end of each evaluation cycle, all `set_value` results are written back to Redis in a single bulk operation, maintaining a predictable cadence.
+
+- **`send_message` actions**: These are executed asynchronously as they are triggered during rule evaluation. Messages are sent immediately to their target channels and don't wait for the evaluation cycle to complete, allowing for real-time notifications independent of the bulk update cycle.
+
+This design provides both consistent state updates and responsive notifications.
+
 The execution sequence is as follows:
 
 ```mermaid
