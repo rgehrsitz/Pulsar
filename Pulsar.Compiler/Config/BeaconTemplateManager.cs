@@ -224,6 +224,7 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("    <PackageReference Include=\"NRedisStack\" Version=\"0.13.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Polly\" Version=\"8.3.0\" />");
             sb.AppendLine("    <PackageReference Include=\"prometheus-net\" Version=\"8.2.1\" />");
+            sb.AppendLine("    <PackageReference Include=\"prometheus-net.AspNetCore\" Version=\"8.2.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Serilog\" Version=\"4.2.0\" />");
             sb.AppendLine(
                 "    <PackageReference Include=\"Serilog.Extensions.Logging\" Version=\"8.0.0\" />"
@@ -449,6 +450,10 @@ namespace Pulsar.Compiler.Config
             CopyTemplateFile(
                 "Runtime/Services/RedisLoggingConfiguration.cs",
                 Path.Combine(servicesDir, "RedisLoggingConfiguration.cs")
+            );
+            CopyTemplateFile(
+                "Runtime/Services/MetricsService.cs",
+                Path.Combine(servicesDir, "MetricsService.cs")
             );
 
             // Fix service file references to use Models namespace
@@ -705,15 +710,26 @@ namespace Pulsar.Compiler.Config
                 $"                var bufferManager = new RingBufferManager(config.BufferCapacity);"
             );
             sb.AppendLine();
+            sb.AppendLine("                // Initialize metrics service");
+            sb.AppendLine(
+                "                var metricsService = new MetricsService(logger, Environment.MachineName);"
+            );
+            sb.AppendLine(
+                "                metricsService.StartMetricsServer(9090);"
+            );
+            sb.AppendLine(
+                "                logger.Information(\"Prometheus metrics available at http://localhost:9090/metrics\");"
+            );
+            sb.AppendLine();
             sb.AppendLine("                // Initialize runtime orchestrator");
             sb.AppendLine(
-                "                using var redisService = new RedisService(redisConfig, logger);"
+                "                using var redisService = new RedisService(redisConfig, logger, metricsService);"
             );
             sb.AppendLine(
-                "                var coordinator = new RuleCoordinator(redisService, logger, bufferManager);"
+                "                var coordinator = new RuleCoordinator(redisService, logger, bufferManager, metricsService);"
             );
             sb.AppendLine(
-                "                var orchestrator = new RuntimeOrchestrator(redisService, logger, coordinator);"
+                "                var orchestrator = new RuntimeOrchestrator(redisService, logger, coordinator, metricsService);"
             );
             sb.AppendLine();
             sb.AppendLine("                // Run the main cycle loop");

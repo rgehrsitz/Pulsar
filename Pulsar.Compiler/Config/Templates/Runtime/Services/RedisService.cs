@@ -25,7 +25,8 @@ public class RedisService : IRedisService, IDisposable
     private readonly AsyncRetryPolicy _retryPolicy;
     private readonly ConfigurationOptions _redisOptions;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
-    private readonly RedisMetrics _metrics;
+    private readonly RedisMetrics _redisMetrics;
+    private readonly MetricsService? _metrics;
     private readonly RedisHealthCheck? _healthCheck;
     private bool _disposed;
 
@@ -36,9 +37,10 @@ public class RedisService : IRedisService, IDisposable
 
     public bool IsHealthy => _healthCheck?.IsHealthy ?? true;
 
-    public RedisService(RedisConfiguration config, ILogger logger)
+    public RedisService(RedisConfiguration config, ILogger logger, MetricsService? metrics = null)
     {
         _logger = logger.ForContext<RedisService>();
+        _metrics = metrics;
 
         // Use a default pool size of 5 connections
         var poolSize = 5;
@@ -95,7 +97,7 @@ public class RedisService : IRedisService, IDisposable
             );
 
         // Create the metrics
-        _metrics = new RedisMetrics();
+        _redisMetrics = new RedisMetrics();
 
         // Create the health check
         _healthCheck = new RedisHealthCheck(this, _logger);
@@ -441,7 +443,8 @@ public class RedisService : IRedisService, IDisposable
                 var result = await db.StringSetAsync(key, value, expiry);
                 var duration = DateTime.UtcNow - startTime;
 
-                _metrics.RecordOperation("SET", duration);
+                _redisMetrics.RecordOperation("SET", duration);
+                _metrics?.RecordRedisConnections(_connectionPool.Count(c => c != null && c.IsConnected));
 
                 return result;
             });
@@ -452,7 +455,7 @@ public class RedisService : IRedisService, IDisposable
             {
                 _logger.Error(ex, "Failed to set Redis key {Key}", key);
             }
-            _metrics.RecordError("SET");
+            _redisMetrics.RecordError("SET");
             return false;
         }
     }
@@ -470,7 +473,7 @@ public class RedisService : IRedisService, IDisposable
                 var result = await db.HashSetAsync(key, field, value);
                 var duration = DateTime.UtcNow - startTime;
 
-                _metrics.RecordOperation("HSET", duration);
+                _redisMetrics.RecordOperation("HSET", duration);
 
                 return result;
             });
@@ -481,7 +484,7 @@ public class RedisService : IRedisService, IDisposable
             {
                 _logger.Error(ex, "Failed to set Redis hash field {Key}:{Field}", key, field);
             }
-            _metrics.RecordError("HSET");
+            _redisMetrics.RecordError("HSET");
             return false;
         }
     }
@@ -499,7 +502,7 @@ public class RedisService : IRedisService, IDisposable
                 var hashEntries = await db.HashGetAllAsync(key);
                 var duration = DateTime.UtcNow - startTime;
 
-                _metrics.RecordOperation("HGETALL", duration);
+                _redisMetrics.RecordOperation("HGETALL", duration);
 
                 return hashEntries.ToDictionary(
                     he => he.Name.ToString(),
@@ -513,7 +516,7 @@ public class RedisService : IRedisService, IDisposable
             {
                 _logger.Error(ex, "Failed to get all Redis hash fields for key {Key}", key);
             }
-            _metrics.RecordError("HGETALL");
+            _redisMetrics.RecordError("HGETALL");
             return new Dictionary<string, string>();
         }
     }
@@ -531,7 +534,7 @@ public class RedisService : IRedisService, IDisposable
                 var value = await db.StringGetAsync(key);
                 var duration = DateTime.UtcNow - startTime;
 
-                _metrics.RecordOperation("GET", duration);
+                _redisMetrics.RecordOperation("GET", duration);
 
                 return value.IsNull ? null : value.ToString();
             });
@@ -542,7 +545,7 @@ public class RedisService : IRedisService, IDisposable
             {
                 _logger.Error(ex, "Failed to get Redis key {Key}", key);
             }
-            _metrics.RecordError("GET");
+            _redisMetrics.RecordError("GET");
             return null;
         }
     }
@@ -561,7 +564,7 @@ public class RedisService : IRedisService, IDisposable
                 var result = await subscriber.PublishAsync(channel, message);
                 var duration = DateTime.UtcNow - startTime;
 
-                _metrics.RecordOperation("PUBLISH", duration);
+                _redisMetrics.RecordOperation("PUBLISH", duration);
 
                 return result;
             });
@@ -572,7 +575,7 @@ public class RedisService : IRedisService, IDisposable
             {
                 _logger.Error(ex, "Failed to publish message to Redis channel {Channel}", channel);
             }
-            _metrics.RecordError("PUBLISH");
+            _redisMetrics.RecordError("PUBLISH");
             return 0;
         }
     }

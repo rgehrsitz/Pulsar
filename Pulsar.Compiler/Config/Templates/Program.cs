@@ -53,14 +53,23 @@ namespace Beacon.Runtime
                 // Create buffer manager for temporal rules
                 var bufferManager = new RingBufferManager(config.BufferCapacity);
 
+                // Initialize metrics service
+                var metricsServiceLogger = loggerFactory.CreateLogger<MetricsService>();
+                var metricsService = new MetricsService(metricsServiceLogger, Environment.MachineName);
+                
+                // Start Prometheus metrics server
+                metricsService.StartMetricsServer(9090);
+                logger.LogInformation("Prometheus metrics available at http://localhost:9090/metrics");
+                
                 // Initialize runtime orchestrator
-                using var redisService = new RedisService(redisConfig, loggerFactory);
+                using var redisService = new RedisService(redisConfig, loggerFactory, metricsService);
                 var orchestratorLogger = loggerFactory.CreateLogger<RuntimeOrchestrator>();
                 var ruleCoordinatorLogger = loggerFactory.CreateLogger<RuleCoordinator>();
                 var orchestrator = new RuntimeOrchestrator(
                     redisService,
                     orchestratorLogger,
-                    new RuleCoordinator(redisService, ruleCoordinatorLogger, bufferManager)
+                    new RuleCoordinator(redisService, ruleCoordinatorLogger, bufferManager),
+                    metricsService
                 );
 
                 // Start the orchestrator

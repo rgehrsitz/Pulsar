@@ -45,6 +45,7 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("        private readonly ILogger _logger;");
             sb.AppendLine("        private readonly RingBufferManager _bufferManager;");
             sb.AppendLine("        private readonly List<IRuleGroup> _ruleGroups;");
+            sb.AppendLine("        private readonly MetricsService? _metrics;");
             sb.AppendLine();
 
             // RuleCount property implementation
@@ -73,7 +74,7 @@ namespace Pulsar.Compiler.Generation.Generators
 
             // Constructor
             sb.AppendLine(
-                "        public RuleCoordinator(IRedisService redis, ILogger logger, RingBufferManager bufferManager)"
+                "        public RuleCoordinator(IRedisService redis, ILogger logger, RingBufferManager bufferManager, MetricsService? metrics = null)"
             );
             sb.AppendLine("        {");
             sb.AppendLine(
@@ -84,6 +85,9 @@ namespace Pulsar.Compiler.Generation.Generators
             );
             sb.AppendLine(
                 "            _bufferManager = bufferManager ?? throw new ArgumentNullException(nameof(bufferManager));"
+            );
+            sb.AppendLine(
+                "            _metrics = metrics;"
             );
             sb.AppendLine("            _ruleGroups = new List<IRuleGroup>();");
             sb.AppendLine();
@@ -119,9 +123,11 @@ namespace Pulsar.Compiler.Generation.Generators
             for (int i = 0; i < ruleGroups.Count; i++)
             {
                 sb.AppendLine($"                _logger.Debug(\"Evaluating rule group {i}\");");
-                sb.AppendLine(
-                    $"                await _ruleGroups[{i}].EvaluateRulesAsync(inputs, outputs);"
-                );
+                sb.AppendLine($"                using (var ruleTimer = _metrics?.MeasureRuleExecutionTime(\"RuleGroup{i}\"))");
+                sb.AppendLine($"                {{");
+                sb.AppendLine($"                    await _ruleGroups[{i}].EvaluateRulesAsync(inputs, outputs);");
+                sb.AppendLine($"                    _metrics?.RecordRuleExecution(\"RuleGroup{i}\", true);");
+                sb.AppendLine($"                }}");
                 sb.AppendLine($"                RuleEvaluationsTotal.Inc();");
             }
 

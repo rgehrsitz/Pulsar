@@ -17,17 +17,20 @@ namespace Beacon.Runtime
         private readonly ILogger _logger;
         private readonly IRuleCoordinator _coordinator;
         private readonly CancellationTokenSource _cts;
+        private readonly MetricsService? _metrics;
         private Task? _executionTask;
 
         public RuntimeOrchestrator(
             IRedisService redis,
             ILogger logger,
-            IRuleCoordinator coordinator
+            IRuleCoordinator coordinator,
+            MetricsService? metrics = null
         )
         {
             _redis = redis;
             _logger = logger.ForContext<RuntimeOrchestrator>();
             _coordinator = coordinator;
+            _metrics = metrics;
             _cts = new CancellationTokenSource();
         }
 
@@ -50,6 +53,9 @@ namespace Beacon.Runtime
                         _coordinator.RuleCount,
                         results.Count
                     );
+                    
+                    // Record metrics for output events
+                    _metrics?.RecordOutputEvents(results);
                 }
             }
             catch (Exception ex)
@@ -86,11 +92,15 @@ namespace Beacon.Runtime
                             
                             // Calculate time to wait until next cycle
                             var cycleTime = DateTime.UtcNow - cycleStart;
-                            var delayMs = Math.Max(0, cycleTimeMs - (int)cycleTime.TotalMilliseconds);
+                            var elapsedMs = (int)cycleTime.TotalMilliseconds;
+                            var delayMs = Math.Max(0, cycleTimeMs - elapsedMs);
                             
-                            // Log the cycle execution time
-                            _logger.Debug("Cycle executed in {ElapsedMs}ms, waiting {DelayMs}ms for next cycle", 
-                                (int)cycleTime.TotalMilliseconds, delayMs);
+                            // Log the cycle execution time (using Information level for better visibility in demos)
+                            _logger.Information("CYCLE STATS: Executed in {ElapsedMs}ms, waiting {DelayMs}ms for next cycle", 
+                                elapsedMs, delayMs);
+                            
+                            // Record metrics for cycle timing
+                            _metrics?.RecordCycleTiming(elapsedMs, delayMs);
                             
                             if (delayMs > 0)
                             {

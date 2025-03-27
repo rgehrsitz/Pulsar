@@ -37,6 +37,8 @@ namespace Pulsar.Compiler.Generation
             sb.AppendLine("    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Prometheus.Metrics))]");
             sb.AppendLine("    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Prometheus.Counter))]");
             sb.AppendLine("    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Prometheus.Histogram))]");
+            sb.AppendLine("    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(Prometheus.MetricServer))]");
+            sb.AppendLine($"    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({namespace1}.Services.MetricsService))]");
             sb.AppendLine($"    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof({namespace1}.Services.RedisService))]");
             sb.AppendLine("    internal static void EnsureAOTCompatibility() { }");
             sb.AppendLine("}");

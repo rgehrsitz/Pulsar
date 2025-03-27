@@ -17,16 +17,17 @@ This directory contains the documentation for the Pulsar/Beacon project, a high-
 ### Technical Components
 
 4. [**Redis Integration**](Redis-Integration.md) - Redis integration components, configuration, and best practices
-5. [**Temporal Buffer**](Temporal-Buffer.md) - Implementation of the temporal buffer for historical data storage and evaluation
+5. [**Prometheus Metrics**](Prometheus-Metrics.md) - Monitoring Beacon with Prometheus metrics
+6. [**Temporal Buffer**](Temporal-Buffer.md) - Implementation of the temporal buffer for historical data storage and evaluation
 
 ### User Guides
 
-6. [**End-to-End Guide**](End-to-End-Guide.md) - Complete walkthrough from creating YAML rules to running a Beacon application
+7. [**End-to-End Guide**](End-to-End-Guide.md) - Complete walkthrough from creating YAML rules to running a Beacon application
 
 ### Development and Testing
 
-7. [**Testing Guide**](Testing-Guide.md) - Comprehensive guide to testing the Pulsar/Beacon system
-8. [**Directory Structure**](Directory-Structure.md) - Explanation of project directories and guidelines
+8. [**Testing Guide**](Testing-Guide.md) - Comprehensive guide to testing the Pulsar/Beacon system
+9. [**Directory Structure**](Directory-Structure.md) - Explanation of project directories and guidelines
 
 ## Getting Started
 
@@ -42,6 +43,7 @@ If you're new to the Pulsar/Beacon project, we recommend starting with the follo
 - **Template-Based Code Generation**: Flexible, maintainable code generation using templates as the source of truth
 - **AOT Compatibility**: Full AOT support with proper attributes and trimming configuration for deployment in environments without JIT
 - **Redis Integration**: Comprehensive Redis service with connection pooling, health monitoring, and error handling
+- **Prometheus Metrics**: Built-in metrics for monitoring rule execution, cycle times, and Redis operations
 - **Temporal Rule Support**: Circular buffer implementation for temporal rules with object value support
 - **Rule Dependency Management**: Automatic dependency analysis and layer assignment
 - **Performance Optimization**: Efficient rule evaluation with minimal overhead

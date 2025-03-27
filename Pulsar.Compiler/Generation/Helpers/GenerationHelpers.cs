@@ -101,6 +101,22 @@ namespace Pulsar.Compiler.Generation.Helpers
                 return $"outputs[\"{setValue.Key}\"] = inputs[\"test:input\"];";
             }
 
+            // Handle special cases for common values
+            if (setValue.ValueExpression == "true")
+            {
+                return $"outputs[\"{setValue.Key}\"] = true;";
+            }
+            
+            if (setValue.ValueExpression == "false")
+            {
+                return $"outputs[\"{setValue.Key}\"] = false;";
+            }
+            
+            if (setValue.ValueExpression == "now()")
+            {
+                return $"outputs[\"{setValue.Key}\"] = DateTime.UtcNow;";
+            }
+
             // If the value expression directly references a sensor with a colon
             if (
                 !string.IsNullOrEmpty(setValue.ValueExpression)
