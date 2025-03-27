@@ -58,7 +58,7 @@ namespace Beacon.Runtime
             }
         }
 
-        public Task StartAsync(CancellationToken cancellationToken = default)
+        public Task StartAsync(int cycleTimeMs = 100, CancellationToken cancellationToken = default)
         {
             if (_executionTask != null)
             {
@@ -66,7 +66,7 @@ namespace Beacon.Runtime
                 return Task.CompletedTask;
             }
 
-            _logger.Information("Starting runtime orchestrator");
+            _logger.Information("Starting runtime orchestrator with cycle time of {CycleTimeMs}ms", cycleTimeMs);
 
             // Link the cancellation tokens
             var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -81,8 +81,21 @@ namespace Beacon.Runtime
                     {
                         while (!linkedCts.Token.IsCancellationRequested)
                         {
+                            var cycleStart = DateTime.UtcNow;
                             await RunCycleAsync();
-                            await Task.Delay(100, linkedCts.Token); // Default delay
+                            
+                            // Calculate time to wait until next cycle
+                            var cycleTime = DateTime.UtcNow - cycleStart;
+                            var delayMs = Math.Max(0, cycleTimeMs - (int)cycleTime.TotalMilliseconds);
+                            
+                            // Log the cycle execution time
+                            _logger.Debug("Cycle executed in {ElapsedMs}ms, waiting {DelayMs}ms for next cycle", 
+                                (int)cycleTime.TotalMilliseconds, delayMs);
+                            
+                            if (delayMs > 0)
+                            {
+                                await Task.Delay(delayMs, linkedCts.Token);
+                            }
                         }
                     }
                     catch (OperationCanceledException)
@@ -100,33 +113,20 @@ namespace Beacon.Runtime
             return Task.CompletedTask;
         }
 
-        public async Task StopAsync(CancellationToken cancellationToken = default)
+        public Task StopAsync(CancellationToken cancellationToken = default)
         {
             if (_executionTask == null)
             {
                 _logger.Warning("Runtime orchestrator is not running");
-                return;
+                return Task.CompletedTask;
             }
 
             _logger.Information("Stopping runtime orchestrator");
+            _cts.Cancel();
 
-            try
-            {
-                _cts.Cancel();
-                await _executionTask;
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected
-            }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Error stopping runtime orchestrator");
-            }
-            finally
-            {
-                _executionTask = null;
-            }
+            return Task.CompletedTask;
         }
+
+        public int RuleCount => _coordinator.RuleCount;
     }
 }

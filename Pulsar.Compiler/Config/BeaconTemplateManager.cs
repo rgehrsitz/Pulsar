@@ -718,8 +718,30 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine();
             sb.AppendLine("                // Run the main cycle loop");
             sb.AppendLine(
-                "                await RunCycleLoop(orchestrator, config.CycleTime, logger);"
+                "                await orchestrator.StartAsync(config.CycleTime);"
             );
+            sb.AppendLine();
+            sb.AppendLine("                // Wait for Ctrl+C");
+            sb.AppendLine("                var cancelSource = new CancellationTokenSource();");
+            sb.AppendLine("                Console.CancelKeyPress += (s, e) =>");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    logger.Information(\"Shutdown requested\");");
+            sb.AppendLine("                    cancelSource.Cancel();");
+            sb.AppendLine("                    e.Cancel = true;");
+            sb.AppendLine("                };");
+            sb.AppendLine();
+            sb.AppendLine("                // Wait until cancellation is requested");
+            sb.AppendLine("                try");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    await Task.Delay(Timeout.Infinite, cancelSource.Token);");
+            sb.AppendLine("                }");
+            sb.AppendLine("                catch (OperationCanceledException)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    // Cancellation was requested");
+            sb.AppendLine("                }");
+            sb.AppendLine();
+            sb.AppendLine("                // Stop the orchestrator");
+            sb.AppendLine("                await orchestrator.StopAsync();");
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");
@@ -752,100 +774,12 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine("            Log.Logger = logger;");
             sb.AppendLine("            return logger;");
             sb.AppendLine("        }");
-            sb.AppendLine();
-
-            sb.AppendLine(
-                "        private static async Task RunCycleLoop(RuntimeOrchestrator orchestrator, int cycleTimeMs, ILogger logger)"
-            );
-            sb.AppendLine("        {");
-            sb.AppendLine("            var cancelSource = new CancellationTokenSource();");
-            sb.AppendLine("            Console.CancelKeyPress += (s, e) =>");
-            sb.AppendLine("            {");
-            sb.AppendLine("                logger.Information(\"Shutdown requested\");");
-            sb.AppendLine("                cancelSource.Cancel();");
-            sb.AppendLine("                e.Cancel = true;");
-            sb.AppendLine("            };");
-            sb.AppendLine();
-            sb.AppendLine(
-                "            logger.Information(\"Starting rule execution cycle loop with interval {CycleTimeMs}ms\", cycleTimeMs);"
-            );
-            sb.AppendLine("            var cycleCount = 0;");
-            sb.AppendLine();
-            sb.AppendLine("            while (!cancelSource.Token.IsCancellationRequested)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                var cycleStart = DateTime.UtcNow;");
-            sb.AppendLine("                try");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    await orchestrator.RunCycleAsync();");
-            sb.AppendLine("                    cycleCount++;");
-            sb.AppendLine();
-            sb.AppendLine("                    if (cycleCount % 1000 == 0)");
-            sb.AppendLine("                    {");
-            sb.AppendLine(
-                "                        logger.Information(\"Completed {CycleCount} execution cycles\", cycleCount);"
-            );
-            sb.AppendLine("                    }");
-            sb.AppendLine("                }");
-            sb.AppendLine("                catch (Exception ex)");
-            sb.AppendLine("                {");
-            sb.AppendLine(
-                "                    logger.Error(ex, \"Error in execution cycle {CycleCount}\", cycleCount);"
-            );
-            sb.AppendLine("                }");
-            sb.AppendLine();
-            sb.AppendLine("                // Calculate time to wait until next cycle");
-            sb.AppendLine("                var cycleTime = DateTime.UtcNow - cycleStart;");
-            sb.AppendLine(
-                "                var delayMs = Math.Max(0, cycleTimeMs - (int)cycleTime.TotalMilliseconds);"
-            );
-            sb.AppendLine("                if (delayMs > 0)");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    await Task.Delay(delayMs, cancelSource.Token);");
-            sb.AppendLine("                }");
-            sb.AppendLine("            }");
-            sb.AppendLine();
-            sb.AppendLine(
-                "            logger.Information(\"Execution cycle loop stopped after {CycleCount} cycles\", cycleCount);"
-            );
-            sb.AppendLine("        }");
             sb.AppendLine("    }");
             sb.AppendLine("}");
-
-            // Write to main Program.cs file
+            
+            // Write the Program.cs file to disk
             File.WriteAllText(programPath, sb.ToString());
-            _logger.Information("Generated Program.cs: {Path}", programPath);
-
-            // Generate AOT compatibility declarations in a separate file
-            string aotAttributesPath = Path.Combine(runtimeDir, "AOTAttributes.cs");
-            var aotSb = new StringBuilder();
-
-            aotSb.AppendLine("// Auto-generated AOT attributes");
-            aotSb.AppendLine("// Generated: " + DateTime.UtcNow.ToString("O"));
-            aotSb.AppendLine();
-
-            aotSb.AppendLine("using System;");
-            aotSb.AppendLine("using System.Collections.Generic;");
-            aotSb.AppendLine("using System.Text.Json.Serialization;");
-            aotSb.AppendLine("using System.Diagnostics.CodeAnalysis;");
-            aotSb.AppendLine();
-
-            // Add a JsonSerializerContext derived class with appropriate attributes
-            aotSb.AppendLine($"namespace {buildConfig.Namespace}");
-            aotSb.AppendLine("{");
-            aotSb.AppendLine("    [JsonSerializable(typeof(Dictionary<string, object>))]");
-            aotSb.AppendLine(
-                $"    [JsonSerializable(typeof({buildConfig.Namespace}.Models.RuntimeConfig))]"
-            );
-            aotSb.AppendLine(
-                $"    [JsonSerializable(typeof({buildConfig.Namespace}.Models.RedisConfiguration))]"
-            );
-            aotSb.AppendLine("    public partial class BeaconJsonContext : JsonSerializerContext");
-            aotSb.AppendLine("    {");
-            aotSb.AppendLine("    }");
-            aotSb.AppendLine("}");
-
-            File.WriteAllText(aotAttributesPath, aotSb.ToString());
-            _logger.Information("Generated AOT attributes: {Path}", aotAttributesPath);
+            _logger.Information("Generated Program.cs file: {Path}", programPath);
         }
 
         /// <summary>
