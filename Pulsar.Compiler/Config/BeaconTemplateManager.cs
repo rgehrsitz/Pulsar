@@ -653,13 +653,11 @@ namespace Pulsar.Compiler.Config
             );
             sb.AppendLine();
 
-            // Add AOT compatibility attributes
-            sb.AppendLine(Generation.CodeGenHelpers.GenerateAOTAttributes(buildConfig.Namespace));
-
             // Add standard using statements first
             sb.AppendLine("using System;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using System.IO;");
+            sb.AppendLine("using System.Diagnostics.CodeAnalysis;");
             sb.AppendLine("using System.Runtime.CompilerServices;");
             sb.AppendLine("using System.Threading;");
             sb.AppendLine("using System.Threading.Tasks;");
@@ -674,6 +672,9 @@ namespace Pulsar.Compiler.Config
             sb.AppendLine($"using {buildConfig.Namespace}.Generated;");
             sb.AppendLine("using ILogger = Serilog.ILogger;");
             sb.AppendLine();
+
+            // Add AOT compatibility attributes
+            sb.AppendLine(Generation.CodeGenHelpers.GenerateAOTAttributes(buildConfig.Namespace));
 
             // Add namespace and class declaration
             sb.AppendLine($"namespace {buildConfig.Namespace}");
