@@ -2,18 +2,69 @@
 
 rules:
   - name: "TemperatureConversion"
-    description: "Converts temperature and sets alert if too high"
+    description: "Converts Fahrenheit to Celsius"
     conditions:
-      all: # All conditions must be true
+      all:
         - condition:
             type: comparison
             sensor: "temperature_f"
             operator: ">"
-            value: 100
+            value: 32
     actions:
       - set_value:
           key: "temperature_c"
-          value_expression: "(temperature_f - 32) * 5/9"
+          value_expression: "(temperature_f - 32) * 5 / 9"
+
+  - name: "HumidityCheck"
+    description: "Flags high humidity"
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: "humidity"
+            operator: ">"
+            value: 70
+    actions:
+      - set_value:
+          key: "humidity_status"
+          value_expression: "'high'"
+
+  - name: "ComfortScoreCalc"
+    description: "Calculates a comfort score from temperature_c and humidity_status"
+    conditions:
+      all:
+        - condition:
+            type: expression
+            expression: "temperature_c < 26 and humidity_status == 'high'"
+    actions:
+      - set_value:
+          key: "comfort_score"
+          value_expression: "50 - (humidity * 0.5)"
+
+  - name: "LowComfortAlert"
+    description: "Sends alert if comfort score is low for 2 minutes"
+    conditions:
+      all:
+        - condition:
+            type: threshold_over_time
+            sensor: "comfort_score"
+            threshold: 30
+            duration: 120000 # 2 minutes
+    actions:
       - send_message:
-          channel: "alert_channel"
-          message: "High temperature detected!"
+          channel: "alerts"
+          message: "Comfort score has been too low for 2 minutes!"
+
+  - name: "PressureDropWarning"
+    description: "Detects rapid pressure drop"
+    conditions:
+      all:
+        - condition:
+            type: threshold_over_time
+            sensor: "pressure"
+            threshold: 1000
+            duration: 180000 # 3 minutes
+    actions:
+      - send_message:
+          channel: "alerts"
+          message: "Pressure dropped below 1000 for 3 minutes!"

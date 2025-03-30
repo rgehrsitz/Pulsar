@@ -6,6 +6,8 @@ validSensors:
   - temperature_c
   - humidity
   - pressure
+  - humidity_status
+  - comfort_score
 cycleTime: 100
 redis:
   endpoints:

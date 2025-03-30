@@ -955,17 +955,38 @@ https://github.com/yourusername/pulsar/docs"
             {
                 logger.Information("Beacon solution generated successfully");
 
-                // List the generated files
-                var generatedFiles = Directory.GetFiles(outputPath);
-                logger.Information("Generated {Count} files:", generatedFiles.Length);
-                foreach (var file in generatedFiles)
+                // Use the GeneratedFiles from the BuildResult
+                if (buildResult.GeneratedFiles != null && buildResult.GeneratedFiles.Length > 0)
                 {
-                    var fileInfo = new FileInfo(file);
-                    logger.Information(
-                        "  {Name} ({Size} bytes)",
-                        Path.GetFileName(file),
-                        fileInfo.Length
-                    );
+                    logger.Information("Generated {Count} files:", buildResult.GeneratedFiles.Length);
+                    foreach (var file in buildResult.GeneratedFiles)
+                    {
+                        var fileInfo = new FileInfo(file);
+                        logger.Information(
+                            "  {Name} ({Size} bytes)",
+                            Path.GetFileName(file),
+                            fileInfo.Length
+                        );
+                    }
+                }
+                else
+                {
+                    // Fallback to listing files in the output directory if GeneratedFiles is empty
+                    var beaconRuntimeGenDir = Path.Combine(outputPath, "Beacon", "Beacon.Runtime", "Generated");
+                    if (Directory.Exists(beaconRuntimeGenDir))
+                    {
+                        var generatedFiles = Directory.GetFiles(beaconRuntimeGenDir);
+                        logger.Information("Generated {Count} files:", generatedFiles.Length);
+                        foreach (var file in generatedFiles)
+                        {
+                            var fileInfo = new FileInfo(file);
+                            logger.Information(
+                                "  {Name} ({Size} bytes)",
+                                Path.GetFileName(file),
+                                fileInfo.Length
+                            );
+                        }
+                    }
                 }
 
                 return true;

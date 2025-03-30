@@ -111,6 +111,9 @@ namespace Pulsar.Compiler.Config
                         }
                     }
 
+                    // Track written file paths for the result
+                    var writtenFilePaths = new List<string>();
+
                     foreach (var file in generatedFiles)
                     {
                         // Skip Program.cs in Generated directory to avoid conflicts
@@ -125,6 +128,7 @@ namespace Pulsar.Compiler.Config
                         var filePath = Path.Combine(generatedDir, file.FileName);
                         File.WriteAllText(filePath, file.Content);
                         _logger.Debug("Wrote generated file: {Path}", filePath);
+                        writtenFilePaths.Add(filePath);
                     }
 
                     // Generate rule manifest file
@@ -151,6 +155,15 @@ namespace Pulsar.Compiler.Config
                     );
                     File.WriteAllText(manifestPath, manifestJson);
                     _logger.Information("Created rule manifest at {Path}", manifestPath);
+                    writtenFilePaths.Add(manifestPath);
+
+                    // Add generated files to the result
+                    result.GeneratedFiles = writtenFilePaths.ToArray();
+                    _logger.Information("Generated {Count} files:", writtenFilePaths.Count);
+                    foreach (var file in writtenFilePaths)
+                    {
+                        _logger.Information("  - {File}", Path.GetFileName(file));
+                    }
 
                     // Return success result
                     return result;
