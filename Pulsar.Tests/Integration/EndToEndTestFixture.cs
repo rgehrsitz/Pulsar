@@ -194,5 +194,56 @@ namespace Pulsar.Tests.Integration
             Redis = await ConnectionMultiplexer.ConnectAsync(RedisConnectionString);
             _logger.LogInformation("Redis connection restored");
         }
+
+        /// <summary>
+        /// Gets a standardized system configuration YAML for testing.
+        /// </summary>
+        public string GetSystemConfigYaml()
+        {
+            string connectionString = RedisConnectionString;
+
+            // Ensure Redis connection string is properly formatted for YAML
+            if (connectionString.Contains(':') || connectionString.Contains('/'))
+            {
+                // If the connection string contains special characters, wrap it in quotes
+                connectionString = $"\"{connectionString}\"";
+            }
+
+            return @"version: 1
+validSensors:
+  - input:temperature
+  - input:humidity
+  - input:pressure
+  - input:status
+  - input:mode
+  - input:system
+  - output:high_temperature
+  - output:temperature_rising
+  - output:high_temp_and_humidity
+  - output:normalized_temp
+  - output:temp_alert_level
+  - output:heat_index
+  - output:status_active
+  - output:status_message
+  - output:alert_condition
+  - output:alert_system
+  - output:system_ready
+  - output:minimal_executed
+  - buffer:temp_history
+cycleTime: 100
+redis:
+  endpoints:
+    - " + connectionString + @"
+  poolSize: 4
+  retryCount: 3
+  retryBaseDelayMs: 100
+  connectTimeout: 5000
+  syncTimeout: 1000
+  keepAlive: 60
+  password: null
+  ssl: false
+  allowAdmin: false
+bufferCapacity: 100";
+        }
     }
 }

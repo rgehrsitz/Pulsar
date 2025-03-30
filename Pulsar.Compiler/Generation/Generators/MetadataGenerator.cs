@@ -49,22 +49,39 @@ namespace Pulsar.Compiler.Generation.Generators
                 sb.AppendLine($"                Layer = {layerMap[rule.Name]},");
                 sb.AppendLine($"                SourceFile = \"{rule.SourceFile}\",");
                 sb.AppendLine($"                LineNumber = {rule.LineNumber},");
-                sb.AppendLine(
-                    "                InputSensors = new[] { "
-                        + string.Join(
-                            ", ",
-                            GenerationHelpers.GetInputSensors(rule).Select(s => $"\"{s}\"")
-                        )
-                        + " },"
-                );
-                sb.AppendLine(
-                    "                OutputSensors = new[] { "
-                        + string.Join(
-                            ", ",
-                            GenerationHelpers.GetOutputSensors(rule).Select(s => $"\"{s}\"")
-                        )
-                        + " },"
-                );
+                var inputSensors = GenerationHelpers.GetInputSensors(rule);
+                if (inputSensors.Count > 0)
+                {
+                    sb.AppendLine(
+                        "                InputSensors = new[] { "
+                            + string.Join(
+                                ", ",
+                                inputSensors.Select(s => $"\"{s}\"")
+                            )
+                            + " },"
+                    );
+                }
+                else
+                {
+                    sb.AppendLine("                InputSensors = new string[] { },");
+                }
+
+                var outputSensors = GenerationHelpers.GetOutputSensors(rule);
+                if (outputSensors.Count > 0)
+                {
+                    sb.AppendLine(
+                        "                OutputSensors = new[] { "
+                            + string.Join(
+                                ", ",
+                                outputSensors.Select(s => $"\"{s}\"")
+                            )
+                            + " },"
+                    );
+                }
+                else
+                {
+                    sb.AppendLine("                OutputSensors = new string[] { },");
+                }
                 sb.AppendLine(
                     $"                HasTemporalConditions = {GenerationHelpers.HasTemporalConditions(rule).ToString().ToLower()}"
                 );

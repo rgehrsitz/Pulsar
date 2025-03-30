@@ -133,5 +133,73 @@ namespace Pulsar.Tests.Integration.Helpers
           key: output:temp_alert_level
           value_expression: 'output:normalized_temp * 10'";
         }
+        
+        /// <summary>
+        /// Returns a rule that uses string comparisons
+        /// </summary>
+        public static string StringComparisonRuleYaml()
+        {
+            return @"rules:
+  - name: StringComparisonRule
+    description: Tests string comparison operations
+    conditions:
+      all:
+        - condition:
+            type: expression
+            expression: 'input:status == ""active""'
+    actions:
+      - set_value:
+          key: output:status_active
+          value_expression: 'true'
+      - send_message:
+          channel: logs
+          message: ""System status is active""";
+        }
+        
+        /// <summary>
+        /// Returns a rule that uses string operations and concatenation
+        /// </summary>
+        public static string StringOperationsRuleYaml()
+        {
+            return @"rules:
+  - name: StringOperationsRule
+    description: Tests string operations and concatenation
+    conditions:
+      all:
+        - condition:
+            type: comparison
+            sensor: input:temperature
+            operator: '>'
+            value: 30
+    actions:
+      - set_value:
+          key: output:status_message
+          value: ""Temperature exceeded threshold: 30°C""
+      - send_message:
+          channel: notifications
+          message_expression: '""Alert: Temperature value "" + input:temperature + ""°C exceeds threshold""'";
+        }
+        
+        /// <summary>
+        /// Returns a rule that uses logical operators in expressions
+        /// </summary>
+        public static string LogicalOperatorsRuleYaml()
+        {
+            return @"rules:
+  - name: LogicalOperatorsRule
+    description: Tests logical operators in rule expressions
+    conditions:
+      all:
+        - condition:
+            type: expression
+            expression: 'input:temperature > 25 and input:humidity > 60 or input:status == ""critical""'
+    actions:
+      - set_value:
+          key: output:alert_condition
+          value_expression: 'true'
+      - send_message:
+          channel: alerts
+          message: ""Alert condition detected with logical operators""";
+        }
     }
 }

@@ -565,6 +565,7 @@ namespace Pulsar.Compiler.Parsers
                             Type = ActionType.SendMessage,
                             Channel = actionItem.SendMessage.Channel,
                             Message = actionItem.SendMessage.Message,
+                            MessageExpression = actionItem.SendMessage.MessageExpression,
                         };
                     }
 
@@ -645,7 +646,7 @@ namespace Pulsar.Compiler.Parsers
         public string Key { get; set; } = string.Empty;
 
         [YamlMember(Alias = "value")]
-        public double? Value { get; set; }
+        public object? Value { get; set; }
 
         [YamlMember(Alias = "value_expression")]
         public string? ValueExpression { get; set; }
@@ -658,5 +659,8 @@ namespace Pulsar.Compiler.Parsers
 
         [YamlMember(Alias = "message")]
         public string Message { get; set; } = string.Empty;
+        
+        [YamlMember(Alias = "message_expression")]
+        public string? MessageExpression { get; set; }
     }
 }

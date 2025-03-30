@@ -43,7 +43,7 @@ namespace Pulsar.Tests.Integration.Helpers
 
                 // Create system config file with the correct sensors
                 var configPath = Path.Combine(outputPath, "system_config.yaml");
-                await File.WriteAllTextAsync(configPath, GenerateSystemConfig());
+                await File.WriteAllTextAsync(configPath, fixture.GetSystemConfigYaml());
 
                 // Verify the config file exists
                 if (!File.Exists(configPath))
@@ -857,47 +857,7 @@ namespace Pulsar.Tests.Integration.Helpers
             }
         }
 
-        /// <summary>
-        /// Generates a system configuration file for Beacon
-        /// </summary>
-        private string GenerateSystemConfig()
-        {
-            string connectionString = fixture.RedisConnectionString;
-
-            // Ensure Redis connection string is properly formatted for YAML
-            if (connectionString.Contains(':') || connectionString.Contains('/'))
-            {
-                // If the connection string contains special characters, wrap it in quotes
-                connectionString = $"\"{connectionString}\"";
-            }
-
-            return @"version: 1
-validSensors:
-  - temperature_f
-  - temperature_c
-  - humidity
-  - pressure
-  - input:temperature
-  - output:high_temperature
-  - output:temperature_rising
-  - buffer:temp_history
-cycleTime: 100
-redis:
-  endpoints:
-    - "
-                + connectionString
-                + @"
-  poolSize: 4
-  retryCount: 3
-  retryBaseDelayMs: 100
-  connectTimeout: 5000
-  syncTimeout: 1000
-  keepAlive: 60
-  password: null
-  ssl: false
-  allowAdmin: false
-bufferCapacity: 100";
-        }
+        // Removed GenerateSystemConfig method - now using fixture.GetSystemConfigYaml() instead
 
         /// <summary>
         /// Finds the path to the Pulsar.Compiler.dll

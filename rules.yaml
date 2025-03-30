@@ -27,7 +27,7 @@ rules:
     actions:
       - set_value:
           key: "humidity_status"
-          value_expression: "'high'"
+          value: "high"
 
   - name: "ComfortScoreCalc"
     description: "Calculates a comfort score from temperature_c and humidity_status"
@@ -35,7 +35,7 @@ rules:
       all:
         - condition:
             type: expression
-            expression: "temperature_c < 26 and humidity_status == 'high'"
+            expression: "temperature_c < 26 && humidity_status == 'high'"
     actions:
       - set_value:
           key: "comfort_score"

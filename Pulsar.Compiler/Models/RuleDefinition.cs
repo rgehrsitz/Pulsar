@@ -244,7 +244,7 @@ namespace Pulsar.Compiler.Models
     {
         public new ActionType Type { get; set; } = ActionType.SetValue;
         public string Key { get; set; } = string.Empty;
-        public double? Value { get; set; }
+        public object? Value { get; set; }
         public string? ValueExpression { get; set; }
 
         public override void Validate()
@@ -256,7 +256,7 @@ namespace Pulsar.Compiler.Models
                 _logger.Error("SetValue action must specify a key");
                 throw new ValidationException("Key is required for SetValue action");
             }
-            if (string.IsNullOrEmpty(ValueExpression) && Value == 0)
+            if (string.IsNullOrEmpty(ValueExpression) && Value == null)
             {
                 _logger.Error("SetValue action must specify either Value or ValueExpression");
                 throw new ValidationException("Either Value or ValueExpression must be specified");
@@ -269,6 +269,7 @@ namespace Pulsar.Compiler.Models
         public new ActionType Type { get; set; } = ActionType.SendMessage;
         public string Channel { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
+        public string? MessageExpression { get; set; }
 
         public override void Validate()
         {
@@ -279,10 +280,12 @@ namespace Pulsar.Compiler.Models
                 _logger.Error("SendMessage action must specify a channel");
                 throw new ValidationException("Channel is required for SendMessage action");
             }
-            if (string.IsNullOrEmpty(Message))
+            
+            // Allow either a static message or a dynamic message expression
+            if (string.IsNullOrEmpty(Message) && string.IsNullOrEmpty(MessageExpression))
             {
-                _logger.Error("SendMessage action must specify a message");
-                throw new ValidationException("Message is required for SendMessage action");
+                _logger.Error("SendMessage action must specify either Message or MessageExpression");
+                throw new ValidationException("Either Message or MessageExpression must be specified for SendMessage action");
             }
         }
     }

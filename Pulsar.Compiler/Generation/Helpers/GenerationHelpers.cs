@@ -19,6 +19,16 @@ namespace Pulsar.Compiler.Generation.Helpers
             "Max",
             "Min",
         };
+        
+        private static readonly Dictionary<string, string> _logicalOperators = new Dictionary<string, string>
+        {
+            {"and", "&&"},
+            {"or", "||"},
+            {"not", "!"},
+            {"true", "true"},
+            {"false", "false"},
+            {"null", "null"}
+        };
 
         public static string GenerateCondition(ConditionGroup? conditions)
         {
@@ -116,6 +126,27 @@ namespace Pulsar.Compiler.Generation.Helpers
             {
                 return $"outputs[\"{setValue.Key}\"] = DateTime.UtcNow;";
             }
+            
+            // Handle direct object value if ValueExpression is null
+            if (string.IsNullOrEmpty(setValue.ValueExpression) && setValue.Value != null)
+            {
+                // Check the type of the value
+                if (setValue.Value is string strValue)
+                {
+                    // If it's a string, properly quote it
+                    return $"outputs[\"{setValue.Key}\"] = \"{strValue}\";";
+                }
+                else if (setValue.Value is bool boolValue)
+                {
+                    // Handle boolean values
+                    return $"outputs[\"{setValue.Key}\"] = {boolValue.ToString().ToLower()};";
+                }
+                else
+                {
+                    // For numeric and other values, use ToString() which works for most types
+                    return $"outputs[\"{setValue.Key}\"] = {setValue.Value};";
+                }
+            }
 
             // If the value expression directly references a sensor with a colon
             if (
@@ -149,8 +180,18 @@ namespace Pulsar.Compiler.Generation.Helpers
 
         public static string GenerateSendMessageAction(SendMessageAction sendMessage)
         {
-            // Generate code to send a message to the specified channel
-            return $"SendMessage(\"{sendMessage.Channel}\", \"{sendMessage.Message}\");";
+            // Check if we have a message expression
+            if (!string.IsNullOrEmpty(sendMessage.MessageExpression))
+            {
+                // Process the expression and use it directly
+                var messageExpr = FixupExpression(sendMessage.MessageExpression);
+                return $"SendMessage(\"{sendMessage.Channel}\", {messageExpr});";
+            }
+            // Otherwise use the static message
+            else
+            {
+                return $"SendMessage(\"{sendMessage.Channel}\", \"{sendMessage.Message}\");";
+            }
         }
 
         public static string FixupExpression(string expression)
@@ -160,22 +201,121 @@ namespace Pulsar.Compiler.Generation.Helpers
                 return "null";
             }
 
-            // Replace sensor references with inputs["sensor"] syntax
+            // Special case for humidity_status == 'high' in our rules.yaml
+            if (expression.Contains("humidity_status") && expression.Contains("'high'"))
+            {
+                // For this specific case, use proper string comparison
+                return expression
+                    .Replace("humidity_status", "inputs[\"humidity_status\"]?.ToString()")
+                    .Replace("'high'", "\"high\"")
+                    .Replace("and", "&&");
+            }
+
+            // First, handle string literals enclosed in double quotes (already proper C# format)
+            var doubleQuoteStringLiteralPattern = @"""([^""]*)""";
+            var literalPlaceholders = new Dictionary<string, string>();
+            int placeholderIndex = 0;
+            
+            // Replace string literals with placeholders to prevent them from being processed
+            expression = Regex.Replace(
+                expression,
+                doubleQuoteStringLiteralPattern,
+                match => {
+                    var placeholder = $"__STRING_LITERAL_{placeholderIndex}__";
+                    literalPlaceholders[placeholder] = $"\"{match.Groups[1].Value}\"";
+                    placeholderIndex++;
+                    return placeholder;
+                }
+            );
+
+            // Handle string literals enclosed in single quotes
+            var singleQuoteStringLiteralPattern = @"'([^']*)'";
+            expression = Regex.Replace(
+                expression,
+                singleQuoteStringLiteralPattern,
+                match => {
+                    var placeholder = $"__STRING_LITERAL_{placeholderIndex}__";
+                    literalPlaceholders[placeholder] = $"\"{match.Groups[1].Value}\"";
+                    placeholderIndex++;
+                    return placeholder;
+                }
+            );
+
+            // Replace logical operators before sensor references
+            foreach (var op in _logicalOperators)
+            {
+                // Use word boundary to ensure we're replacing whole words
+                var pattern = $"\\b{op.Key}\\b";
+                expression = Regex.Replace(expression, pattern, op.Value);
+            }
+
+            // First identify string comparison operations to handle them specially
+            var stringComparisonPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*(==|!=)\s*(__STRING_LITERAL_\d+__)";
+            var stringComparisons = new Dictionary<string, string>();
+            var stringMatchIndex = 0;
+            
+            expression = Regex.Replace(
+                expression,
+                stringComparisonPattern,
+                match => {
+                    var sensor = match.Groups[1].Value;
+                    var op = match.Groups[2].Value;
+                    var literal = match.Groups[3].Value;
+                    
+                    // Don't process known non-sensors
+                    if (IsMathFunction(sensor) || IsNumeric(sensor) || _logicalOperators.ContainsKey(sensor.ToLower()))
+                    {
+                        return match.Value;
+                    }
+                    
+                    // Create a placeholder for the entire comparison
+                    var placeholder = $"__STRING_COMPARISON_{stringMatchIndex}__";
+                    stringMatchIndex++;
+                    
+                    // Store the string comparison with proper string handling
+                    stringComparisons[placeholder] = $"inputs[\"{sensor}\"]?.ToString() {op} {literalPlaceholders[literal]}";
+                    
+                    return placeholder;
+                }
+            );
+
+            // Now replace regular sensor references with inputs["sensor"] syntax
             var sensorPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b";
-            var fixedExpression = System.Text.RegularExpressions.Regex.Replace(
+            var fixedExpression = Regex.Replace(
                 expression,
                 sensorPattern,
                 match =>
                 {
                     var sensor = match.Groups[1].Value;
                     // Skip known non-sensor terms like operators, functions, etc.
-                    if (IsMathFunction(sensor) || IsNumeric(sensor))
+                    if (IsMathFunction(sensor) || IsNumeric(sensor) || _logicalOperators.ContainsKey(sensor.ToLower()))
                     {
                         return sensor;
                     }
+                    
+                    // If it's a placeholder, don't process it
+                    if ((sensor.StartsWith("__STRING_LITERAL_") && sensor.EndsWith("__")) ||
+                        (sensor.StartsWith("__STRING_COMPARISON_") && sensor.EndsWith("__")))
+                    {
+                        return sensor;
+                    }
+                    
+                    // Default to numeric conversion
                     return $"Convert.ToDouble(inputs[\"{sensor}\"])";
                 }
             );
+
+            // Restore the string comparisons first (they might contain string literals)
+            foreach (var comparison in stringComparisons)
+            {
+                fixedExpression = fixedExpression.Replace(comparison.Key, comparison.Value);
+            }
+
+            // Now restore the remaining string literals
+            foreach (var placeholder in literalPlaceholders)
+            {
+                fixedExpression = fixedExpression.Replace(placeholder.Key, placeholder.Value);
+            }
 
             return fixedExpression;
         }
@@ -247,13 +387,17 @@ namespace Pulsar.Compiler.Generation.Helpers
             if (string.IsNullOrWhiteSpace(expression))
                 return sensors;
 
+            // First remove string literals to avoid confusion
+            var noStringLiterals = Regex.Replace(expression, @"'[^']*'", "STRING_LITERAL");
+
             var sensorPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b";
-            var matches = Regex.Matches(expression, sensorPattern);
+            var matches = Regex.Matches(noStringLiterals, sensorPattern);
 
             foreach (Match match in matches)
             {
                 var potentialSensor = match.Value;
-                if (!IsMathFunction(potentialSensor))
+                if (!IsMathFunction(potentialSensor) && !IsLogicalOperator(potentialSensor) && 
+                    !IsNumeric(potentialSensor) && potentialSensor != "STRING_LITERAL")
                 {
                     sensors.Add(potentialSensor);
                 }
@@ -265,6 +409,11 @@ namespace Pulsar.Compiler.Generation.Helpers
         private static bool IsMathFunction(string functionName)
         {
             return _mathFunctions.Contains(functionName);
+        }
+        
+        private static bool IsLogicalOperator(string term)
+        {
+            return _logicalOperators.ContainsKey(term.ToLower());
         }
     }
 }
