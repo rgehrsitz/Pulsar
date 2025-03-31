@@ -95,7 +95,7 @@ rules:
 
             Assert.Equal("alert", action.Key);
 
-            Assert.Equal(1.0, action.Value);
+            Assert.Equal(1.0, Convert.ToDouble(action.Value));
 
             _logger.Debug("Valid rule parsing test completed successfully");
         }

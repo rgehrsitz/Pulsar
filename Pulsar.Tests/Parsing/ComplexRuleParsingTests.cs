@@ -168,7 +168,7 @@ rules:
 
             Assert.Equal("temp_alert", setValue.Key);
 
-            Assert.Equal(1, setValue.Value);
+            Assert.Equal(1, Convert.ToInt32(setValue.Value));
 
             var sendMessage = rule.Actions[1] as SendMessageAction;
 
