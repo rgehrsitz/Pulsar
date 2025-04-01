@@ -30,10 +30,11 @@ public class RedisService : IRedisService, IDisposable
     private readonly RedisHealthCheck? _healthCheck;
     private bool _disposed;
 
-    // Redis key prefixes
-    private const string INPUT_PREFIX = "sensors:";
-    private const string OUTPUT_PREFIX = "outputs:";
-    private const string HISTORY_PREFIX = "history:";
+    // Redis key prefixes - standardized domain-prefix naming convention
+    private const string INPUT_PREFIX = "input:";
+    private const string OUTPUT_PREFIX = "output:";
+    private const string STATE_PREFIX = "state:";
+    private const string BUFFER_PREFIX = "buffer:";
 
     public bool IsHealthy => _healthCheck?.IsHealthy ?? true;
 
@@ -232,31 +233,110 @@ public class RedisService : IRedisService, IDisposable
             {
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
-
-                var keys = await db.ExecuteAsync("KEYS", $"{INPUT_PREFIX}*");
                 var result = new Dictionary<string, object>();
 
-                if (keys.IsNull)
-                    return result;
-
-                foreach (var key in (RedisResult[])keys)
+                try
                 {
-                    var keyStr = key.ToString();
-                    var value = await db.StringGetAsync(keyStr);
-                    if (!value.IsNull)
+                    var keys = await db.ExecuteAsync("KEYS", $"{INPUT_PREFIX}*");
+                    
+                    if (keys.IsNull)
+                        return result;
+
+                    foreach (var key in (RedisResult[])keys)
                     {
-                        var sensorName = keyStr.Substring(INPUT_PREFIX.Length);
-                        if (double.TryParse(value, out var doubleValue))
+                        var keyStr = key.ToString();
+                        try
                         {
-                            result[sensorName] = doubleValue;
+                            // Check key type first to avoid WRONGTYPE errors
+                            var keyType = await db.KeyTypeAsync(keyStr);
+                            if (keyType == RedisType.String)
+                            {
+                                var value = await db.StringGetAsync(keyStr);
+                                if (!value.IsNull)
+                                {
+                                    // Extract only the part after the prefix
+                                    var sensorName = keyStr.Substring(INPUT_PREFIX.Length);
+                                    
+                                    if (double.TryParse(value, out var doubleValue))
+                                    {
+                                        // For backward compatibility, include both prefixed and unprefixed keys
+                                        result[keyStr] = doubleValue;   // Keep the prefixed key for new code
+                                        result[sensorName] = doubleValue; // Keep unprefixed for backward compatibility
+                                    }
+                                    else
+                                    {
+                                        // For backward compatibility, include both prefixed and unprefixed keys
+                                        result[keyStr] = value.ToString();   // Keep the prefixed key for new code
+                                        result[sensorName] = value.ToString(); // Keep unprefixed for backward compatibility
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                _logger.Warning("Skipping non-string Redis key {Key} of type {Type}", keyStr, keyType);
+                            }
                         }
-                        else
+                        catch (Exception innerEx)
                         {
-                            result[sensorName] = value.ToString();
+                            _logger.Warning(innerEx, "Failed to process Redis key {Key}", keyStr);
                         }
                     }
                 }
-
+                catch (RedisServerException ex) when (ex.Message.Contains("WRONGTYPE"))
+                {
+                    _logger.Warning("Key type mismatch in Redis. Trying scan command instead.");
+                    
+                    // Fallback to SCAN command if KEYS fails due to type issues
+                    long cursor = 0;
+                    do
+                    {
+                        var scan = await db.ExecuteAsync("SCAN", cursor.ToString(), "MATCH", $"{INPUT_PREFIX}*", "COUNT", "100");
+                        var scanResult = (RedisResult[])scan;
+                        cursor = long.Parse(scanResult[0].ToString());
+                        var keys = (RedisResult[])scanResult[1];
+                        
+                        foreach (var key in keys)
+                        {
+                            var keyStr = key.ToString();
+                            try 
+                            {
+                                // Check key type first to avoid WRONGTYPE errors
+                                var keyType = await db.KeyTypeAsync(keyStr);
+                                if (keyType == RedisType.String)
+                                {
+                                    var value = await db.StringGetAsync(keyStr);
+                                    if (!value.IsNull)
+                                    {
+                                        // Extract only the part after the prefix
+                                        var sensorName = keyStr.Substring(INPUT_PREFIX.Length);
+                                        
+                                        if (double.TryParse(value, out var doubleValue))
+                                        {
+                                            // For backward compatibility, include both prefixed and unprefixed keys
+                                            result[keyStr] = doubleValue;   // Keep the prefixed key for new code
+                                            result[sensorName] = doubleValue; // Keep unprefixed for backward compatibility
+                                        }
+                                        else
+                                        {
+                                            // For backward compatibility, include both prefixed and unprefixed keys
+                                            result[keyStr] = value.ToString();   // Keep the prefixed key for new code
+                                            result[sensorName] = value.ToString(); // Keep unprefixed for backward compatibility
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    _logger.Warning("Skipping non-string Redis key {Key} of type {Type}", keyStr, keyType);
+                                }
+                            }
+                            catch (Exception innerEx)
+                            {
+                                _logger.Warning(innerEx, "Failed to process Redis key {Key}", keyStr);
+                            }
+                        }
+                    } while (cursor != 0);
+                }
+                
                 return result;
             });
         }
@@ -286,7 +366,17 @@ public class RedisService : IRedisService, IDisposable
 
                 foreach (var (key, value) in outputs)
                 {
-                    var redisKey = $"{OUTPUT_PREFIX}{key}";
+                    // Handle case where key might already include the prefix
+                    string redisKey;
+                    if (key.StartsWith(OUTPUT_PREFIX))
+                    {
+                        redisKey = key;
+                    }
+                    else
+                    {
+                        redisKey = $"{OUTPUT_PREFIX}{key}";
+                    }
+                    
                     tasks.Add(batch.StringSetAsync(redisKey, value.ToString()));
                 }
 
@@ -322,12 +412,28 @@ public class RedisService : IRedisService, IDisposable
                 {
                     try
                     {
-                        var redisKey = $"{INPUT_PREFIX}{key}";
+                        // Handle case where key might already include the prefix
+                        string redisKey;
+                        if (key.StartsWith(INPUT_PREFIX))
+                        {
+                            redisKey = key;
+                        }
+                        else
+                        {
+                            redisKey = $"{INPUT_PREFIX}{key}";
+                        }
+                        
                         var value = await db.StringGetAsync(redisKey);
 
                         if (!value.IsNull && double.TryParse(value, out var doubleValue))
                         {
-                            result[key] = (doubleValue, now);
+                            // Use the original key (without prefix) for the result
+                            string resultKey = key;
+                            if (key.StartsWith(INPUT_PREFIX))
+                            {
+                                resultKey = key.Substring(INPUT_PREFIX.Length);
+                            }
+                            result[resultKey] = (doubleValue, now);
                         }
                     }
                     catch (Exception ex)
@@ -365,14 +471,31 @@ public class RedisService : IRedisService, IDisposable
 
                 foreach (var (key, value) in outputs)
                 {
-                    var redisKey = $"{OUTPUT_PREFIX}{key}";
+                    // Handle case where key might already include the prefix
+                    string redisKey;
+                    if (key.StartsWith(OUTPUT_PREFIX))
+                    {
+                        redisKey = key;
+                    }
+                    else
+                    {
+                        redisKey = $"{OUTPUT_PREFIX}{key}";
+                    }
+                    
                     tasks.Add(batch.StringSetAsync(redisKey, value.ToString()));
 
-                    // Also store in history
-                    var historyKey = $"{HISTORY_PREFIX}{key}";
+                    // Parse key to get the base name without any prefix
+                    string baseName = key;
+                    if (key.StartsWith(OUTPUT_PREFIX))
+                    {
+                        baseName = key.Substring(OUTPUT_PREFIX.Length);
+                    }
+                    
+                    // Also store in buffer (historical data)
+                    var bufferKey = $"{BUFFER_PREFIX}{baseName}";
                     var entry = $"{DateTime.UtcNow.Ticks}:{value}";
-                    tasks.Add(batch.ListRightPushAsync(historyKey, entry));
-                    tasks.Add(batch.ListTrimAsync(historyKey, 0, 999)); // Keep last 1000 entries
+                    tasks.Add(batch.ListRightPushAsync(bufferKey, entry));
+                    tasks.Add(batch.ListTrimAsync(bufferKey, 0, 999)); // Keep last 1000 entries
                 }
 
                 batch.Execute();
@@ -399,8 +522,18 @@ public class RedisService : IRedisService, IDisposable
                 var connection = GetConnection();
                 var db = connection.GetDatabase();
 
-                var historyKey = $"{HISTORY_PREFIX}{sensor}";
-                var entries = await db.ListRangeAsync(historyKey, -count, -1);
+                // Handle case where sensor might already include the buffer prefix
+                string bufferKey;
+                if (sensor.StartsWith(BUFFER_PREFIX))
+                {
+                    bufferKey = sensor;
+                }
+                else
+                {
+                    bufferKey = $"{BUFFER_PREFIX}{sensor}";
+                }
+                
+                var entries = await db.ListRangeAsync(bufferKey, -count, -1);
 
                 var result = new List<(double Value, DateTime Timestamp)>();
 

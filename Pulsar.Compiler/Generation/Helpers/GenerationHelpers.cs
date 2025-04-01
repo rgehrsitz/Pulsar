@@ -148,10 +148,45 @@ namespace Pulsar.Compiler.Generation.Helpers
                 }
             }
 
+            // Special case for general expressions with input: prefixes
+            if (setValue.ValueExpression?.Contains("input:") == true &&
+                (setValue.ValueExpression?.Contains("+") == true ||
+                 setValue.ValueExpression?.Contains("-") == true ||
+                 setValue.ValueExpression?.Contains("*") == true ||
+                 setValue.ValueExpression?.Contains("/") == true ||
+                 setValue.ValueExpression?.Contains("(") == true))
+            {
+                // Extract all input: prefixed variables
+                var matches = Regex.Matches(setValue.ValueExpression, @"input:[a-zA-Z0-9_]+");
+                string expr = setValue.ValueExpression;
+                
+                // Replace each one with proper Convert.ToDouble(inputs["..."]) syntax
+                // Use a dictionary to track replacements to avoid nested replacements
+                var replacements = new Dictionary<string, string>();
+                foreach (Match match in matches)
+                {
+                    replacements[match.Value] = $"Convert.ToDouble(inputs[\"{match.Value}\"])";
+                }
+                
+                // Sort by length descending to replace the longest matches first
+                foreach (var replacement in replacements.OrderByDescending(r => r.Key.Length))
+                {
+                    expr = expr.Replace(replacement.Key, replacement.Value);
+                }
+                
+                return $"outputs[\"{setValue.Key}\"] = {expr};";
+            }
+            
             // If the value expression directly references a sensor with a colon
             if (
                 !string.IsNullOrEmpty(setValue.ValueExpression)
                 && setValue.ValueExpression.Contains(":")
+                && !setValue.ValueExpression.Contains("+")
+                && !setValue.ValueExpression.Contains("-")
+                && !setValue.ValueExpression.Contains("*")
+                && !setValue.ValueExpression.Contains("/")
+                && !setValue.ValueExpression.Contains("(")
+                && !setValue.ValueExpression.Contains(")")
             )
             {
                 // Direct reference to a sensor with a colon
@@ -163,12 +198,12 @@ namespace Pulsar.Compiler.Generation.Helpers
                 : setValue.Value?.ToString() ?? "null";
 
             // If the processed value starts with "inputs[", it's already been processed by FixupExpression
-            if (value.StartsWith("inputs["))
+            if (value.StartsWith("inputs[") || value.Contains("Convert.ToDouble"))
             {
                 return $"outputs[\"{setValue.Key}\"] = {value};";
             }
-            // If the value contains a colon, it's likely a sensor reference that needs to be quoted
-            else if (value.Contains(":"))
+            // If the value is just a simple sensor reference (without expressions), treat it as a direct input lookup
+            else if (value.Contains(":") && !value.Contains(" ") && !value.Contains("(") && !value.Contains("+") && !value.Contains("-") && !value.Contains("*") && !value.Contains("/"))
             {
                 return $"outputs[\"{setValue.Key}\"] = inputs[\"{value}\"];";
             }
@@ -280,9 +315,36 @@ namespace Pulsar.Compiler.Generation.Helpers
             );
 
             // Now replace regular sensor references with inputs["sensor"] syntax
+            // Process prefixed variables like input:temperature first
+            var prefixedSensorPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*:[a-zA-Z_][a-zA-Z0-9_]*)\b";
+            var expressionWithPrefixes = Regex.Replace(
+                expression,
+                prefixedSensorPattern,
+                match =>
+                {
+                    var sensor = match.Groups[1].Value;
+                    // Skip known non-sensor terms like operators, functions, etc.
+                    if (IsMathFunction(sensor) || IsNumeric(sensor) || _logicalOperators.ContainsKey(sensor.ToLower()))
+                    {
+                        return sensor;
+                    }
+                    
+                    // If it's a placeholder, don't process it
+                    if ((sensor.StartsWith("__STRING_LITERAL_") && sensor.EndsWith("__")) ||
+                        (sensor.StartsWith("__STRING_COMPARISON_") && sensor.EndsWith("__")))
+                    {
+                        return sensor;
+                    }
+                    
+                    // Handle prefixed variable
+                    return $"Convert.ToDouble(inputs[\"{sensor}\"])";
+                }
+            );
+            
+            // Then process standard variables
             var sensorPattern = @"\b([a-zA-Z_][a-zA-Z0-9_]*)\b";
             var fixedExpression = Regex.Replace(
-                expression,
+                expressionWithPrefixes,
                 sensorPattern,
                 match =>
                 {
