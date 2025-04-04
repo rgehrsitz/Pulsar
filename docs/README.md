@@ -13,21 +13,22 @@ This directory contains the documentation for the Pulsar/Beacon project, a high-
 1. [**Project Status**](Project-Status.md) - Current status of the project, recent fixes, and next steps
 2. [**AOT Implementation**](AOT-Implementation.md) - Details of the AOT (Ahead-of-Time) compilation implementation
 3. [**Rules Engine**](Rules-Engine.md) - Overview of the rules engine, including rule definitions, conditions, actions, and execution
+4. [**Command Line Options**](Command-Line-Options.md) - Comprehensive guide to Pulsar's command line interface and options
 
 ### Technical Components
 
-4. [**Redis Integration**](Redis-Integration.md) - Redis integration components, configuration, and best practices
-5. [**Prometheus Metrics**](Prometheus-Metrics.md) - Monitoring Beacon with Prometheus metrics
-6. [**Temporal Buffer**](Temporal-Buffer.md) - Implementation of the temporal buffer for historical data storage and evaluation
+5. [**Redis Integration**](Redis-Integration.md) - Redis integration components, configuration, and best practices
+6. [**Prometheus Metrics**](Prometheus-Metrics.md) - Monitoring Beacon with Prometheus metrics
+7. [**Temporal Buffer**](Temporal-Buffer.md) - Implementation of the temporal buffer for historical data storage and evaluation
 
 ### User Guides
 
-7. [**End-to-End Guide**](End-to-End-Guide.md) - Complete walkthrough from creating YAML rules to running a Beacon application
+8. [**End-to-End Guide**](End-to-End-Guide.md) - Complete walkthrough from creating YAML rules to running a Beacon application
 
 ### Development and Testing
 
-8. [**Testing Guide**](Testing-Guide.md) - Comprehensive guide to testing the Pulsar/Beacon system
-9. [**Directory Structure**](Directory-Structure.md) - Explanation of project directories and guidelines
+9. [**Testing Guide**](Testing-Guide.md) - Comprehensive guide to testing the Pulsar/Beacon system
+10. [**Directory Structure**](Directory-Structure.md) - Explanation of project directories and guidelines
 
 ## Getting Started
 
@@ -37,6 +38,7 @@ If you're new to the Pulsar/Beacon project, we recommend starting with the follo
 2. [**Rules Engine**](Rules-Engine.md) - To learn about rule definitions and capabilities
 3. [**Directory Structure**](Directory-Structure.md) - To understand the project organization
 4. [**Project Status**](Project-Status.md) - To understand the current state of the project
+5. [**Command Line Options**](Command-Line-Options.md) - To learn how to use the Pulsar command line interface
 
 ## Key Features
 
