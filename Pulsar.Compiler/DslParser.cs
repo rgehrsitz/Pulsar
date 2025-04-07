@@ -422,7 +422,36 @@ namespace Pulsar.Compiler.Parsers
                             "Threshold over time condition must specify a positive duration"
                         );
                     }
-                    if (condition.ConditionDetails.Threshold <= 0) // Check Threshold instead of Value
+                    
+                    // Convert the threshold value properly
+                    double thresholdValue = 0;
+                    if (condition.ConditionDetails.Threshold > 0)
+                    {
+                        thresholdValue = condition.ConditionDetails.Threshold;
+                    }
+                    else if (condition.ConditionDetails.Value != null)
+                    {
+                        // Try to convert Value to double for threshold
+                        if (condition.ConditionDetails.Value is double dVal)
+                        {
+                            thresholdValue = dVal;
+                        }
+                        else if (condition.ConditionDetails.Value is int iVal)
+                        {
+                            thresholdValue = iVal;
+                        }
+                        else if (condition.ConditionDetails.Value is string sVal && double.TryParse(sVal, out double parsedVal))
+                        {
+                            thresholdValue = parsedVal;
+                        }
+                        else
+                        {
+                            throw new ValidationException(
+                                "Threshold over time condition must specify a numeric threshold"
+                            );
+                        }
+                    }
+                    else
                     {
                         throw new ValidationException(
                             "Threshold over time condition must specify a positive threshold"
@@ -446,7 +475,7 @@ namespace Pulsar.Compiler.Parsers
                     {
                         Type = ConditionType.ThresholdOverTime,
                         Sensor = condition.ConditionDetails.Sensor,
-                        Threshold = condition.ConditionDetails.Threshold, // Use Threshold instead of Value
+                        Threshold = thresholdValue,
                         Duration = condition.ConditionDetails.Duration,
                         Mode = mode,
                     };
@@ -622,8 +651,8 @@ namespace Pulsar.Compiler.Parsers
         public string Type { get; set; } = string.Empty;
         public string Sensor { get; set; } = string.Empty;
         public string Operator { get; set; } = string.Empty;
-        public double Value { get; set; }
-        public double Threshold { get; set; } // Add this field
+        public object? Value { get; set; }  // Changed from double to object? to support boolean values
+        public double Threshold { get; set; }
         public string Expression { get; set; } = string.Empty;
         public int Duration { get; set; }
         public string Mode { get; set; } = string.Empty;

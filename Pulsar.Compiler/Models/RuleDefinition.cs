@@ -148,7 +148,7 @@ namespace Pulsar.Compiler.Models
         public new ConditionType Type { get; set; } = ConditionType.Comparison;
         public string Sensor { get; set; } = string.Empty;
         public ComparisonOperator Operator { get; set; }
-        public double Value { get; set; }
+        public object? Value { get; set; }  // Changed from double to object? to support boolean values
 
         public override void Validate()
         {

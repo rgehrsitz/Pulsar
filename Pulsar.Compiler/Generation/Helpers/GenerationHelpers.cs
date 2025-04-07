@@ -82,7 +82,23 @@ namespace Pulsar.Compiler.Generation.Helpers
                 ),
             };
 
-            return $"Convert.ToDouble(inputs[\"{comparison.Sensor}\"]) {op} {comparison.Value}";
+            // Special handling for boolean values
+            if (comparison.Value is bool boolValue)
+            {
+                // Use C# boolean literal (lowercase true/false)
+                return $"Convert.ToBoolean(inputs[\"{comparison.Sensor}\"]) {op} {boolValue.ToString().ToLower()}";
+            }
+            // Special handling for string values
+            else if (comparison.Value is string stringValue)
+            {
+                // Use string comparison with proper quotes
+                return $"inputs[\"{comparison.Sensor}\"]?.ToString() {op} \"{stringValue}\"";
+            }
+            // Default to numeric comparison
+            else
+            {
+                return $"Convert.ToDouble(inputs[\"{comparison.Sensor}\"]) {op} {comparison.Value}";
+            }
         }
 
         public static string GenerateThresholdCondition(ThresholdOverTimeCondition threshold)
