@@ -377,7 +377,19 @@ public class RedisService : IRedisService, IDisposable
                         redisKey = $"{OUTPUT_PREFIX}{key}";
                     }
                     
-                    tasks.Add(batch.StringSetAsync(redisKey, value.ToString()));
+                    // Special handling for boolean values - use lowercase true/false for proper Redis compatibility
+                    string valueStr;
+                    if (value is bool boolValue)
+                    {
+                        valueStr = boolValue.ToString().ToLowerInvariant(); // "true" or "false" lowercase
+                        _logger.Debug("Setting boolean key {Key} to {Value}", redisKey, valueStr);
+                    }
+                    else
+                    {
+                        valueStr = value.ToString();
+                    }
+                    
+                    tasks.Add(batch.StringSetAsync(redisKey, valueStr));
                 }
 
                 batch.Execute();
@@ -482,7 +494,10 @@ public class RedisService : IRedisService, IDisposable
                         redisKey = $"{OUTPUT_PREFIX}{key}";
                     }
                     
-                    tasks.Add(batch.StringSetAsync(redisKey, value.ToString()));
+                    // Dictionary<string, double> contains only numeric values, no special handling needed
+                    string valueStr = value.ToString();
+                    
+                    tasks.Add(batch.StringSetAsync(redisKey, valueStr));
 
                     // Parse key to get the base name without any prefix
                     string baseName = key;
