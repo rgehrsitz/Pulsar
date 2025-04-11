@@ -82,28 +82,58 @@ namespace Pulsar.Compiler.Generation.Helpers
                 ),
             };
 
+            // Special handling for sensor that might be an output from another rule
+            string sensorAccess;
+            if (comparison.Sensor.StartsWith("output:"))
+            {
+                // For output sensors, try getting from outputs first, then inputs
+                // Use unique variable names for TryGetValue to avoid conflicts
+                string varName = $"outVal_{comparison.Sensor.Replace(":", "_")}";
+                sensorAccess = $"(outputs.TryGetValue(\"{comparison.Sensor}\", out var {varName}) ? {varName} : " +
+                              $"(inputs.ContainsKey(\"{comparison.Sensor}\") ? inputs[\"{comparison.Sensor}\"] : null))";
+            }
+            else
+            {
+                // Regular input sensor
+                sensorAccess = $"inputs[\"{comparison.Sensor}\"]";
+            }
+
             // Special handling for boolean values
             if (comparison.Value is bool boolValue)
             {
                 // Use C# boolean literal (lowercase true/false)
-                return $"Convert.ToBoolean(inputs[\"{comparison.Sensor}\"]) {op} {boolValue.ToString().ToLower()}";
+                return $"Convert.ToBoolean({sensorAccess}) {op} {boolValue.ToString().ToLower()}";
             }
             // Special handling for string values
             else if (comparison.Value is string stringValue)
             {
                 // Use string comparison with proper quotes
-                return $"inputs[\"{comparison.Sensor}\"]?.ToString() {op} \"{stringValue}\"";
+                return $"{sensorAccess}?.ToString() {op} \"{stringValue}\"";
             }
             // Default to numeric comparison
             else
             {
-                return $"Convert.ToDouble(inputs[\"{comparison.Sensor}\"]) {op} {comparison.Value}";
+                return $"Convert.ToDouble({sensorAccess}) {op} {comparison.Value}";
             }
         }
 
         public static string GenerateThresholdCondition(ThresholdOverTimeCondition threshold)
         {
-            return $"CheckThreshold(\"{threshold.Sensor}\", {threshold.Threshold}, {threshold.Duration}, \"{threshold.ComparisonOperator}\")";
+            // Convert the ComparisonOperator enum to the string operator format expected by CheckThreshold
+            var op = threshold.ComparisonOperator switch
+            {
+                ComparisonOperator.GreaterThan => ">",
+                ComparisonOperator.LessThan => "<",
+                ComparisonOperator.GreaterThanOrEqual => ">=",
+                ComparisonOperator.LessThanOrEqual => "<=",
+                ComparisonOperator.EqualTo => "==",
+                ComparisonOperator.NotEqualTo => "!=",
+                _ => throw new InvalidOperationException(
+                    $"Unknown operator: {threshold.ComparisonOperator}"
+                ),
+            };
+            
+            return $"CheckThreshold(\"{threshold.Sensor}\", {threshold.Threshold}, {threshold.Duration}, \"{op}\")";
         }
 
         public static string GenerateAction(ActionDefinition action)

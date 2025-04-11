@@ -178,7 +178,11 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("                var inputs = await _redis.GetAllInputsAsync();");
             sb.AppendLine("                var outputs = await ExecuteRulesAsync(inputs);");
             sb.AppendLine();
-            sb.AppendLine("                await _redis.SetOutputsAsync(outputs);");
+            sb.AppendLine("                // Send all outputs to Redis");
+            sb.AppendLine("                if (outputs.Count > 0)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    await _redis.SetOutputsAsync(outputs);");
+            sb.AppendLine("                }");
             sb.AppendLine("            }");
             sb.AppendLine("            catch (Exception ex)");
             sb.AppendLine("            {");

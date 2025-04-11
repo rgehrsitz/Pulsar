@@ -494,7 +494,7 @@ public class RedisService : IRedisService, IDisposable
                         redisKey = $"{OUTPUT_PREFIX}{key}";
                     }
                     
-                    // Dictionary<string, double> contains only numeric values, no special handling needed
+                    // Numeric values don't need special handling - convert to string
                     string valueStr = value.ToString();
                     
                     tasks.Add(batch.StringSetAsync(redisKey, valueStr));

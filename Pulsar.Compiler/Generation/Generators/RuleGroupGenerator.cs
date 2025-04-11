@@ -66,14 +66,22 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            // Required sensors property
-            var requiredSensors = rules
-                .SelectMany(r => GenerationHelpers.GetInputSensors(r))
-                .Distinct()
-                .ToList();
+            // Required sensors property - include both inputs and outputs that are referenced in conditions
+            var allSensors = new HashSet<string>();
+            
+            // Add all input sensors
+            foreach (var rule in rules)
+            {
+                var inputSensors = GenerationHelpers.GetInputSensors(rule);
+                foreach (var sensor in inputSensors)
+                {
+                    allSensors.Add(sensor);
+                }
+            }
+            
             sb.AppendLine("        public string[] RequiredSensors => new[]");
             sb.AppendLine("        {");
-            foreach (var sensor in requiredSensors)
+            foreach (var sensor in allSensors)
             {
                 sb.AppendLine($"            \"{sensor}\",");
             }
