@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Beacon.Runtime.Interfaces;
+using Beacon.Runtime.Models;
 using Beacon.Runtime.Services;
 using Serilog;
 
@@ -64,7 +65,7 @@ namespace Beacon.Runtime
             }
         }
 
-        public Task StartAsync(int cycleTimeMs = 100, CancellationToken cancellationToken = default)
+        public Task StartAsync(int? overrideCycleTimeMs = null, CancellationToken cancellationToken = default)
         {
             if (_executionTask != null)
             {
@@ -72,7 +73,18 @@ namespace Beacon.Runtime
                 return Task.CompletedTask;
             }
 
-            _logger.Information("Starting runtime orchestrator with cycle time of {CycleTimeMs}ms", cycleTimeMs);
+            // Get cycle time from configuration or use override value
+            var config = Models.RuntimeConfig.LoadFromEnvironment();
+            var cycleTimeMs = overrideCycleTimeMs ?? (config.TestMode ? config.TestModeCycleTimeMs : config.CycleTime);
+            
+            if (config.TestMode)
+            {
+                _logger.Information("Starting runtime orchestrator in TEST MODE with cycle time of {CycleTimeMs}ms", cycleTimeMs);
+            }
+            else
+            {
+                _logger.Information("Starting runtime orchestrator with cycle time of {CycleTimeMs}ms", cycleTimeMs);
+            }
 
             // Link the cancellation tokens
             var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(

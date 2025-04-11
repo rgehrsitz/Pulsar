@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -37,11 +38,41 @@ namespace Beacon.Runtime
             // Get a logger for the Program class
             var logger = loggerFactory.CreateLogger<Program>();
             logger.LogInformation("Starting Beacon Runtime Engine");
+            
+            // Parse command line arguments for test mode
+            bool testMode = args.Contains("--testmode") || args.Contains("-t");
+            int testCycleTimeMs = 0;
+            
+            // Check for test cycle time
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if ((args[i] == "--test-cycle-time" || args[i] == "-c") && int.TryParse(args[i + 1], out int cycleTime))
+                {
+                    testCycleTimeMs = cycleTime;
+                    break;
+                }
+            }
+            
+            // Output test mode settings if enabled
+            if (testMode)
+            {
+                logger.LogInformation("Test mode enabled. Cycle time: {CycleTimeMs}ms", testCycleTimeMs > 0 ? testCycleTimeMs : 250);
+            }
 
             try
             {
                 // Load configuration
                 var config = Models.RuntimeConfig.LoadFromEnvironment();
+                
+                // Apply test mode settings if specified
+                if (testMode)
+                {
+                    config.TestMode = true;
+                    if (testCycleTimeMs > 0)
+                    {
+                        config.TestModeCycleTimeMs = testCycleTimeMs;
+                    }
+                }
                 logger.LogInformation(
                     "Loaded configuration with {SensorCount} sensors",
                     config.ValidSensors.Count
@@ -107,5 +138,7 @@ namespace Beacon.Runtime
                 logger.LogInformation("Beacon Runtime Engine stopped");
             }
         }
+        
+
     }
 }

@@ -18,6 +18,18 @@ namespace Beacon.Runtime.Models
         public int CycleTime { get; set; } = 100;
 
         [JsonInclude]
+        public bool TestMode { get; set; } = false;
+
+        [JsonInclude]
+        public int TestModeCycleTimeMs { get; set; } = 250; // Longer cycle time for testing
+
+        /// <summary>
+        /// Returns the appropriate cycle time based on whether test mode is enabled
+        /// </summary>
+        [JsonIgnore]
+        public int EffectiveCycleTimeMs => TestMode ? TestModeCycleTimeMs : CycleTime;
+
+        [JsonInclude]
         public int BufferCapacity { get; set; } = 100;
 
         [JsonInclude]
@@ -149,6 +161,23 @@ namespace Beacon.Runtime.Models
             )
             {
                 config.CycleTime = cycleTime;
+            }
+            
+            // Load test mode settings from environment variables
+            if (bool.TryParse(Environment.GetEnvironmentVariable("TEST_MODE"), out var testMode))
+            {
+                config.TestMode = testMode;
+            }
+
+            // Load test mode cycle time from environment variables
+            if (
+                int.TryParse(
+                    Environment.GetEnvironmentVariable("TEST_MODE_CYCLE_TIME_MS"),
+                    out var testModeCycleTime
+                )
+            )
+            {
+                config.TestModeCycleTimeMs = testModeCycleTime;
             }
 
             // Load buffer capacity from environment variables
