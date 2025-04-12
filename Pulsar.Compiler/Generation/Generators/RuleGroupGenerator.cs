@@ -69,13 +69,44 @@ namespace Pulsar.Compiler.Generation.Generators
             // Required sensors property - include both inputs and outputs that are referenced in conditions
             var allSensors = new HashSet<string>();
             
-            // Add all input sensors
+            // Add all input sensors and output sensors referenced in conditions
             foreach (var rule in rules)
             {
+                // Get all input sensors (including those from actions with our fix)
                 var inputSensors = GenerationHelpers.GetInputSensors(rule);
                 foreach (var sensor in inputSensors)
                 {
                     allSensors.Add(sensor);
+                }
+                
+                // Also explicitly ensure output sensors referenced in conditions are added
+                if (rule.Conditions != null)
+                {
+                    var outputReferences = GenerationHelpers.ExtractOutputReferencesFromConditions(rule.Conditions);
+                    foreach (var outputRef in outputReferences)
+                    {
+                        allSensors.Add(outputRef);
+                    }
+                }
+            }
+            
+            // Before generating the RequiredSensors array, add input sensors necessary for rule actions
+            // Collect any input references from actions for each rule in this group
+            foreach (var rule in rules)
+            {
+                foreach (var action in rule.Actions)
+                {
+                    if (action is SetValueAction setValueAction && !string.IsNullOrEmpty(setValueAction.ValueExpression))
+                    {
+                        // Check for input references in the value expression
+                        var matches = System.Text.RegularExpressions.Regex.Matches(
+                            setValueAction.ValueExpression, "input:[a-zA-Z0-9_]+");
+                        
+                        foreach (System.Text.RegularExpressions.Match match in matches)
+                        {
+                            allSensors.Add(match.Value);
+                        }
+                    }
                 }
             }
             

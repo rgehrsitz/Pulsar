@@ -119,12 +119,44 @@ namespace Pulsar.Compiler.Generation.Generators
             sb.AppendLine("                UpdateBuffers(inputs);");
             sb.AppendLine();
 
+            // Fetch all initial inputs and outputs from Redis for cycle-aware testing
+            sb.AppendLine("                // First, get all inputs and previous outputs from Redis to ensure we have all dependencies");
+            sb.AppendLine("                var allRedisValues = await _redis.GetAllInputsAsync();");
+            sb.AppendLine("                _logger.Debug(\"Loaded {Count} initial values from Redis\", allRedisValues.Count);");
+            sb.AppendLine("                ");
+            sb.AppendLine("                // Add any Redis values not already in our inputs dictionary");
+            sb.AppendLine("                foreach (var kvp in allRedisValues)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    if (!inputs.ContainsKey(kvp.Key))");
+            sb.AppendLine("                    {");
+            sb.AppendLine("                        inputs[kvp.Key] = kvp.Value;");
+            sb.AppendLine("                        if (kvp.Key.StartsWith(\"output:\"))");
+            sb.AppendLine("                        {");
+            sb.AppendLine("                            _logger.Debug(\"Added dependency from Redis: {Key} = {Value}\", kvp.Key, kvp.Value);");
+            sb.AppendLine("                        }");
+            sb.AppendLine("                    }");
+            sb.AppendLine("                }");
+            sb.AppendLine();
+
             // Evaluate each rule group in sequence
             for (int i = 0; i < ruleGroups.Count; i++)
             {
                 sb.AppendLine($"                _logger.Debug(\"Evaluating rule group {i}\");");
                 sb.AppendLine($"                using (var ruleTimer = _metrics?.MeasureRuleExecutionTime(\"RuleGroup{i}\"))");
                 sb.AppendLine($"                {{");
+                
+                // For rule groups after the first one, merge outputs from previous groups into inputs
+                if (i > 0)
+                {
+                    sb.AppendLine("                    // Merge outputs from previous rule groups into inputs for this rule group");
+                    sb.AppendLine("                    foreach (var output in outputs)");
+                    sb.AppendLine("                    {");
+                    sb.AppendLine("                        inputs[output.Key] = output.Value;");
+                    sb.AppendLine("                        _logger.Debug(\"Added output to inputs: {Key} = {Value}\", output.Key, output.Value);");
+                    sb.AppendLine("                    }");
+                    sb.AppendLine();
+                }
+                
                 sb.AppendLine($"                    await _ruleGroups[{i}].EvaluateRulesAsync(inputs, outputs);");
                 sb.AppendLine($"                    _metrics?.RecordRuleExecution(\"RuleGroup{i}\", true);");
                 sb.AppendLine($"                }}");

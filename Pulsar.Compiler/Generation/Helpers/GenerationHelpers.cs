@@ -1,12 +1,41 @@
 // File: Pulsar.Compiler/Generation/Helpers/GenerationHelpers.cs
 
+using System;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Pulsar.Compiler.Models;
 
 namespace Pulsar.Compiler.Generation.Helpers
 {
     public static class GenerationHelpers
     {
+        // Counter to ensure uniqueness of variable names
+        private static int _varNameCounter = 0;
+
+        // Generate a unique variable name using counter and a unique identifier
+        private static string GenerateUniqueVarName(string baseName, Dictionary<string, int>? occurrenceCounter = null)
+        {
+            int counter = Interlocked.Increment(ref _varNameCounter);
+            
+            // If we're tracking occurrences of the same variable within an expression
+            if (occurrenceCounter != null)
+            {
+                if (!occurrenceCounter.TryGetValue(baseName, out int occurrence))
+                {
+                    occurrence = 1;
+                }
+                else
+                {
+                    occurrence++;
+                }
+                
+                occurrenceCounter[baseName] = occurrence;
+                return $"{baseName}_{counter}_{occurrence}";
+            }
+            
+            return $"{baseName}_{counter}_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+        }
+
         private static readonly HashSet<string> _mathFunctions = new HashSet<string>
         {
             "Sin",
@@ -94,8 +123,12 @@ namespace Pulsar.Compiler.Generation.Helpers
             }
             else
             {
-                // Regular input sensor
-                sensorAccess = $"inputs[\"{comparison.Sensor}\"]";
+                // Regular input sensor - add safety check to prevent KeyNotFoundException
+                // Use a hash code in the variable name to make it unique within nested expressions
+                // Use helper method to generate a unique variable name
+                string varName = GenerateUniqueVarName($"inVal_{comparison.Sensor.Replace(":", "_")}");
+                sensorAccess = $"(inputs.TryGetValue(\"{comparison.Sensor}\", out var {varName}) ? {varName} : null)";
+
             }
 
             // Special handling for boolean values
@@ -206,18 +239,47 @@ namespace Pulsar.Compiler.Generation.Helpers
                 var matches = Regex.Matches(setValue.ValueExpression, @"input:[a-zA-Z0-9_]+");
                 string expr = setValue.ValueExpression;
                 
-                // Replace each one with proper Convert.ToDouble(inputs["..."]) syntax
-                // Use a dictionary to track replacements to avoid nested replacements
-                var replacements = new Dictionary<string, string>();
+                // Track occurrences of each input variable to ensure uniqueness
+                // even for multiple occurrences of the same variable in one expression
+                var occurrenceCounter = new Dictionary<string, int>();
+                
+                // For each match, generate a unique variable name that tracks occurrence count
+                var replacements = new Dictionary<string, List<Tuple<int, int, string>>>();
+                
+                // First, collect all occurrences with positions
                 foreach (Match match in matches)
                 {
-                    replacements[match.Value] = $"Convert.ToDouble(inputs[\"{match.Value}\"])";
+                    string key = match.Value;
+                    if (!replacements.ContainsKey(key))
+                    {
+                        replacements[key] = new List<Tuple<int, int, string>>();
+                    }
+                    
+                    // Create a unique base name for this input variable
+                    string baseName = $"inVal_{key.Replace(":", "_")}";
+                    
+                    // Use helper method to generate a unique variable name with occurrence tracking
+                    if (!occurrenceCounter.ContainsKey(baseName))
+                    {
+                        occurrenceCounter[baseName] = 0;
+                    }
+                    occurrenceCounter[baseName]++;
+                    
+                    string varName = $"{baseName}_{_varNameCounter}_{occurrenceCounter[baseName]}";
+                    
+                    // Store the position and replacement info
+                    replacements[key].Add(Tuple.Create(match.Index, match.Length, 
+                        $"Convert.ToDouble((inputs.TryGetValue(\"{key}\", out var {varName}) ? {varName} : 0))"));
                 }
                 
-                // Sort by length descending to replace the longest matches first
-                foreach (var replacement in replacements.OrderByDescending(r => r.Key.Length))
+                // Apply replacements from right to left to maintain correct positions
+                var allReplacements = replacements.Values.SelectMany(x => x)
+                    .OrderByDescending(x => x.Item1)
+                    .ToList();
+                
+                foreach (var r in allReplacements)
                 {
-                    expr = expr.Replace(replacement.Key, replacement.Value);
+                    expr = expr.Substring(0, r.Item1) + r.Item3 + expr.Substring(r.Item1 + r.Item2);
                 }
                 
                 return $"outputs[\"{setValue.Key}\"] = {expr};";
@@ -235,8 +297,10 @@ namespace Pulsar.Compiler.Generation.Helpers
                 && !setValue.ValueExpression.Contains(")")
             )
             {
-                // Direct reference to a sensor with a colon
-                return $"outputs[\"{setValue.Key}\"] = inputs[\"{setValue.ValueExpression}\"];";
+                // Direct reference to a sensor with a colon - use safe access
+                // Use helper method to generate a unique variable name
+                string varName = GenerateUniqueVarName($"inVal_{setValue.ValueExpression.Replace(":", "_")}");
+                return $"outputs[\"{setValue.Key}\"] = (inputs.TryGetValue(\"{setValue.ValueExpression}\", out var {varName}) ? {varName} : null);";
             }
 
             var value = !string.IsNullOrEmpty(setValue.ValueExpression)
@@ -251,7 +315,10 @@ namespace Pulsar.Compiler.Generation.Helpers
             // If the value is just a simple sensor reference (without expressions), treat it as a direct input lookup
             else if (value.Contains(":") && !value.Contains(" ") && !value.Contains("(") && !value.Contains("+") && !value.Contains("-") && !value.Contains("*") && !value.Contains("/"))
             {
-                return $"outputs[\"{setValue.Key}\"] = inputs[\"{value}\"];";
+                // Use safe access for simple sensor references
+                // Use helper method to generate a unique variable name
+                string varName = GenerateUniqueVarName($"inVal_{value.Replace(":", "_")}");
+                return $"outputs[\"{setValue.Key}\"] = (inputs.TryGetValue(\"{value}\", out var {varName}) ? {varName} : null);";
             }
             else
             {
@@ -437,6 +504,7 @@ namespace Pulsar.Compiler.Generation.Helpers
         {
             var sensors = new HashSet<string>();
 
+            // Extract sensors from conditions
             if (rule.Conditions != null)
             {
                 if (rule.Conditions.All != null)
@@ -453,6 +521,15 @@ namespace Pulsar.Compiler.Generation.Helpers
                     {
                         AddConditionSensors(condition, sensors);
                     }
+                }
+            }
+            
+            // Also extract sensors from actions - vital for rules that use inputs in their actions
+            if (rule.Actions != null)
+            {
+                foreach (var action in rule.Actions)
+                {
+                    AddActionSensors(action, sensors);
                 }
             }
 
@@ -485,6 +562,56 @@ namespace Pulsar.Compiler.Generation.Helpers
                     break;
                 case ExpressionCondition e:
                     sensors.UnionWith(ExtractSensorsFromExpression(e.Expression));
+                    break;
+            }
+        }
+        
+        /// <summary>
+        /// Extract all input sensors referenced in a rule action
+        /// </summary>
+        /// <remarks>
+        /// This is critical for rules that reference input sensors in their actions even if
+        /// those inputs aren't used in the rule's conditions. For example, an alert rule
+        /// might reference temperature and humidity in its alert message.
+        /// </remarks>
+        private static void AddActionSensors(
+            ActionDefinition action,
+            HashSet<string> sensors
+        )
+        {
+            switch (action)
+            {
+                case SetValueAction setValueAction:
+                    // Check if the action has a value expression that might contain input references
+                    if (!string.IsNullOrEmpty(setValueAction.ValueExpression))
+                    {
+                        // Extract all potential sensor references from the expression
+                        var expressionSensors = ExtractSensorsFromExpression(setValueAction.ValueExpression);
+                        
+                        // Filter to only include input sensors, not other variables or functions
+                        foreach (var sensor in expressionSensors)
+                        {
+                            if (sensor.StartsWith("input:"))
+                            {
+                                sensors.Add(sensor);
+                            }
+                        }
+                    }
+                    break;
+                    
+                case SendMessageAction sendMessageAction:
+                    // Check if message content contains input references
+                    if (!string.IsNullOrEmpty(sendMessageAction.Message))
+                    {
+                        var messageSensors = ExtractSensorsFromExpression(sendMessageAction.Message);
+                        foreach (var sensor in messageSensors)
+                        {
+                            if (sensor.StartsWith("input:"))
+                            {
+                                sensors.Add(sensor);
+                            }
+                        }
+                    }
                     break;
             }
         }
@@ -522,6 +649,55 @@ namespace Pulsar.Compiler.Generation.Helpers
         private static bool IsLogicalOperator(string term)
         {
             return _logicalOperators.ContainsKey(term.ToLower());
+        }
+        
+        /// <summary>
+        /// Extracts all output sensors referenced in a condition group
+        /// </summary>
+        /// <param name="conditions">The condition group to extract output references from</param>
+        /// <returns>A set of output sensor references</returns>
+        public static HashSet<string> ExtractOutputReferencesFromConditions(ConditionGroup conditions)
+        {
+            var outputs = new HashSet<string>();
+            
+            if (conditions.All != null)
+            {
+                foreach (var condition in conditions.All)
+                {
+                    AddOutputReferencesFromCondition(condition, outputs);
+                }
+            }
+            
+            if (conditions.Any != null)
+            {
+                foreach (var condition in conditions.Any)
+                {
+                    AddOutputReferencesFromCondition(condition, outputs);
+                }
+            }
+            
+            return outputs;
+        }
+        
+        /// <summary>
+        /// Adds output references from a condition to a set
+        /// </summary>
+        private static void AddOutputReferencesFromCondition(ConditionDefinition condition, HashSet<string> outputs)
+        {
+            switch (condition)
+            {
+                case ComparisonCondition c when c.Sensor.StartsWith("output:"):
+                    outputs.Add(c.Sensor);
+                    break;
+                case ExpressionCondition e:
+                    // Extract output references from the expression
+                    var matches = Regex.Matches(e.Expression, "output:[a-zA-Z0-9_]+");
+                    foreach (Match match in matches)
+                    {
+                        outputs.Add(match.Value);
+                    }
+                    break;
+            }
         }
     }
 }
