@@ -213,13 +213,13 @@ namespace Pulsar.Compiler.Config
             // Add package references
             sb.AppendLine("  <ItemGroup>");
             sb.AppendLine(
-                "    <PackageReference Include=\"Microsoft.Extensions.Logging\" Version=\"8.0.0\" />"
+                "    <PackageReference Include=\"Microsoft.Extensions.Logging\" Version=\"8.0.1\" />"
             );
             sb.AppendLine(
-                "    <PackageReference Include=\"Microsoft.Extensions.Logging.Abstractions\" Version=\"8.0.0\" />"
+                "    <PackageReference Include=\"Microsoft.Extensions.Logging.Abstractions\" Version=\"8.0.2\" />"
             );
             sb.AppendLine(
-                "    <PackageReference Include=\"Microsoft.Extensions.Logging.Console\" Version=\"8.0.0\" />"
+                "    <PackageReference Include=\"Microsoft.Extensions.Logging.Console\" Version=\"8.0.1\" />"
             );
             sb.AppendLine("    <PackageReference Include=\"NRedisStack\" Version=\"0.13.1\" />");
             sb.AppendLine("    <PackageReference Include=\"Polly\" Version=\"8.3.0\" />");

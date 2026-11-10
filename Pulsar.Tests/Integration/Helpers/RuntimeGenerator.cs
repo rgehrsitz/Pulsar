@@ -33,8 +33,8 @@ namespace Pulsar.Tests.Integration.Helpers
 
   <ItemGroup>
     <PackageReference Include=""StackExchange.Redis"" Version=""2.6.122"" />
-    <PackageReference Include=""Microsoft.Extensions.Logging"" Version=""8.0.0"" />
-    <PackageReference Include=""Microsoft.Extensions.Logging.Console"" Version=""8.0.0"" />
+    <PackageReference Include=""Microsoft.Extensions.Logging"" Version=""8.0.1"" />
+    <PackageReference Include=""Microsoft.Extensions.Logging.Console"" Version=""8.0.1"" />
   </ItemGroup>
 </Project>";
                 await File.WriteAllTextAsync(projectPath, projectContent);
